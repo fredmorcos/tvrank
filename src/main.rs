@@ -1,17 +1,20 @@
 #![warn(clippy::all)]
 
-use csv::Reader as CsvReader;
+use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
+use enum_utils::FromStr;
 use flate2::bufread::GzDecoder;
+use fnv::FnvHashMap;
 use log::{debug, error, info, trace, warn};
+use memmap::Mmap;
 use regex::Regex;
 use reqwest::Url;
-use serde::{de::Error as SerdeDeserializeError, Deserialize, Deserializer};
-use std::collections::HashSet;
 use std::error::Error;
+use std::fmt;
 use std::fs::{self, File};
-use std::io::{self, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
+use std::ops::Index;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -19,50 +22,11 @@ use structopt::StructOpt;
 
 type Res<T> = Result<T, Box<dyn Error>>;
 
-fn imdb_parse_tconst<'de, D: Deserializer<'de>>(des: D) -> Result<u64, D::Error> {
-  let field: &str = Deserialize::deserialize(des)?;
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy)]
+struct TitleId(usize);
 
-  if field.len() < 2 || &field[0..=1] != "tt" {
-    return Err(SerdeDeserializeError::invalid_value(
-      serde::de::Unexpected::Str(field),
-      &"an ID that starts with `tt` (e.g. ttXXXXX)",
-    ));
-  }
-
-  match field[2..].parse() {
-    Ok(v) => Ok(v),
-    Err(_) => Err(SerdeDeserializeError::invalid_value(
-      serde::de::Unexpected::Str(field),
-      &"a number after the ID's prefix `tt` (e.g. ttXXXXX)",
-    )),
-  }
-}
-
-fn imdb_parse_is_adult<'de, D: Deserializer<'de>>(des: D) -> Result<bool, D::Error> {
-  let field: u8 = Deserialize::deserialize(des)?;
-  Ok(field != 0)
-}
-
-fn imdb_parse_optional_u16<'de, D: Deserializer<'de>>(
-  deserializer: D,
-) -> Result<Option<u16>, D::Error> {
-  let field: &str = Deserialize::deserialize(deserializer)?;
-
-  if field == "\\N" {
-    return Ok(None);
-  }
-
-  match field.parse() {
-    Ok(v) => Ok(Some(v)),
-    Err(_) => Err(SerdeDeserializeError::invalid_type(
-      serde::de::Unexpected::Str(field),
-      &"a number or `\\N`",
-    )),
-  }
-}
-
-#[derive(Debug, Deserialize, Display)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
+#[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
 enum TitleType {
   Short,
@@ -75,14 +39,53 @@ enum TitleType {
   TvMiniSeries,
   TvShort,
   TvSpecial,
+  TvPilot,
+  RadioSeries,
+  RadioEpisode,
 }
 
-#[derive(Debug, Display, PartialEq, Eq, Hash)]
+// impl TitleType {
+//   fn is_movie(&self) -> bool {
+//     match self {
+//       TitleType::Short
+//       | TitleType::Video
+//       | TitleType::Movie
+//       | TitleType::TvMovie
+//       | TitleType::TvShort
+//       | TitleType::TvSpecial => true,
+//       TitleType::VideoGame
+//       | TitleType::TvEpisode
+//       | TitleType::TvSeries
+//       | TitleType::TvMiniSeries
+//       | TitleType::TvPilot
+//       | TitleType::RadioSeries
+//       | TitleType::RadioEpisode => false,
+//     }
+//   }
+
+//   fn is_series(&self) -> bool {
+//     match self {
+//       TitleType::Short
+//       | TitleType::Video
+//       | TitleType::Movie
+//       | TitleType::TvMovie
+//       | TitleType::TvShort
+//       | TitleType::TvSpecial
+//       | TitleType::VideoGame => false,
+//       TitleType::TvEpisode
+//       | TitleType::TvSeries
+//       | TitleType::TvMiniSeries
+//       | TitleType::TvPilot
+//       | TitleType::RadioSeries
+//       | TitleType::RadioEpisode => true,
+//     }
+//   }
+// }
+
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
 enum Genre {
-  #[display(fmt = "Reality-TV")]
-  RealityTv,
-  Drama,
+  Drama = 0,
   Documentary,
   Short,
   Animation,
@@ -105,93 +108,421 @@ enum Genre {
   Mystery,
   Thriller,
   Adult,
+  #[display(fmt = "Reality-TV")]
+  #[enumeration(rename = "Reality-TV")]
+  RealityTv,
   #[display(fmt = "Sci-Fi")]
+  #[enumeration(rename = "Sci-Fi")]
   SciFi,
   #[display(fmt = "Film-Noir")]
+  #[enumeration(rename = "Film-Noir")]
   FilmNoir,
   #[display(fmt = "Talk-Show")]
+  #[enumeration(rename = "Talk-Show")]
   TalkShow,
   #[display(fmt = "Game-Show")]
+  #[enumeration(rename = "Game-Show")]
   GameShow,
-  #[display(fmt = "N/A")]
-  Na,
 }
 
-impl FromStr for Genre {
-  type Err = String;
+#[derive(PartialEq, Eq, Default, Clone, Copy)]
+struct Genres(u64);
 
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    Ok(match s {
-      "Reality-TV" => Self::RealityTv,
-      "Drama" => Self::Drama,
-      "Documentary" => Self::Documentary,
-      "Short" => Self::Short,
-      "Animation" => Self::Animation,
-      "Comedy" => Self::Comedy,
-      "Sport" => Self::Sport,
-      "Fantasy" => Self::Fantasy,
-      "Horror" => Self::Horror,
-      "Romance" => Self::Romance,
-      "News" => Self::News,
-      "Biography" => Self::Biography,
-      "Music" => Self::Music,
-      "Musical" => Self::Musical,
-      "War" => Self::War,
-      "Crime" => Self::Crime,
-      "Western" => Self::Western,
-      "Family" => Self::Family,
-      "Adventure" => Self::Adventure,
-      "Action" => Self::Action,
-      "History" => Self::History,
-      "Mystery" => Self::Mystery,
-      "Thriller" => Self::Thriller,
-      "Adult" => Self::Adult,
-      "Sci-Fi" => Self::SciFi,
-      "Film-Noir" => Self::FilmNoir,
-      "Talk-Show" => Self::TalkShow,
-      "Game-Show" => Self::GameShow,
-      "\\N" => Self::Na,
-      _ => return Err(format!("Unknown genre `{}`", s)),
-    })
+impl Genres {
+  fn add_genre(&mut self, genre: Genre) {
+    let index = genre as u8;
+    self.0 |= 1 << index;
   }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Title {
-  #[serde(deserialize_with = "imdb_parse_tconst")]
-  tconst: u64,
-  title_type: TitleType,
-
-  // TODO: Primary and original titles are - most of the time - the same. Perhaps store
-  // one of them in an `Option<String>` to avoid searching both.
-  primary_title: String,
-  original_title: String,
-
-  #[serde(deserialize_with = "imdb_parse_is_adult")]
-  is_adult: bool,
-  #[serde(deserialize_with = "imdb_parse_optional_u16")]
-  start_year: Option<u16>,
-  #[serde(deserialize_with = "imdb_parse_optional_u16")]
-  end_year: Option<u16>,
-  #[serde(deserialize_with = "imdb_parse_optional_u16")]
-  runtime_minutes: Option<u16>,
-  #[serde(with = "serde_with::StringWithSeparator::<serde_with::CommaSeparator>")]
-  genres: HashSet<Genre>,
+impl fmt::Debug for Genres {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    <Self as fmt::Display>::fmt(self, f)
+  }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Rating {
-  #[serde(deserialize_with = "imdb_parse_tconst")]
-  tconst: u64,
-  average_rating: f32,
+impl fmt::Display for Genres {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    let mut first = true;
+
+    for index in 0..u64::BITS {
+      let index = index as u8;
+
+      if (self.0 >> index) & 1 == 1 {
+        let genre: Genre = unsafe { std::mem::transmute(index) };
+
+        if first {
+          write!(f, "{}", genre)?;
+          first = false;
+        } else {
+          write!(f, ", {}", genre)?;
+        }
+      }
+    }
+
+    Ok(())
+  }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+struct Title {
+  title_id: TitleId,
+  title_type: TitleType,
+  is_adult: bool,
+  start_year: Option<u16>,
+  end_year: Option<u16>,
+  runtime_minutes: Option<u16>,
+  genres: Genres,
+  average_rating: u8,
   num_votes: u64,
+}
+
+impl fmt::Display for Title {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.title_type)?;
+
+    if let Some(year) = self.start_year {
+      write!(f, " ({})", year)?;
+    }
+
+    write!(f, " [{}]", self.genres)
+  }
+}
+
+// #[derive(Debug)]
+// struct Rating {
+//   tconst: u64,
+//   average_rating: f32,
+//   num_votes: u64,
+// }
+
+#[derive(Debug, Display)]
+#[display(fmt = "{}")]
+enum DbErr {
+  #[display(fmt = "ID does not start with `tt` (e.g. ttXXXXXXX)")]
+  Id,
+  #[display(fmt = "ID does not contain a number (e.g. ttXXXXXXX)")]
+  IdNumber,
+  #[display(fmt = "Unknown title type")]
+  TitleType,
+  #[display(fmt = "Bad isAdult marker")]
+  BadIsAdult,
+  #[display(fmt = "Start year is not a number")]
+  StartYear,
+  #[display(fmt = "End year is not a number")]
+  EndYear,
+  #[display(fmt = "Runtime minutes is not a number")]
+  RuntimeMinutes,
+  #[display(fmt = "ID already exists")]
+  IdExists,
+  #[display(fmt = "Invalid genre")]
+  Genre,
+  #[display(fmt = "Unexpected end of file")]
+  UnexpectedEof,
+}
+
+impl DbErr {
+  fn id<T>() -> Res<T> {
+    Err(Box::new(DbErr::Id))
+  }
+
+  fn bad_is_adult<T>() -> Res<T> {
+    Err(Box::new(DbErr::BadIsAdult))
+  }
+
+  fn id_exists<T>() -> Res<T> {
+    Err(Box::new(DbErr::IdExists))
+  }
+
+  fn unexpected_eof<T>() -> Res<T> {
+    Err(Box::new(DbErr::UnexpectedEof))
+  }
+}
+
+impl Error for DbErr {}
+
+type DbByNameAndYear = FnvHashMap<String, FnvHashMap<Option<u16>, Vec<TitleId>>>;
+
+struct Db {
+  /// Title information.
+  titles: Vec<Option<Title>>,
+  /// Map from name to years to titles.
+  by_name_and_year: DbByNameAndYear,
+}
+
+impl Index<&TitleId> for Db {
+  type Output = Option<Title>;
+
+  fn index(&self, index: &TitleId) -> &Self::Output {
+    unsafe { self.titles.get_unchecked(index.0) }
+  }
+}
+
+impl Db {
+  const TAB: u8 = b'\t';
+  const ZERO: u8 = b'0';
+  const ONE: u8 = b'1';
+  const COMMA: u8 = b',';
+  const NL: u8 = b'\n';
+
+  const NOT_AVAIL: &'static [u8; 2] = b"\\N";
+
+  fn skip_line<R: BufRead>(data: &mut io::Bytes<R>) -> Res<()> {
+    for c in data {
+      let c = c?;
+
+      if c == Db::NL {
+        break;
+      }
+    }
+
+    Ok(())
+  }
+
+  fn parse_cell<R: BufRead>(data: &mut io::Bytes<R>, tok: &mut Vec<u8>) -> Res<()> {
+    tok.clear();
+
+    for c in data {
+      let c = c?;
+
+      if c == Db::TAB {
+        break;
+      }
+
+      tok.push(c);
+    }
+
+    if tok.is_empty() {
+      DbErr::unexpected_eof()
+    } else {
+      Ok(())
+    }
+  }
+
+  fn parse_title<R: BufRead>(
+    data: &mut io::Bytes<R>,
+    tok: &mut Vec<u8>,
+    res: &mut String,
+  ) -> Res<()> {
+    tok.clear();
+    res.clear();
+
+    for c in data {
+      let c = c?;
+
+      if c == Db::TAB {
+        break;
+      }
+
+      tok.push(c);
+    }
+
+    if tok.is_empty() {
+      DbErr::unexpected_eof()
+    } else {
+      res.push_str(std::str::from_utf8(tok)?);
+      Ok(())
+    }
+  }
+
+  fn parse_is_adult<R: BufRead>(data: &mut io::Bytes<R>) -> Res<bool> {
+    let is_adult = match Db::next_byte(data)? {
+      Db::ZERO => false,
+      Db::ONE => true,
+      _ => return DbErr::bad_is_adult(),
+    };
+
+    if Db::next_byte(data)? != Db::TAB {
+      return DbErr::bad_is_adult();
+    }
+
+    Ok(is_adult)
+  }
+
+  fn parse_genre<R: BufRead>(
+    data: &mut io::Bytes<R>,
+    tok: &mut Vec<u8>,
+    res: &mut String,
+  ) -> Res<bool> {
+    tok.clear();
+    res.clear();
+
+    let mut finish = false;
+
+    for c in data {
+      let c = c?;
+
+      if c == Db::COMMA {
+        break;
+      } else if c == Db::NL {
+        finish = true;
+        break;
+      }
+
+      tok.push(c);
+    }
+
+    if tok.is_empty() || tok == Self::NOT_AVAIL {
+      Ok(true)
+    } else {
+      res.push_str(unsafe { std::str::from_utf8_unchecked(tok) });
+      Ok(finish)
+    }
+  }
+
+  fn parse_genres<R: BufRead>(
+    data: &mut io::Bytes<R>,
+    tok: &mut Vec<u8>,
+    res: &mut String,
+  ) -> Res<Genres> {
+    let mut genres = Genres::default();
+
+    loop {
+      let finish = Self::parse_genre(data, tok, res)?;
+
+      if tok == Self::NOT_AVAIL {
+        break;
+      }
+
+      let genre = Genre::from_str(res).map_err(|_| DbErr::Genre)?;
+      genres.add_genre(genre);
+
+      if finish {
+        break;
+      }
+    }
+
+    Ok(genres)
+  }
+
+  fn next_byte<R: BufRead>(data: &mut io::Bytes<R>) -> Res<u8> {
+    if let Some(current) = data.next() {
+      Ok(current?)
+    } else {
+      DbErr::unexpected_eof()
+    }
+  }
+
+  fn new<R: BufRead>(mut data: io::Bytes<R>) -> Res<Self> {
+    let mut titles: Vec<Option<Title>> = Vec::new();
+    let mut by_name_and_year: DbByNameAndYear = FnvHashMap::default();
+
+    let mut tok = Vec::new();
+    let mut res = String::new();
+
+    let _ = Self::skip_line(&mut data)?;
+
+    loop {
+      let c = if let Some(c) = data.next() {
+        c?
+      } else {
+        return Ok(Db { titles, by_name_and_year });
+      };
+
+      if c != b't' {
+        return DbErr::id();
+      }
+
+      let c = Db::next_byte(&mut data)?;
+
+      if c != b't' {
+        return DbErr::id();
+      }
+
+      Db::parse_cell(&mut data, &mut tok)?;
+      let id = atoi::<usize>(&tok).ok_or(DbErr::IdNumber)?;
+
+      Db::parse_cell(&mut data, &mut tok)?;
+      let title_type = unsafe { std::str::from_utf8_unchecked(&tok) };
+      let title_type = TitleType::from_str(title_type).map_err(|_| DbErr::TitleType)?;
+
+      Db::parse_title(&mut data, &mut tok, &mut res)?;
+      let ptitle = res.clone();
+      Db::parse_title(&mut data, &mut tok, &mut res)?;
+      let otitle = if ptitle == res { None } else { Some(res.clone()) };
+
+      let is_adult = Db::parse_is_adult(&mut data)?;
+
+      Db::parse_cell(&mut data, &mut tok)?;
+      let start_year = match tok.as_slice() {
+        b"\\N" => None,
+        start_year => Some(atoi::<u16>(start_year).ok_or(DbErr::StartYear)?),
+      };
+
+      Db::parse_cell(&mut data, &mut tok)?;
+      let end_year = match tok.as_slice() {
+        b"\\N" => None,
+        end_year => Some(atoi::<u16>(end_year).ok_or(DbErr::EndYear)?),
+      };
+
+      Db::parse_cell(&mut data, &mut tok)?;
+      let runtime_minutes = match tok.as_slice() {
+        b"\\N" => None,
+        runtime_minutes => {
+          Some(atoi::<u16>(runtime_minutes).ok_or(DbErr::RuntimeMinutes)?)
+        }
+      };
+
+      let genres = Db::parse_genres(&mut data, &mut tok, &mut res)?;
+
+      if titles.len() <= id {
+        titles.resize_with(id + 1, Default::default);
+      } else if unsafe { titles.get_unchecked(id) }.is_some() {
+        return DbErr::id_exists();
+      }
+
+      let title_id = TitleId(id);
+
+      let title = Title {
+        title_id,
+        title_type,
+        is_adult,
+        start_year,
+        end_year,
+        runtime_minutes,
+        genres,
+        average_rating: 0,
+        num_votes: 0,
+      };
+
+      *unsafe { titles.get_unchecked_mut(id) } = Some(title);
+
+      fn update_db(
+        db: &mut DbByNameAndYear,
+        id: TitleId,
+        title: String,
+        year: Option<u16>,
+      ) {
+        db.entry(title)
+          .and_modify(|by_year| {
+            by_year
+              .entry(year)
+              .and_modify(|titles| titles.push(id))
+              .or_insert_with(|| vec![id]);
+          })
+          .or_insert_with(|| {
+            let mut by_year = FnvHashMap::default();
+            by_year.insert(year, vec![id]);
+            by_year
+          });
+      }
+
+      update_db(&mut by_name_and_year, title_id, ptitle, start_year);
+
+      if let Some(otitle) = otitle {
+        update_db(&mut by_name_and_year, title_id, otitle, start_year);
+      }
+    }
+  }
+
+  fn lookup(&self, title: &str, year: Option<u16>) -> Option<&Vec<TitleId>> {
+    self.by_name_and_year.get(title).and_then(|by_year| by_year.get(&year))
+  }
 }
 
 trait TvService {
   fn new(cache_dir: &Path) -> Self;
-  fn lookup(&self, title: &str, year: &str) -> Res<Vec<&str>>;
+  fn lookup(&self, title: &str, year: u16) -> Res<Option<Vec<Title>>>;
 }
 
 struct Imdb {
@@ -253,17 +584,9 @@ fn ensure_file(
   Ok(())
 }
 
-fn gz_csv_reader(path: &Path) -> Res<CsvReader<GzDecoder<BufReader<File>>>> {
+fn mmap_file(path: &Path) -> Res<Mmap> {
   let file = File::open(path)?;
-  let reader = BufReader::new(file);
-  let gz = GzDecoder::new(reader);
-  Ok(
-    csv::ReaderBuilder::new()
-      .flexible(true)
-      .trim(csv::Trim::All)
-      .delimiter(b'\t')
-      .from_reader(gz),
-  )
+  Ok(unsafe { Mmap::map(&file)? })
 }
 
 impl Imdb {
@@ -287,29 +610,23 @@ impl Imdb {
     Ok(())
   }
 
-  fn load_basics_db(&self) -> Res<Vec<Title>> {
-    let mut csv_reader = gz_csv_reader(&self.basics_db_file)?;
-    let mut db = Vec::with_capacity(1_000_000);
-
-    for title in csv_reader.deserialize() {
-      let title = title?;
-      db.push(title);
-    }
-
-    Ok(db)
+  fn load_basics_db(buf: &[u8]) -> Res<Db> {
+    let decoder = BufReader::new(GzDecoder::new(buf));
+    info!("Parsing IMDB Basics DB...");
+    Db::new(decoder.bytes())
   }
 
-  fn load_ratings_db(&self) -> Res<Vec<Rating>> {
-    let mut csv_reader = gz_csv_reader(&self.ratings_db_file)?;
-    let mut db = Vec::with_capacity(1_000_000);
+  // fn load_ratings_db(&self) -> Res<Vec<Rating>> {
+  //   let mut csv_reader = gz_csv_reader(&self.ratings_db_file)?;
+  //   let mut db = Vec::with_capacity(1_000_000);
 
-    for title in csv_reader.deserialize() {
-      let title = title?;
-      db.push(title);
-    }
+  //   for title in csv_reader.deserialize() {
+  //     let title = title?;
+  //     db.push(title);
+  //   }
 
-    Ok(db)
-  }
+  //   Ok(db)
+  // }
 }
 
 impl TvService for Imdb {
@@ -320,11 +637,22 @@ impl TvService for Imdb {
     Imdb { cache_dir, basics_db_file, ratings_db_file }
   }
 
-  fn lookup(&self, _title: &str, _year: &str) -> Res<Vec<&str>> {
+  fn lookup(&self, title: &str, year: u16) -> Res<Option<Vec<Title>>> {
     self.ensure_db_files()?;
-    let basics = self.load_basics_db()?;
-    let ratings = self.load_ratings_db()?;
-    todo!()
+
+    // TODO switch out the sample file.
+    // let basics_mmap = mmap_file(&self.cache_dir.join("title.basics.small.tsv.gz"))?;
+    let basics_mmap = mmap_file(&self.basics_db_file)?;
+    let basics_db = Self::load_basics_db(&basics_mmap)?;
+    info!("Done loading IMDB Basics DB");
+
+    // let ratings = self.load_ratings_db()?;
+
+    Ok(
+      basics_db
+        .lookup(title, Some(year))
+        .and_then(|ids| ids.iter().map(|id| basics_db[id]).collect()),
+    )
   }
 }
 
@@ -337,7 +665,7 @@ enum TvRankErr {
   #[display(fmt = "Could not read title from input")]
   Title,
 
-  #[display(fmt = "Could not read year from title")]
+  #[display(fmt = "Could not read year from input")]
   Year,
 
   #[display(fmt = "Could not find cache directory")]
@@ -363,6 +691,11 @@ impl TvRankErr {
 }
 
 impl Error for TvRankErr {}
+
+// fn parse_input_movie(input: &str) -> Res<(&str, &str)> {
+//   // let (title, captures) = parse_input(input, r"^(.+)\s+\((\d{4})\)$");
+//   todo!()
+// }
 
 fn parse_input(input: &str) -> Res<(&str, &str)> {
   debug!("Input: {}", input);
@@ -401,13 +734,18 @@ fn create_project() -> Res<ProjectDirs> {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "tvrank")]
+#[structopt(about = "Query information about movies and series")]
+#[structopt(author = "Fred Morcos <fm@fredmorcos.com>")]
 struct Opt {
   /// Verbose output (can be specified multiple times).
   #[structopt(short, long, parse(from_occurrences))]
   verbose: u8,
 
-  /// Input in the format of TITLE (YYYY).
+  /// Whether to lookup series instead of movies.
+  #[structopt(short, long)]
+  series: bool,
+
+  /// Input in the format of "TITLE (YYYY)".
   #[structopt(name = "INPUT")]
   input: String,
 }
@@ -420,13 +758,20 @@ fn run(opt: &Opt) -> Res<()> {
   fs::create_dir_all(cache_dir)?;
   debug!("Created cache directory");
 
-  let (title, year) = parse_input(&opt.input)?;
+  let input = opt.input.trim();
+  let (title, year) = parse_input(input)?;
+  let year = atoi::<u16>(year.as_bytes()).ok_or(DbErr::IdNumber)?;
   info!("Title: {}", title);
   info!("Year: {}", year);
 
   let imdb = Imdb::new(cache_dir);
-  let res = imdb.lookup(title, year)?;
-  debug!("Result = {:#?}", res);
+  if let Some(titles) = imdb.lookup(title, year)? {
+    for title in titles {
+      println!("{}", title);
+    }
+  } else {
+    println!("No results");
+  }
 
   Ok(())
 }
