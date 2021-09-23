@@ -1,6 +1,6 @@
 [package]
 name = "tvrank"
-description = "Download information about movies and series"
+description = "Query information about movies and series"
 version = "0.1.0"
 edition = "2018"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
@@ -25,3 +25,11 @@ directories = "3.0"
 memmap = "0.7"
 flate2 = "1.0"
 reqwest = { version = "0.11", features = ["blocking"] }
+atoi = "0.4"
+fnv = "1.0"
+
+[profile.release]
+debug = true
+panic = "abort"
+codegen-units = 1
+lto = true
