@@ -4,10 +4,9 @@ use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
 use enum_utils::FromStr;
-use flate2::bufread::GzDecoder;
+use flate2::read::GzDecoder;
 use fnv::FnvHashMap;
 use log::{debug, error, info, trace, warn};
-use memmap::Mmap;
 use regex::Regex;
 use reqwest::Url;
 use std::error::Error;
@@ -219,6 +218,8 @@ enum DbErr {
   Genre,
   #[display(fmt = "Unexpected end of file")]
   UnexpectedEof,
+  #[display(fmt = "Duplicate title ID {}", _0)]
+  DuplicateID(usize),
 }
 
 impl DbErr {
@@ -236,6 +237,10 @@ impl DbErr {
 
   fn unexpected_eof<T>() -> Res<T> {
     Err(Box::new(DbErr::UnexpectedEof))
+  }
+
+  fn duplicate_id<T>(id: usize) -> Res<T> {
+    Err(Box::new(DbErr::DuplicateID(id)))
   }
 }
 
@@ -412,10 +417,23 @@ impl Db {
 
     let _ = Self::skip_line(&mut data)?;
 
+    let mut actual_titles = 0;
+    let mut max_title_id = 0;
+
     loop {
       let c = if let Some(c) = data.next() {
         c?
       } else {
+        debug!(
+          "Titles array has {}/{} ({}%) titles ({} allocated - {}%), max title ID = {}",
+          actual_titles,
+          titles.len(),
+          (actual_titles * 100) / titles.len(),
+          titles.capacity(),
+          (titles.len() * 100) / titles.capacity(),
+          max_title_id,
+        );
+
         return Ok(Db { titles, by_name_and_year });
       };
 
@@ -436,10 +454,16 @@ impl Db {
       let title_type = unsafe { std::str::from_utf8_unchecked(&tok) };
       let title_type = TitleType::from_str(title_type).map_err(|_| DbErr::TitleType)?;
 
+      let mut ptitle = String::new();
+      Db::parse_title(&mut data, &mut tok, &mut ptitle)?;
       Db::parse_title(&mut data, &mut tok, &mut res)?;
-      let ptitle = res.clone();
-      Db::parse_title(&mut data, &mut tok, &mut res)?;
-      let otitle = if ptitle == res { None } else { Some(res.clone()) };
+      let otitle = if ptitle == res {
+        None
+      } else {
+        let otitle = Some(res);
+        res = String::new();
+        otitle
+      };
 
       let is_adult = Db::parse_is_adult(&mut data)?;
 
@@ -485,7 +509,18 @@ impl Db {
         num_votes: 0,
       };
 
+      let old_title = unsafe { titles.get_unchecked(id) };
+
+      if let Some(old_title) = old_title {
+        if old_title != &title {
+          return DbErr::duplicate_id(id);
+        }
+      }
+
       *unsafe { titles.get_unchecked_mut(id) } = Some(title);
+
+      actual_titles += 1;
+      max_title_id = max_title_id.max(id);
 
       fn update_db(
         db: &mut DbByNameAndYear,
@@ -584,10 +619,10 @@ fn ensure_file(
   Ok(())
 }
 
-fn mmap_file(path: &Path) -> Res<Mmap> {
-  let file = File::open(path)?;
-  Ok(unsafe { Mmap::map(&file)? })
-}
+// fn mmap_file(path: &Path) -> Res<Mmap> {
+//   let file = File::open(path)?;
+//   Ok(unsafe { Mmap::map(&file)? })
+// }
 
 impl Imdb {
   const IMDB: &'static str = "https://datasets.imdbws.com/";
@@ -610,10 +645,14 @@ impl Imdb {
     Ok(())
   }
 
-  fn load_basics_db(buf: &[u8]) -> Res<Db> {
-    let decoder = BufReader::new(GzDecoder::new(buf));
+  fn load_basics_db(buf: BufReader<File>) -> Res<Db> {
+    let mut decoder = GzDecoder::new(buf);
+    let mut buf = Vec::new();
+    info!("Decompressing IMDB Basics DB...");
+    let size = decoder.read_to_end(&mut buf)?;
+    info!("Read IMDB Basics DB: {} bytes", size);
     info!("Parsing IMDB Basics DB...");
-    Db::new(decoder.bytes())
+    Db::new(buf.bytes())
   }
 
   // fn load_ratings_db(&self) -> Res<Vec<Rating>> {
@@ -642,8 +681,11 @@ impl TvService for Imdb {
 
     // TODO switch out the sample file.
     // let basics_mmap = mmap_file(&self.cache_dir.join("title.basics.small.tsv.gz"))?;
-    let basics_mmap = mmap_file(&self.basics_db_file)?;
-    let basics_db = Self::load_basics_db(&basics_mmap)?;
+    // let basics_mmap = mmap_file(&self.basics_db_file)?;
+    let basics_file = File::open(&self.basics_db_file)?;
+    // let mut buf = Vec::with_capacity(basics_file.metadata()?.len() as usize);
+    // basics_file.read_to_end(&mut buf)?;
+    let basics_db = Self::load_basics_db(BufReader::new(basics_file))?;
     info!("Done loading IMDB Basics DB");
 
     // let ratings = self.load_ratings_db()?;
