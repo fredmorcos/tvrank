@@ -47,7 +47,7 @@ impl TvRankErr {
 
 impl Error for TvRankErr {}
 
-fn parse_input(input: &str) -> Res<(&str, &str)> {
+fn parse_name_and_year(input: &str) -> Res<(&str, &str)> {
   debug!("Input: {}", input);
 
   let regex = Regex::new(r"^(.+)\s+\((\d{4})\)$")?;
@@ -109,15 +109,30 @@ fn run(opt: &Opt) -> Res<()> {
   debug!("Created cache directory");
 
   let input = opt.input.trim();
-  let (title, year) = parse_input(input)?;
-  let year = atoi::<u16>(year.as_bytes()).ok_or(ImdbErr::IdNumber)?;
-  info!("Title: {}", title);
-  info!("Year: {}", year);
+  let (name, year) = match parse_name_and_year(input) {
+    Ok((title, year)) => {
+      let year = atoi::<u16>(year.as_bytes()).ok_or(ImdbErr::IdNumber)?;
+      info!("Title: `{}`, Year: `{}`", title, year);
+      (title, Some(year))
+    }
+    Err(err) => {
+      debug!("Failed to parse title and year: {}", err);
+      debug!("Using full input as title");
+      info!("Title: `{}`", input);
+      (input, None)
+    }
+  };
 
   let imdb = Imdb::new(cache_dir)?;
-  if let Some(titles) = imdb.get_movie(title, Some(year)) {
-    for title in titles {
-      println!("{}", title);
+  let query_fn = if opt.series {
+    Imdb::series
+  } else {
+    Imdb::movie
+  };
+
+  if let Some(results) = query_fn(&imdb, &name.to_ascii_lowercase(), year) {
+    for result in results {
+      println!("{}: {}", name, result);
     }
   } else {
     println!("No results");

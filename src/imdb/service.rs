@@ -20,11 +20,19 @@ impl Service {
     Ok(Service { basics_db })
   }
 
-  pub fn get_movie(
-    &self,
-    title: &str,
-    year: Option<u16>,
-  ) -> Option<impl Iterator<Item = &Title>> {
-    self.basics_db.lookup_movie(title, year)
+  pub fn movie(&self, name: &str, year: Option<u16>) -> Option<Vec<&Title>> {
+    if let Some(year) = year {
+      self.basics_db.movie_with_year(name, year)
+    } else {
+      self.basics_db.movie(name)
+    }
+  }
+
+  pub fn series(&self, name: &str, year: Option<u16>) -> Option<Vec<&Title>> {
+    if let Some(year) = year {
+      self.basics_db.series_with_year(name, year)
+    } else {
+      self.basics_db.series(name)
+    }
   }
 }

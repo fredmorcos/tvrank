@@ -28,6 +28,7 @@ type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type DbByName<C> = FnvHashMap<String, DbByYear<C>>;
 type DbById<C> = FnvHashMap<TitleId, C>;
 
+#[derive(Default)]
 pub(crate) struct Basics {
   /// Movies information.
   movies: Vec<Title>,
@@ -61,6 +62,34 @@ impl Index<&SeriesCookie> for Basics {
 }
 
 impl Basics {
+  pub(crate) fn movie_with_year(&self, name: &str, year: u16) -> Option<Vec<&Title>> {
+    self.movies_db.get(name).and_then(move |by_year| {
+      by_year
+        .get(&Some(year))
+        .map(move |cookies| cookies.iter().map(move |cookie| &self[cookie]).collect())
+    })
+  }
+
+  pub(crate) fn movie(&self, name: &str) -> Option<Vec<&Title>> {
+    self.movies_db.get(name).map(move |by_year| {
+      by_year.values().flatten().map(move |cookie| &self[cookie]).collect()
+    })
+  }
+
+  pub(crate) fn series_with_year(&self, name: &str, year: u16) -> Option<Vec<&Title>> {
+    self.series_db.get(name).and_then(move |by_year| {
+      by_year
+        .get(&Some(year))
+        .map(move |cookies| cookies.iter().map(move |cookie| &self[cookie]).collect())
+    })
+  }
+
+  pub(crate) fn series(&self, name: &str) -> Option<Vec<&Title>> {
+    self.series_db.get(name).map(move |by_year| {
+      by_year.values().flatten().map(move |cookie| &self[cookie]).collect()
+    })
+  }
+
   const TAB: u8 = b'\t';
   const ZERO: u8 = b'0';
   const ONE: u8 = b'1';
@@ -205,7 +234,7 @@ impl Basics {
     }
   }
 
-  pub fn new<R: BufRead>(mut data: io::Bytes<R>) -> Res<Self> {
+  pub(crate) fn new<R: BufRead>(mut data: io::Bytes<R>) -> Res<Self> {
     let mut movies: Vec<Title> = Vec::new();
     let mut movies_db: DbByName<MovieCookie> = FnvHashMap::default();
     let mut movies_ids: DbById<MovieCookie> = FnvHashMap::default();
@@ -286,9 +315,10 @@ impl Basics {
       fn update_db<T: From<usize> + Copy>(
         db: &mut DbByName<T>,
         cookie: T,
-        title_name: String,
+        mut title_name: String,
         year: Option<u16>,
       ) {
+        title_name.make_ascii_lowercase();
         db.entry(title_name)
           .and_modify(|by_year| {
             by_year
@@ -335,17 +365,5 @@ impl Basics {
         }
       }
     }
-  }
-
-  pub(crate) fn lookup_movie(
-    &self,
-    title: &str,
-    year: Option<u16>,
-  ) -> Option<impl Iterator<Item = &Title>> {
-    self.movies_db.get(title).and_then(move |by_year| {
-      by_year
-        .get(&year)
-        .map(move |cookies| cookies.iter().map(move |cookie| &self[cookie]))
-    })
   }
 }
