@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
 use atoi::atoi;
-use derive_more::Display;
+use derive_more::{Display, From};
 use directories::ProjectDirs;
 use enum_utils::FromStr;
 use flate2::read::GzDecoder;
@@ -14,15 +14,22 @@ use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read};
 use std::ops::Index;
-use std::path::{Path, PathBuf};
+// use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 use structopt::StructOpt;
 
 type Res<T> = Result<T, Box<dyn Error>>;
 
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
 struct TitleId(usize);
+
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
+struct MovieCookie(usize);
+
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
+struct SeriesCookie(usize);
 
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[enumeration(rename_all = "camelCase")]
@@ -43,43 +50,43 @@ enum TitleType {
   RadioEpisode,
 }
 
-// impl TitleType {
-//   fn is_movie(&self) -> bool {
-//     match self {
-//       TitleType::Short
-//       | TitleType::Video
-//       | TitleType::Movie
-//       | TitleType::TvMovie
-//       | TitleType::TvShort
-//       | TitleType::TvSpecial => true,
-//       TitleType::VideoGame
-//       | TitleType::TvEpisode
-//       | TitleType::TvSeries
-//       | TitleType::TvMiniSeries
-//       | TitleType::TvPilot
-//       | TitleType::RadioSeries
-//       | TitleType::RadioEpisode => false,
-//     }
-//   }
+impl TitleType {
+  fn is_movie(&self) -> bool {
+    match self {
+      TitleType::Short
+      | TitleType::Video
+      | TitleType::Movie
+      | TitleType::TvMovie
+      | TitleType::TvShort
+      | TitleType::TvSpecial => true,
+      TitleType::VideoGame
+      | TitleType::TvEpisode
+      | TitleType::TvSeries
+      | TitleType::TvMiniSeries
+      | TitleType::TvPilot
+      | TitleType::RadioSeries
+      | TitleType::RadioEpisode => false,
+    }
+  }
 
-//   fn is_series(&self) -> bool {
-//     match self {
-//       TitleType::Short
-//       | TitleType::Video
-//       | TitleType::Movie
-//       | TitleType::TvMovie
-//       | TitleType::TvShort
-//       | TitleType::TvSpecial
-//       | TitleType::VideoGame => false,
-//       TitleType::TvEpisode
-//       | TitleType::TvSeries
-//       | TitleType::TvMiniSeries
-//       | TitleType::TvPilot
-//       | TitleType::RadioSeries
-//       | TitleType::RadioEpisode => true,
-//     }
-//   }
-// }
+  fn is_series(&self) -> bool {
+    match self {
+      TitleType::Short
+      | TitleType::Video
+      | TitleType::Movie
+      | TitleType::TvMovie
+      | TitleType::TvShort
+      | TitleType::TvSpecial
+      | TitleType::VideoGame => false,
+      TitleType::TvEpisode
+      | TitleType::TvSeries
+      | TitleType::TvMiniSeries
+      | TitleType::TvPilot
+      | TitleType::RadioSeries
+      | TitleType::RadioEpisode => true,
+    }
+  }
+}
 
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
@@ -212,14 +219,10 @@ enum DbErr {
   EndYear,
   #[display(fmt = "Runtime minutes is not a number")]
   RuntimeMinutes,
-  #[display(fmt = "ID already exists")]
-  IdExists,
   #[display(fmt = "Invalid genre")]
   Genre,
   #[display(fmt = "Unexpected end of file")]
   UnexpectedEof,
-  #[display(fmt = "Duplicate title ID {}", _0)]
-  DuplicateID(usize),
 }
 
 impl DbErr {
@@ -231,35 +234,41 @@ impl DbErr {
     Err(Box::new(DbErr::BadIsAdult))
   }
 
-  fn id_exists<T>() -> Res<T> {
-    Err(Box::new(DbErr::IdExists))
-  }
-
   fn unexpected_eof<T>() -> Res<T> {
     Err(Box::new(DbErr::UnexpectedEof))
-  }
-
-  fn duplicate_id<T>(id: usize) -> Res<T> {
-    Err(Box::new(DbErr::DuplicateID(id)))
   }
 }
 
 impl Error for DbErr {}
 
-type DbByNameAndYear = FnvHashMap<String, FnvHashMap<Option<u16>, Vec<TitleId>>>;
+type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
+type DbByName<C> = FnvHashMap<String, DbByYear<C>>;
 
 struct Db {
-  /// Title information.
-  titles: Vec<Option<Title>>,
-  /// Map from name to years to titles.
-  by_name_and_year: DbByNameAndYear,
+  /// Movies information.
+  movies: Vec<Title>,
+  /// Map from movie names to years to movies.
+  movies_db: DbByName<MovieCookie>,
+
+  /// Series information.
+  series: Vec<Title>,
+  /// Map from series or episode names to years to series.
+  series_db: DbByName<SeriesCookie>,
 }
 
-impl Index<&TitleId> for Db {
-  type Output = Option<Title>;
+impl Index<&MovieCookie> for Db {
+  type Output = Title;
 
-  fn index(&self, index: &TitleId) -> &Self::Output {
-    unsafe { self.titles.get_unchecked(index.0) }
+  fn index(&self, index: &MovieCookie) -> &Self::Output {
+    unsafe { self.movies.get_unchecked(index.0) }
+  }
+}
+
+impl Index<&SeriesCookie> for Db {
+  type Output = Title;
+
+  fn index(&self, index: &SeriesCookie) -> &Self::Output {
+    unsafe { self.series.get_unchecked(index.0) }
   }
 }
 
@@ -409,32 +418,22 @@ impl Db {
   }
 
   fn new<R: BufRead>(mut data: io::Bytes<R>) -> Res<Self> {
-    let mut titles: Vec<Option<Title>> = Vec::new();
-    let mut by_name_and_year: DbByNameAndYear = FnvHashMap::default();
+    let mut movies: Vec<Title> = Vec::new();
+    let mut movies_db: DbByName<MovieCookie> = FnvHashMap::default();
+
+    let mut series: Vec<Title> = Vec::new();
+    let mut series_db: DbByName<SeriesCookie> = FnvHashMap::default();
 
     let mut tok = Vec::new();
     let mut res = String::new();
 
     let _ = Self::skip_line(&mut data)?;
 
-    let mut actual_titles = 0;
-    let mut max_title_id = 0;
-
     loop {
       let c = if let Some(c) = data.next() {
         c?
       } else {
-        debug!(
-          "Titles array has {}/{} ({}%) titles ({} allocated - {}%), max title ID = {}",
-          actual_titles,
-          titles.len(),
-          (actual_titles * 100) / titles.len(),
-          titles.capacity(),
-          (titles.len() * 100) / titles.capacity(),
-          max_title_id,
-        );
-
-        return Ok(Db { titles, by_name_and_year });
+        return Ok(Db { movies, movies_db, series, series_db });
       };
 
       if c != b't' {
@@ -489,14 +488,31 @@ impl Db {
 
       let genres = Db::parse_genres(&mut data, &mut tok, &mut res)?;
 
-      if titles.len() <= id {
-        titles.resize_with(id + 1, Default::default);
-      } else if unsafe { titles.get_unchecked(id) }.is_some() {
-        return DbErr::id_exists();
+      fn update_db<T: From<usize> + Copy>(
+        storage: &mut Vec<Title>,
+        db: &mut DbByName<T>,
+        element: Title,
+        title: String,
+        year: Option<u16>,
+      ) {
+        let cookie = T::from(storage.len());
+        storage.push(element);
+
+        db.entry(title)
+          .and_modify(|by_year| {
+            by_year
+              .entry(year)
+              .and_modify(|titles| titles.push(cookie))
+              .or_insert_with(|| vec![cookie]);
+          })
+          .or_insert_with(|| {
+            let mut by_year = FnvHashMap::default();
+            by_year.insert(year, vec![cookie]);
+            by_year
+          });
       }
 
       let title_id = TitleId(id);
-
       let title = Title {
         title_id,
         title_type,
@@ -509,61 +525,45 @@ impl Db {
         num_votes: 0,
       };
 
-      let old_title = unsafe { titles.get_unchecked(id) };
+      if title_type.is_movie() {
+        update_db(&mut movies, &mut movies_db, title, ptitle, start_year);
 
-      if let Some(old_title) = old_title {
-        if old_title != &title {
-          return DbErr::duplicate_id(id);
+        if let Some(otitle) = otitle {
+          update_db(&mut movies, &mut movies_db, title, otitle, start_year);
         }
-      }
+      } else if title_type.is_series() {
+        update_db(&mut series, &mut series_db, title, ptitle, start_year);
 
-      *unsafe { titles.get_unchecked_mut(id) } = Some(title);
-
-      actual_titles += 1;
-      max_title_id = max_title_id.max(id);
-
-      fn update_db(
-        db: &mut DbByNameAndYear,
-        id: TitleId,
-        title: String,
-        year: Option<u16>,
-      ) {
-        db.entry(title)
-          .and_modify(|by_year| {
-            by_year
-              .entry(year)
-              .and_modify(|titles| titles.push(id))
-              .or_insert_with(|| vec![id]);
-          })
-          .or_insert_with(|| {
-            let mut by_year = FnvHashMap::default();
-            by_year.insert(year, vec![id]);
-            by_year
-          });
-      }
-
-      update_db(&mut by_name_and_year, title_id, ptitle, start_year);
-
-      if let Some(otitle) = otitle {
-        update_db(&mut by_name_and_year, title_id, otitle, start_year);
+        if let Some(otitle) = otitle {
+          update_db(&mut series, &mut series_db, title, otitle, start_year);
+        }
       }
     }
   }
 
-  fn lookup(&self, title: &str, year: Option<u16>) -> Option<&Vec<TitleId>> {
-    self.by_name_and_year.get(title).and_then(|by_year| by_year.get(&year))
+  fn lookup_movie(
+    &self,
+    title: &str,
+    year: Option<u16>,
+  ) -> Option<impl Iterator<Item = &Title>> {
+    self.movies_db.get(title).and_then(move |by_year| {
+      by_year
+        .get(&year)
+        .map(move |cookies| cookies.iter().map(move |cookie| &self[cookie]))
+    })
   }
 }
 
-trait TvService {
-  fn new(cache_dir: &Path) -> Self;
-  fn lookup(&self, title: &str, year: u16) -> Res<Option<Vec<Title>>>;
-}
+// trait TvService: Sized {
+//   fn new(cache_dir: &Path) -> Res<Self>;
+//   fn lookup<T: AsRef<Title>>(&self, title: &str, year: u16) -> Res<Option<Vec<T>>>;
+// }
 
 struct Imdb {
-  cache_dir: PathBuf,
-  basics_db_file: PathBuf,
-  ratings_db_file: PathBuf,
+  // cache_dir: PathBuf,
+  // basics_db_file: PathBuf,
+  // ratings_db_file: PathBuf,
+  basics_db: Db,
 }
 
 fn file_exists(path: &Path) -> Res<Option<File>> {
@@ -629,18 +629,22 @@ impl Imdb {
   const BASICS: &'static str = "title.basics.tsv.gz";
   const RATINGS: &'static str = "title.ratings.tsv.gz";
 
-  fn ensure_db_files(&self) -> Res<()> {
-    fs::create_dir_all(&self.cache_dir)?;
+  fn ensure_db_files(
+    cache_dir: &Path,
+    basics_db_file: &Path,
+    ratings_db_file: &Path,
+  ) -> Res<()> {
+    fs::create_dir_all(cache_dir)?;
     debug!("Created Imdb cache directory");
 
     let client = reqwest::blocking::Client::builder().build()?;
     let imdb = Url::parse(Self::IMDB)?;
 
     let url = imdb.join(Self::BASICS)?;
-    ensure_file(&client, &self.basics_db_file, url, "Imdb Title Basics DB")?;
+    ensure_file(&client, basics_db_file, url, "Imdb Title Basics DB")?;
 
     let url = imdb.join(Self::RATINGS)?;
-    ensure_file(&client, &self.ratings_db_file, url, "Imdb Title Ratings DB")?;
+    ensure_file(&client, ratings_db_file, url, "Imdb Title Ratings DB")?;
 
     Ok(())
   }
@@ -666,23 +670,18 @@ impl Imdb {
 
   //   Ok(db)
   // }
-}
 
-impl TvService for Imdb {
-  fn new(cache_dir: &Path) -> Self {
+  fn new(cache_dir: &Path) -> Res<Self> {
     let cache_dir = cache_dir.join("imdb");
     let basics_db_file = cache_dir.join(Self::BASICS);
     let ratings_db_file = cache_dir.join(Self::RATINGS);
-    Imdb { cache_dir, basics_db_file, ratings_db_file }
-  }
 
-  fn lookup(&self, title: &str, year: u16) -> Res<Option<Vec<Title>>> {
-    self.ensure_db_files()?;
+    Self::ensure_db_files(&cache_dir, &basics_db_file, &ratings_db_file)?;
 
     // TODO switch out the sample file.
     // let basics_mmap = mmap_file(&self.cache_dir.join("title.basics.small.tsv.gz"))?;
     // let basics_mmap = mmap_file(&self.basics_db_file)?;
-    let basics_file = File::open(&self.basics_db_file)?;
+    let basics_file = File::open(&basics_db_file)?;
     // let mut buf = Vec::with_capacity(basics_file.metadata()?.len() as usize);
     // basics_file.read_to_end(&mut buf)?;
     let basics_db = Self::load_basics_db(BufReader::new(basics_file))?;
@@ -690,13 +689,51 @@ impl TvService for Imdb {
 
     // let ratings = self.load_ratings_db()?;
 
-    Ok(
-      basics_db
-        .lookup(title, Some(year))
-        .and_then(|ids| ids.iter().map(|id| basics_db[id]).collect()),
-    )
+    // Ok(Imdb { cache_dir, basics_db_file, ratings_db_file, basics_db })
+    Ok(Imdb { basics_db })
+  }
+
+  fn get_movie(
+    &self,
+    title: &str,
+    year: Option<u16>,
+  ) -> Option<impl Iterator<Item = &Title>> {
+    self.basics_db.lookup_movie(title, year)
   }
 }
+
+// impl TvService for Imdb {
+//   fn new(cache_dir: &Path) -> Res<Self> {
+//     let cache_dir = cache_dir.join("imdb");
+//     let basics_db_file = cache_dir.join(Self::BASICS);
+//     let ratings_db_file = cache_dir.join(Self::RATINGS);
+
+//     Self::ensure_db_files(&cache_dir, &basics_db_file, &ratings_db_file)?;
+
+//     // TODO switch out the sample file.
+//     // let basics_mmap = mmap_file(&self.cache_dir.join("title.basics.small.tsv.gz"))?;
+//     // let basics_mmap = mmap_file(&self.basics_db_file)?;
+//     let basics_file = File::open(&basics_db_file)?;
+//     // let mut buf = Vec::with_capacity(basics_file.metadata()?.len() as usize);
+//     // basics_file.read_to_end(&mut buf)?;
+//     let basics_db = Self::load_basics_db(BufReader::new(basics_file))?;
+//     info!("Done loading IMDB Basics DB");
+
+//     // let ratings = self.load_ratings_db()?;
+
+//     // Ok(Imdb { cache_dir, basics_db_file, ratings_db_file, basics_db })
+//     Ok(Imdb { basics_db })
+//   }
+
+//   fn lookup(&self, title: &str, year: u16) -> Res<Option<Vec<&Title>>> {
+//     Ok(
+//       self
+//         .basics_db
+//         .lookup(title, Some(year))
+//         .map(|cookies| cookies.iter().map(|cookie| &self.basics_db[cookie]).collect()),
+//     )
+//   }
+// }
 
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
@@ -806,14 +843,16 @@ fn run(opt: &Opt) -> Res<()> {
   info!("Title: {}", title);
   info!("Year: {}", year);
 
-  let imdb = Imdb::new(cache_dir);
-  if let Some(titles) = imdb.lookup(title, year)? {
+  let imdb = Imdb::new(cache_dir)?;
+  if let Some(titles) = imdb.get_movie(title, Some(year)) {
     for title in titles {
       println!("{}", title);
     }
   } else {
     println!("No results");
   }
+
+  std::mem::forget(imdb);
 
   Ok(())
 }
