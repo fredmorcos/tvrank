@@ -6,7 +6,7 @@ use std::error::Error;
 
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
-pub enum DbErr {
+pub enum Err {
   #[display(fmt = "ID does not start with `tt` (e.g. ttXXXXXXX)")]
   Id,
   #[display(fmt = "ID does not contain a number (e.g. ttXXXXXXX)")]
@@ -29,22 +29,22 @@ pub enum DbErr {
   Duplicate(u64),
 }
 
-impl DbErr {
+impl Err {
   pub(crate) fn id<T>() -> Res<T> {
-    Err(Box::new(DbErr::Id))
+    Err(Box::new(Err::Id))
   }
 
   pub(crate) fn adult<T>() -> Res<T> {
-    Err(Box::new(DbErr::Adult))
+    Err(Box::new(Err::Adult))
   }
 
   pub(crate) fn eof<T>() -> Res<T> {
-    Err(Box::new(DbErr::Eof))
+    Err(Box::new(Err::Eof))
   }
 
   pub(crate) fn duplicate<T>(id: u64) -> Res<T> {
-    Err(Box::new(DbErr::Duplicate(id)))
+    Err(Box::new(Err::Duplicate(id)))
   }
 }
 
-impl Error for DbErr {}
+impl Error for Err {}

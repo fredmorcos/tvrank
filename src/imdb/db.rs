@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
 use super::{
-  error::DbErr,
+  error::Err,
   genre::{Genre, Genres},
   title::{Title, TitleType},
 };
@@ -95,7 +95,7 @@ impl Db {
     }
 
     if tok.is_empty() {
-      DbErr::eof()
+      Err::eof()
     } else {
       Ok(())
     }
@@ -120,7 +120,7 @@ impl Db {
     }
 
     if tok.is_empty() {
-      DbErr::eof()
+      Err::eof()
     } else {
       res.push_str(std::str::from_utf8(tok)?);
       Ok(())
@@ -131,11 +131,11 @@ impl Db {
     let is_adult = match Db::next_byte(data)? {
       Db::ZERO => false,
       Db::ONE => true,
-      _ => return DbErr::adult(),
+      _ => return Err::adult(),
     };
 
     if Db::next_byte(data)? != Db::TAB {
-      return DbErr::adult();
+      return Err::adult();
     }
 
     Ok(is_adult)
@@ -186,7 +186,7 @@ impl Db {
         break;
       }
 
-      let genre = Genre::from_str(res).map_err(|_| DbErr::Genre)?;
+      let genre = Genre::from_str(res).map_err(|_| Err::Genre)?;
       genres.add_genre(genre);
 
       if finish {
@@ -201,7 +201,7 @@ impl Db {
     if let Some(current) = data.next() {
       Ok(current?)
     } else {
-      DbErr::eof()
+      Err::eof()
     }
   }
 
@@ -227,21 +227,21 @@ impl Db {
       };
 
       if c != b't' {
-        return DbErr::id();
+        return Err::id();
       }
 
       let c = Db::next_byte(&mut data)?;
 
       if c != b't' {
-        return DbErr::id();
+        return Err::id();
       }
 
       Db::parse_cell(&mut data, &mut tok)?;
-      let id = atoi::<u64>(&tok).ok_or(DbErr::IdNumber)?;
+      let id = atoi::<u64>(&tok).ok_or(Err::IdNumber)?;
 
       Db::parse_cell(&mut data, &mut tok)?;
       let title_type = unsafe { std::str::from_utf8_unchecked(&tok) };
-      let title_type = TitleType::from_str(title_type).map_err(|_| DbErr::TitleType)?;
+      let title_type = TitleType::from_str(title_type).map_err(|_| Err::TitleType)?;
 
       let mut ptitle = String::new();
       Db::parse_title(&mut data, &mut tok, &mut ptitle)?;
@@ -259,21 +259,19 @@ impl Db {
       Db::parse_cell(&mut data, &mut tok)?;
       let start_year = match tok.as_slice() {
         b"\\N" => None,
-        start_year => Some(atoi::<u16>(start_year).ok_or(DbErr::StartYear)?),
+        start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
       };
 
       Db::parse_cell(&mut data, &mut tok)?;
       let end_year = match tok.as_slice() {
         b"\\N" => None,
-        end_year => Some(atoi::<u16>(end_year).ok_or(DbErr::EndYear)?),
+        end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
       };
 
       Db::parse_cell(&mut data, &mut tok)?;
       let runtime_minutes = match tok.as_slice() {
         b"\\N" => None,
-        runtime_minutes => {
-          Some(atoi::<u16>(runtime_minutes).ok_or(DbErr::RuntimeMinutes)?)
-        }
+        runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
       };
 
       let genres = Db::parse_genres(&mut data, &mut tok, &mut res)?;
@@ -307,7 +305,7 @@ impl Db {
         movies.push(title);
 
         if movies_ids.insert(title_id, cookie).is_some() {
-          return DbErr::duplicate(title_id.0);
+          return Err::duplicate(title_id.0);
         }
 
         update_db(&mut movies_db, cookie, ptitle, start_year);
@@ -320,7 +318,7 @@ impl Db {
         series.push(title);
 
         if series_ids.insert(title_id, cookie).is_some() {
-          return DbErr::duplicate(title_id.0);
+          return Err::duplicate(title_id.0);
         }
 
         update_db(&mut series_db, cookie, ptitle, start_year);

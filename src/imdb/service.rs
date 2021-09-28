@@ -13,7 +13,7 @@ use std::{
   time::{Duration, SystemTime},
 };
 
-pub struct Imdb {
+pub struct Service {
   // cache_dir: PathBuf,
   // basics_db_file: PathBuf,
   // ratings_db_file: PathBuf,
@@ -73,7 +73,7 @@ fn ensure_file(
   Ok(())
 }
 
-impl Imdb {
+impl Service {
   const IMDB: &'static str = "https://datasets.imdbws.com/";
   const BASICS: &'static str = "title.basics.tsv.gz";
   const RATINGS: &'static str = "title.ratings.tsv.gz";
@@ -119,7 +119,7 @@ impl Imdb {
     let basics_db = Self::load_basics_db(BufReader::new(basics_file))?;
     info!("Done loading IMDB Basics DB");
 
-    Ok(Imdb { basics_db })
+    Ok(Service { basics_db })
   }
 
   pub fn get_movie(
