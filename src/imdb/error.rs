@@ -38,10 +38,6 @@ impl Err {
     Err(Box::new(Err::Adult))
   }
 
-  pub(crate) fn eof<T>() -> Res<T> {
-    Err(Box::new(Err::Eof))
-  }
-
   pub(crate) fn duplicate<T>(id: u64) -> Res<T> {
     Err(Box::new(Err::Duplicate(id)))
   }

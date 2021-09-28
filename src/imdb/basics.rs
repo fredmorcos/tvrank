@@ -9,11 +9,7 @@ use crate::Res;
 use atoi::atoi;
 use derive_more::{Display, From};
 use fnv::FnvHashMap;
-use std::{
-  io::{self, BufRead},
-  ops::Index,
-  str::FromStr,
-};
+use std::{ops::Index, str::FromStr};
 
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
 struct TitleId(u64);
@@ -90,280 +86,148 @@ impl Basics {
     })
   }
 
-  const TAB: u8 = b'\t';
-  const ZERO: u8 = b'0';
-  const ONE: u8 = b'1';
-  const COMMA: u8 = b',';
-  const NL: u8 = b'\n';
+  pub(crate) fn add_from_line(&mut self, line: &[u8]) -> Res<()> {
+    const TAB: u8 = b'\t';
+    const COMMA: u8 = b',';
 
-  const NOT_AVAIL: &'static [u8; 2] = b"\\N";
+    const TT: &[u8] = b"tt";
+    const ZERO: &[u8] = b"0";
+    const ONE: &[u8] = b"1";
 
-  fn skip_line<R: BufRead>(data: &mut io::Bytes<R>) -> Res<()> {
-    for c in data {
-      let c = c?;
+    const NOT_AVAIL: &[u8] = b"\\N";
 
-      if c == Basics::NL {
-        break;
+    let mut iter = line.split(|&b| b == TAB);
+
+    macro_rules! next {
+      () => {{
+        iter.next().ok_or(Err::Eof)?
+      }};
+    }
+
+    let id = {
+      let id = next!();
+
+      if &id[0..=1] != TT {
+        return Err::id();
+      }
+
+      atoi::<u64>(&id[2..]).ok_or(Err::IdNumber)?
+    };
+
+    let title_type = {
+      let title_type = next!();
+      let title_type = unsafe { std::str::from_utf8_unchecked(title_type) };
+      TitleType::from_str(title_type).map_err(|_| Err::TitleType)?
+    };
+
+    if !title_type.is_movie() && !title_type.is_series() {
+      return Ok(());
+    }
+
+    let ptitle = next!();
+    let otitle = next!();
+
+    let is_adult = {
+      let is_adult = next!();
+      match is_adult {
+        ZERO => false,
+        ONE => true,
+        _ => return Err::adult(),
+      }
+    };
+
+    let start_year = {
+      let start_year = next!();
+      match start_year {
+        NOT_AVAIL => None,
+        start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
+      }
+    };
+
+    let end_year = {
+      let end_year = next!();
+      match end_year {
+        NOT_AVAIL => None,
+        end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
+      }
+    };
+
+    let runtime_minutes = {
+      let runtime_minutes = next!();
+      match runtime_minutes {
+        NOT_AVAIL => None,
+        runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
+      }
+    };
+
+    let genres = {
+      let genres = next!();
+      let mut result = Genres::default();
+
+      if genres != NOT_AVAIL {
+        let genres = genres.split(|&b| b == COMMA);
+        for genre in genres {
+          let genre = unsafe { std::str::from_utf8_unchecked(genre) };
+          let genre = Genre::from_str(genre).map_err(|_| Err::Genre)?;
+          result.add_genre(genre);
+        }
+      }
+
+      result
+    };
+
+    let title_id = TitleId(id);
+    let title =
+      Title::new(title_type, is_adult, start_year, end_year, runtime_minutes, genres);
+
+    if title_type.is_movie() {
+      let cookie = MovieCookie::from(self.movies.len());
+      self.movies.push(title);
+
+      if self.movies_ids.insert(title_id, cookie).is_some() {
+        return Err::duplicate(title_id.0);
+      }
+
+      Self::db(&mut self.movies_db, cookie, ptitle, start_year);
+
+      if otitle != ptitle {
+        Self::db(&mut self.movies_db, cookie, otitle, start_year);
+      }
+    } else if title_type.is_series() {
+      let cookie = SeriesCookie::from(self.series.len());
+      self.series.push(title);
+
+      if self.series_ids.insert(title_id, cookie).is_some() {
+        return Err::duplicate(title_id.0);
+      }
+
+      Self::db(&mut self.series_db, cookie, ptitle, start_year);
+
+      if otitle != ptitle {
+        Self::db(&mut self.series_db, cookie, otitle, start_year);
       }
     }
 
     Ok(())
   }
 
-  fn parse_cell<R: BufRead>(data: &mut io::Bytes<R>, tok: &mut Vec<u8>) -> Res<()> {
-    tok.clear();
-
-    for c in data {
-      let c = c?;
-
-      if c == Basics::TAB {
-        break;
-      }
-
-      tok.push(c);
-    }
-
-    if tok.is_empty() {
-      Err::eof()
-    } else {
-      Ok(())
-    }
-  }
-
-  fn parse_title<R: BufRead>(
-    data: &mut io::Bytes<R>,
-    tok: &mut Vec<u8>,
-    res: &mut String,
-  ) -> Res<()> {
-    tok.clear();
-    res.clear();
-
-    for c in data {
-      let c = c?;
-
-      if c == Basics::TAB {
-        break;
-      }
-
-      tok.push(c);
-    }
-
-    if tok.is_empty() {
-      Err::eof()
-    } else {
-      res.push_str(std::str::from_utf8(tok)?);
-      Ok(())
-    }
-  }
-
-  fn parse_is_adult<R: BufRead>(data: &mut io::Bytes<R>) -> Res<bool> {
-    let is_adult = match Basics::next_byte(data)? {
-      Basics::ZERO => false,
-      Basics::ONE => true,
-      _ => return Err::adult(),
-    };
-
-    if Basics::next_byte(data)? != Basics::TAB {
-      return Err::adult();
-    }
-
-    Ok(is_adult)
-  }
-
-  fn parse_genre<R: BufRead>(
-    data: &mut io::Bytes<R>,
-    tok: &mut Vec<u8>,
-    res: &mut String,
-  ) -> Res<bool> {
-    tok.clear();
-    res.clear();
-
-    let mut finish = false;
-
-    for c in data {
-      let c = c?;
-
-      if c == Basics::COMMA {
-        break;
-      } else if c == Basics::NL {
-        finish = true;
-        break;
-      }
-
-      tok.push(c);
-    }
-
-    if tok.is_empty() || tok == Self::NOT_AVAIL {
-      Ok(true)
-    } else {
-      res.push_str(unsafe { std::str::from_utf8_unchecked(tok) });
-      Ok(finish)
-    }
-  }
-
-  fn parse_genres<R: BufRead>(
-    data: &mut io::Bytes<R>,
-    tok: &mut Vec<u8>,
-    res: &mut String,
-  ) -> Res<Genres> {
-    let mut genres = Genres::default();
-
-    loop {
-      let finish = Self::parse_genre(data, tok, res)?;
-
-      if tok == Self::NOT_AVAIL {
-        break;
-      }
-
-      let genre = Genre::from_str(res).map_err(|_| Err::Genre)?;
-      genres.add_genre(genre);
-
-      if finish {
-        break;
-      }
-    }
-
-    Ok(genres)
-  }
-
-  fn next_byte<R: BufRead>(data: &mut io::Bytes<R>) -> Res<u8> {
-    if let Some(current) = data.next() {
-      Ok(current?)
-    } else {
-      Err::eof()
-    }
-  }
-
-  pub(crate) fn new<R: BufRead>(mut data: io::Bytes<R>) -> Res<Self> {
-    let mut movies: Vec<Title> = Vec::new();
-    let mut movies_db: DbByName<MovieCookie> = FnvHashMap::default();
-    let mut movies_ids: DbById<MovieCookie> = FnvHashMap::default();
-
-    let mut series: Vec<Title> = Vec::new();
-    let mut series_db: DbByName<SeriesCookie> = FnvHashMap::default();
-    let mut series_ids: DbById<SeriesCookie> = FnvHashMap::default();
-
-    let mut tok = Vec::new();
-    let mut res = String::new();
-
-    let _ = Self::skip_line(&mut data)?;
-
-    loop {
-      let c = if let Some(c) = data.next() {
-        c?
-      } else {
-        return Ok(Basics {
-          movies,
-          movies_db,
-          movies_ids,
-          series,
-          series_db,
-          series_ids,
-        });
-      };
-
-      if c != b't' {
-        return Err::id();
-      }
-
-      let c = Basics::next_byte(&mut data)?;
-
-      if c != b't' {
-        return Err::id();
-      }
-
-      Basics::parse_cell(&mut data, &mut tok)?;
-      let id = atoi::<u64>(&tok).ok_or(Err::IdNumber)?;
-
-      Basics::parse_cell(&mut data, &mut tok)?;
-      let title_type = unsafe { std::str::from_utf8_unchecked(&tok) };
-      let title_type = TitleType::from_str(title_type).map_err(|_| Err::TitleType)?;
-
-      let mut ptitle = String::new();
-      Basics::parse_title(&mut data, &mut tok, &mut ptitle)?;
-      Basics::parse_title(&mut data, &mut tok, &mut res)?;
-      let otitle = if ptitle == res {
-        None
-      } else {
-        let otitle = Some(res);
-        res = String::new();
-        otitle
-      };
-
-      let is_adult = Basics::parse_is_adult(&mut data)?;
-
-      Basics::parse_cell(&mut data, &mut tok)?;
-      let start_year = match tok.as_slice() {
-        b"\\N" => None,
-        start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
-      };
-
-      Basics::parse_cell(&mut data, &mut tok)?;
-      let end_year = match tok.as_slice() {
-        b"\\N" => None,
-        end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
-      };
-
-      Basics::parse_cell(&mut data, &mut tok)?;
-      let runtime_minutes = match tok.as_slice() {
-        b"\\N" => None,
-        runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
-      };
-
-      let genres = Basics::parse_genres(&mut data, &mut tok, &mut res)?;
-
-      fn update_db<T: From<usize> + Copy>(
-        db: &mut DbByName<T>,
-        cookie: T,
-        mut title_name: String,
-        year: Option<u16>,
-      ) {
-        title_name.make_ascii_lowercase();
-        db.entry(title_name)
-          .and_modify(|by_year| {
-            by_year
-              .entry(year)
-              .and_modify(|titles| titles.push(cookie))
-              .or_insert_with(|| vec![cookie]);
-          })
-          .or_insert_with(|| {
-            let mut by_year = FnvHashMap::default();
-            by_year.insert(year, vec![cookie]);
-            by_year
-          });
-      }
-
-      let title_id = TitleId(id);
-      let title =
-        Title::new(title_type, is_adult, start_year, end_year, runtime_minutes, genres);
-
-      if title_type.is_movie() {
-        let cookie = MovieCookie::from(movies.len());
-        movies.push(title);
-
-        if movies_ids.insert(title_id, cookie).is_some() {
-          return Err::duplicate(title_id.0);
-        }
-
-        update_db(&mut movies_db, cookie, ptitle, start_year);
-
-        if let Some(otitle) = otitle {
-          update_db(&mut movies_db, cookie, otitle, start_year);
-        }
-      } else if title_type.is_series() {
-        let cookie = SeriesCookie::from(series.len());
-        series.push(title);
-
-        if series_ids.insert(title_id, cookie).is_some() {
-          return Err::duplicate(title_id.0);
-        }
-
-        update_db(&mut series_db, cookie, ptitle, start_year);
-
-        if let Some(otitle) = otitle {
-          update_db(&mut series_db, cookie, otitle, start_year);
-        }
-      }
-    }
+  fn db<T>(db: &mut DbByName<T>, cookie: T, name: &[u8], year: Option<u16>)
+  where
+    T: From<usize> + Copy,
+  {
+    let name = unsafe { std::str::from_utf8_unchecked(name) };
+    let name = name.to_ascii_lowercase();
+    db.entry(name)
+      .and_modify(|by_year| {
+        by_year
+          .entry(year)
+          .and_modify(|titles| titles.push(cookie))
+          .or_insert_with(|| vec![cookie]);
+      })
+      .or_insert_with(|| {
+        let mut by_year = DbByYear::default();
+        by_year.insert(year, vec![cookie]);
+        by_year
+      });
   }
 }
