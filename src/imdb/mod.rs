@@ -1,9 +1,10 @@
 #![warn(clippy::all)]
 
-pub mod db;
+pub mod basics;
 pub mod error;
 pub mod genre;
 pub mod service;
+pub mod storage;
 pub mod title;
 
 pub use error::Err as ImdbErr;

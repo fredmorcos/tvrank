@@ -28,7 +28,7 @@ type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type DbByName<C> = FnvHashMap<String, DbByYear<C>>;
 type DbById<C> = FnvHashMap<TitleId, C>;
 
-pub(crate) struct Db {
+pub(crate) struct Basics {
   /// Movies information.
   movies: Vec<Title>,
   /// Map from movie names to years to movies.
@@ -44,7 +44,7 @@ pub(crate) struct Db {
   series_ids: DbById<SeriesCookie>,
 }
 
-impl Index<&MovieCookie> for Db {
+impl Index<&MovieCookie> for Basics {
   type Output = Title;
 
   fn index(&self, index: &MovieCookie) -> &Self::Output {
@@ -52,7 +52,7 @@ impl Index<&MovieCookie> for Db {
   }
 }
 
-impl Index<&SeriesCookie> for Db {
+impl Index<&SeriesCookie> for Basics {
   type Output = Title;
 
   fn index(&self, index: &SeriesCookie) -> &Self::Output {
@@ -60,7 +60,7 @@ impl Index<&SeriesCookie> for Db {
   }
 }
 
-impl Db {
+impl Basics {
   const TAB: u8 = b'\t';
   const ZERO: u8 = b'0';
   const ONE: u8 = b'1';
@@ -73,7 +73,7 @@ impl Db {
     for c in data {
       let c = c?;
 
-      if c == Db::NL {
+      if c == Basics::NL {
         break;
       }
     }
@@ -87,7 +87,7 @@ impl Db {
     for c in data {
       let c = c?;
 
-      if c == Db::TAB {
+      if c == Basics::TAB {
         break;
       }
 
@@ -112,7 +112,7 @@ impl Db {
     for c in data {
       let c = c?;
 
-      if c == Db::TAB {
+      if c == Basics::TAB {
         break;
       }
 
@@ -128,13 +128,13 @@ impl Db {
   }
 
   fn parse_is_adult<R: BufRead>(data: &mut io::Bytes<R>) -> Res<bool> {
-    let is_adult = match Db::next_byte(data)? {
-      Db::ZERO => false,
-      Db::ONE => true,
+    let is_adult = match Basics::next_byte(data)? {
+      Basics::ZERO => false,
+      Basics::ONE => true,
       _ => return Err::adult(),
     };
 
-    if Db::next_byte(data)? != Db::TAB {
+    if Basics::next_byte(data)? != Basics::TAB {
       return Err::adult();
     }
 
@@ -154,9 +154,9 @@ impl Db {
     for c in data {
       let c = c?;
 
-      if c == Db::COMMA {
+      if c == Basics::COMMA {
         break;
-      } else if c == Db::NL {
+      } else if c == Basics::NL {
         finish = true;
         break;
       }
@@ -223,29 +223,36 @@ impl Db {
       let c = if let Some(c) = data.next() {
         c?
       } else {
-        return Ok(Db { movies, movies_db, movies_ids, series, series_db, series_ids });
+        return Ok(Basics {
+          movies,
+          movies_db,
+          movies_ids,
+          series,
+          series_db,
+          series_ids,
+        });
       };
 
       if c != b't' {
         return Err::id();
       }
 
-      let c = Db::next_byte(&mut data)?;
+      let c = Basics::next_byte(&mut data)?;
 
       if c != b't' {
         return Err::id();
       }
 
-      Db::parse_cell(&mut data, &mut tok)?;
+      Basics::parse_cell(&mut data, &mut tok)?;
       let id = atoi::<u64>(&tok).ok_or(Err::IdNumber)?;
 
-      Db::parse_cell(&mut data, &mut tok)?;
+      Basics::parse_cell(&mut data, &mut tok)?;
       let title_type = unsafe { std::str::from_utf8_unchecked(&tok) };
       let title_type = TitleType::from_str(title_type).map_err(|_| Err::TitleType)?;
 
       let mut ptitle = String::new();
-      Db::parse_title(&mut data, &mut tok, &mut ptitle)?;
-      Db::parse_title(&mut data, &mut tok, &mut res)?;
+      Basics::parse_title(&mut data, &mut tok, &mut ptitle)?;
+      Basics::parse_title(&mut data, &mut tok, &mut res)?;
       let otitle = if ptitle == res {
         None
       } else {
@@ -254,27 +261,27 @@ impl Db {
         otitle
       };
 
-      let is_adult = Db::parse_is_adult(&mut data)?;
+      let is_adult = Basics::parse_is_adult(&mut data)?;
 
-      Db::parse_cell(&mut data, &mut tok)?;
+      Basics::parse_cell(&mut data, &mut tok)?;
       let start_year = match tok.as_slice() {
         b"\\N" => None,
         start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
       };
 
-      Db::parse_cell(&mut data, &mut tok)?;
+      Basics::parse_cell(&mut data, &mut tok)?;
       let end_year = match tok.as_slice() {
         b"\\N" => None,
         end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
       };
 
-      Db::parse_cell(&mut data, &mut tok)?;
+      Basics::parse_cell(&mut data, &mut tok)?;
       let runtime_minutes = match tok.as_slice() {
         b"\\N" => None,
         runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
       };
 
-      let genres = Db::parse_genres(&mut data, &mut tok, &mut res)?;
+      let genres = Basics::parse_genres(&mut data, &mut tok, &mut res)?;
 
       fn update_db<T: From<usize> + Copy>(
         db: &mut DbByName<T>,
