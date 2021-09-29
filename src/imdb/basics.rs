@@ -58,32 +58,40 @@ impl Index<&SeriesCookie> for Basics {
 }
 
 impl Basics {
-  pub(crate) fn movie_with_year(&self, name: &str, year: u16) -> Option<Vec<&Title>> {
-    self.movies_db.get(name).and_then(move |by_year| {
-      by_year
-        .get(&Some(year))
-        .map(move |cookies| cookies.iter().map(move |cookie| &self[cookie]).collect())
-    })
+  pub(crate) fn movie_with_year(&self, name: &str, year: u16) -> Vec<&Title> {
+    if let Some(by_year) = self.movies_db.get(name) {
+      if let Some(cookies) = by_year.get(&Some(year)) {
+        return cookies.iter().map(|cookie| &self[cookie]).collect();
+      }
+    }
+
+    vec![]
   }
 
-  pub(crate) fn movie(&self, name: &str) -> Option<Vec<&Title>> {
-    self.movies_db.get(name).map(move |by_year| {
-      by_year.values().flatten().map(move |cookie| &self[cookie]).collect()
-    })
+  pub(crate) fn movie(&self, name: &str) -> Vec<&Title> {
+    if let Some(by_year) = self.movies_db.get(name) {
+      return by_year.values().flatten().map(|cookie| &self[cookie]).collect();
+    }
+
+    vec![]
   }
 
-  pub(crate) fn series_with_year(&self, name: &str, year: u16) -> Option<Vec<&Title>> {
-    self.series_db.get(name).and_then(move |by_year| {
-      by_year
-        .get(&Some(year))
-        .map(move |cookies| cookies.iter().map(move |cookie| &self[cookie]).collect())
-    })
+  pub(crate) fn series_with_year(&self, name: &str, year: u16) -> Vec<&Title> {
+    if let Some(by_year) = self.series_db.get(name) {
+      if let Some(cookies) = by_year.get(&Some(year)) {
+        return cookies.iter().map(|cookie| &self[cookie]).collect();
+      }
+    }
+
+    vec![]
   }
 
-  pub(crate) fn series(&self, name: &str) -> Option<Vec<&Title>> {
-    self.series_db.get(name).map(move |by_year| {
-      by_year.values().flatten().map(move |cookie| &self[cookie]).collect()
-    })
+  pub(crate) fn series(&self, name: &str) -> Vec<&Title> {
+    if let Some(by_year) = self.series_db.get(name) {
+      return by_year.values().flatten().map(|cookie| &self[cookie]).collect();
+    }
+
+    vec![]
   }
 
   pub(crate) fn add_from_line(&mut self, line: &[u8]) -> Res<()> {

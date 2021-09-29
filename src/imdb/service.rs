@@ -26,7 +26,7 @@ impl Service {
     Ok(Service { basics_db })
   }
 
-  pub fn movie(&self, name: &str, year: Option<u16>) -> Option<Vec<&Title>> {
+  pub fn movie(&self, name: &str, year: Option<u16>) -> Vec<&Title> {
     if let Some(year) = year {
       self.basics_db.movie_with_year(name, year)
     } else {
@@ -34,7 +34,7 @@ impl Service {
     }
   }
 
-  pub fn series(&self, name: &str, year: Option<u16>) -> Option<Vec<&Title>> {
+  pub fn series(&self, name: &str, year: Option<u16>) -> Vec<&Title> {
     if let Some(year) = year {
       self.basics_db.series_with_year(name, year)
     } else {

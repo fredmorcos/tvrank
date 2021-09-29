@@ -130,12 +130,13 @@ fn run(opt: &Opt) -> Res<()> {
     Imdb::movie
   };
 
-  if let Some(results) = query_fn(&imdb, &name.to_ascii_lowercase(), year) {
-    for result in results {
-      println!("{}: {}", name, result);
-    }
-  } else {
+  let results = query_fn(&imdb, &name.to_ascii_lowercase(), year);
+  if results.is_empty() {
     println!("No results");
+  } else {
+    for result in results {
+      println!("{} -> {}", name, result);
+    }
   }
 
   std::mem::forget(imdb);
