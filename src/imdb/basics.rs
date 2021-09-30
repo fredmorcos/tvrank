@@ -58,6 +58,14 @@ impl Index<&SeriesCookie> for Basics {
 }
 
 impl Basics {
+  pub(crate) fn n_movies(&self) -> usize {
+    self.movies.len()
+  }
+
+  pub(crate) fn n_series(&self) -> usize {
+    self.series.len()
+  }
+
   pub(crate) fn movie_with_year(&self, name: &str, year: u16) -> Vec<&Title> {
     if let Some(by_year) = self.movies_db.get(name) {
       if let Some(cookies) = by_year.get(&Some(year)) {
@@ -94,7 +102,7 @@ impl Basics {
     vec![]
   }
 
-  pub(crate) fn add_from_line(&mut self, line: &[u8]) -> Res<()> {
+  pub(crate) fn add_basics_from_line(&mut self, line: &[u8]) -> Res<()> {
     const TAB: u8 = b'\t';
     const COMMA: u8 = b',';
 
@@ -225,6 +233,7 @@ impl Basics {
   {
     let name = unsafe { std::str::from_utf8_unchecked(name) };
     let name = name.to_ascii_lowercase();
+
     db.entry(name)
       .and_modify(|by_year| {
         by_year

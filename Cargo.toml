@@ -35,6 +35,9 @@ flate2 = "1.0"
 reqwest = { version = "0.11", features = ["blocking"] }
 atoi = "0.4"
 fnv = "1.0"
+num_cpus = "1.13"
+crossbeam = "0.8"
+parking_lot = "0.11"
 
 [profile.release]
 debug = true

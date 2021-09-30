@@ -130,7 +130,11 @@ fn run(opt: &Opt) -> Res<()> {
     Imdb::movie
   };
 
-  let results = query_fn(&imdb, &name.to_ascii_lowercase(), year);
+  // TODO: Need to properly shutdown the multi-threaded service before exiting the main
+  // thread. Replace the ? with a proper match on the error, print the error and wait for
+  // the threads to shutdown. This will also require a shutdown() method on the Imdb
+  // Service.
+  let results = query_fn(&imdb, &name.to_ascii_lowercase(), year)?;
   if results.is_empty() {
     println!("No results");
   } else {
