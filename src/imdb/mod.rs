@@ -1,5 +1,7 @@
 #![warn(clippy::all)]
 
+mod parsing;
+
 pub mod basics;
 pub mod error;
 pub mod genre;

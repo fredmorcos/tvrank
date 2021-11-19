@@ -1,10 +1,8 @@
 #![warn(clippy::all)]
 
-use super::{
-  error::Err,
-  genre::{Genre, Genres},
-  title::{Title, TitleType},
-};
+use super::error::Err;
+use super::genre::{Genre, Genres};
+use super::title::{Title, TitleType};
 use crate::Res;
 use atoi::atoi;
 use derive_more::{Display, From};
@@ -103,16 +101,7 @@ impl Basics {
   }
 
   pub(crate) fn add_basics_from_line(&mut self, line: &[u8]) -> Res<()> {
-    const TAB: u8 = b'\t';
-    const COMMA: u8 = b',';
-
-    const TT: &[u8] = b"tt";
-    const ZERO: &[u8] = b"0";
-    const ONE: &[u8] = b"1";
-
-    const NOT_AVAIL: &[u8] = b"\\N";
-
-    let mut iter = line.split(|&b| b == TAB);
+    let mut iter = line.split(|&b| b == super::parsing::TAB);
 
     macro_rules! next {
       () => {{
@@ -120,15 +109,7 @@ impl Basics {
       }};
     }
 
-    let id = {
-      let id = next!();
-
-      if &id[0..=1] != TT {
-        return Err::id();
-      }
-
-      atoi::<u64>(&id[2..]).ok_or(Err::IdNumber)?
-    };
+    let title_id = TitleId(super::parsing::parse_title_id(next!())?);
 
     let title_type = {
       let title_type = next!();
@@ -146,8 +127,8 @@ impl Basics {
     let is_adult = {
       let is_adult = next!();
       match is_adult {
-        ZERO => false,
-        ONE => true,
+        super::parsing::ZERO => false,
+        super::parsing::ONE => true,
         _ => return Err::adult(),
       }
     };
@@ -155,7 +136,7 @@ impl Basics {
     let start_year = {
       let start_year = next!();
       match start_year {
-        NOT_AVAIL => None,
+        super::parsing::NOT_AVAIL => None,
         start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
       }
     };
@@ -163,7 +144,7 @@ impl Basics {
     let end_year = {
       let end_year = next!();
       match end_year {
-        NOT_AVAIL => None,
+        super::parsing::NOT_AVAIL => None,
         end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
       }
     };
@@ -171,7 +152,7 @@ impl Basics {
     let runtime_minutes = {
       let runtime_minutes = next!();
       match runtime_minutes {
-        NOT_AVAIL => None,
+        super::parsing::NOT_AVAIL => None,
         runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
       }
     };
@@ -180,8 +161,8 @@ impl Basics {
       let genres = next!();
       let mut result = Genres::default();
 
-      if genres != NOT_AVAIL {
-        let genres = genres.split(|&b| b == COMMA);
+      if genres != super::parsing::NOT_AVAIL {
+        let genres = genres.split(|&b| b == super::parsing::COMMA);
         for genre in genres {
           let genre = unsafe { std::str::from_utf8_unchecked(genre) };
           let genre = Genre::from_str(genre).map_err(|_| Err::Genre)?;
@@ -192,7 +173,6 @@ impl Basics {
       result
     };
 
-    let title_id = TitleId(id);
     let title =
       Title::new(title_type, is_adult, start_year, end_year, runtime_minutes, genres);
 
