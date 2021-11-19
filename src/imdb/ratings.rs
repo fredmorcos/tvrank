@@ -2,6 +2,7 @@
 
 use super::error::Err;
 use super::title::TitleId;
+use crate::mem::MemSize;
 use crate::Res;
 use atoi::atoi;
 use fnv::FnvHashMap;
@@ -10,6 +11,12 @@ use std::str::FromStr;
 #[derive(Default)]
 pub(crate) struct Ratings {
   ratings: FnvHashMap<TitleId, (u8, u64)>,
+}
+
+impl MemSize for Ratings {
+  fn mem_size(&self) -> usize {
+    std::mem::size_of::<Self>() + self.ratings.mem_size()
+  }
 }
 
 impl Ratings {

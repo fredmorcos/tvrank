@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+use crate::mem::MemSize;
 use derive_more::Display;
 use enum_utils::FromStr;
 use std::fmt;
@@ -49,6 +50,12 @@ pub enum Genre {
 
 #[derive(PartialEq, Eq, Default, Clone, Copy)]
 pub struct Genres(u64);
+
+impl MemSize for Genres {
+  fn mem_size(&self) -> usize {
+    self.0.mem_size()
+  }
+}
 
 impl Genres {
   pub(crate) fn add_genre(&mut self, genre: Genre) {

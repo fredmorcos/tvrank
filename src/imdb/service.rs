@@ -8,6 +8,7 @@ use crate::{
   imdb::{ratings::Ratings, storage::Storage},
   Res,
 };
+use crate::mem::MemSize;
 use crossbeam::thread;
 use log::{debug, error, info};
 use parking_lot::const_mutex;
@@ -16,6 +17,12 @@ use std::{ops::DerefMut, path::Path, sync::Arc};
 pub struct Service {
   basics_dbs: Vec<Basics>,
   ratings_db: Ratings,
+}
+
+impl MemSize for Service {
+  fn mem_size(&self) -> usize {
+    self.basics_dbs.mem_size() + self.ratings_db.mem_size()
+  }
 }
 
 impl Service {

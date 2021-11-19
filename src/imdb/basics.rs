@@ -3,6 +3,7 @@
 use super::error::Err;
 use super::genre::{Genre, Genres};
 use super::title::{Title, TitleId, TitleType};
+use crate::mem::MemSize;
 use crate::Res;
 use atoi::atoi;
 use derive_more::{Display, From};
@@ -12,8 +13,20 @@ use std::{ops::Index, str::FromStr};
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
 struct MovieCookie(usize);
 
+impl MemSize for MovieCookie {
+  fn mem_size(&self) -> usize {
+    self.0.mem_size()
+  }
+}
+
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
 struct SeriesCookie(usize);
+
+impl MemSize for SeriesCookie {
+  fn mem_size(&self) -> usize {
+    self.0.mem_size()
+  }
+}
 
 type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type DbByName<C> = FnvHashMap<String, DbByYear<C>>;
@@ -34,6 +47,17 @@ pub(crate) struct Basics {
   series_db: DbByName<SeriesCookie>,
   /// Map from IMDB ID to series.
   series_ids: DbById<SeriesCookie>,
+}
+
+impl MemSize for Basics {
+  fn mem_size(&self) -> usize {
+    self.movies.mem_size()
+      + self.movies_db.mem_size()
+      + self.movies_ids.mem_size()
+      + self.series.mem_size()
+      + self.series_db.mem_size()
+      + self.series_ids.mem_size()
+  }
 }
 
 impl Index<&MovieCookie> for Basics {
