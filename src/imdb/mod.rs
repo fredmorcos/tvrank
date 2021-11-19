@@ -5,6 +5,7 @@ mod parsing;
 pub mod basics;
 pub mod error;
 pub mod genre;
+pub mod ratings;
 pub mod service;
 pub mod storage;
 pub mod title;

@@ -2,15 +2,12 @@
 
 use super::error::Err;
 use super::genre::{Genre, Genres};
-use super::title::{Title, TitleType};
+use super::title::{Title, TitleId, TitleType};
 use crate::Res;
 use atoi::atoi;
 use derive_more::{Display, From};
 use fnv::FnvHashMap;
 use std::{ops::Index, str::FromStr};
-
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
-struct TitleId(u64);
 
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
 struct MovieCookie(usize);
@@ -109,7 +106,7 @@ impl Basics {
       }};
     }
 
-    let title_id = TitleId(super::parsing::parse_title_id(next!())?);
+    let title_id = TitleId::from(super::parsing::parse_title_id(next!())?);
 
     let title_type = {
       let title_type = next!();
@@ -173,15 +170,22 @@ impl Basics {
       result
     };
 
-    let title =
-      Title::new(title_type, is_adult, start_year, end_year, runtime_minutes, genres);
+    let title = Title::new(
+      title_id,
+      title_type,
+      is_adult,
+      start_year,
+      end_year,
+      runtime_minutes,
+      genres,
+    );
 
     if title_type.is_movie() {
       let cookie = MovieCookie::from(self.movies.len());
       self.movies.push(title);
 
       if self.movies_ids.insert(title_id, cookie).is_some() {
-        return Err::duplicate(title_id.0);
+        return Err::duplicate(title_id);
       }
 
       Self::db(&mut self.movies_db, cookie, ptitle, start_year);
@@ -194,7 +198,7 @@ impl Basics {
       self.series.push(title);
 
       if self.series_ids.insert(title_id, cookie).is_some() {
-        return Err::duplicate(title_id.0);
+        return Err::duplicate(title_id);
       }
 
       Self::db(&mut self.series_db, cookie, ptitle, start_year);

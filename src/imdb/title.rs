@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
 use crate::imdb::genre::Genres;
-use derive_more::Display;
+use derive_more::{Display, From, Into};
 use derive_new::new;
 use enum_utils::FromStr;
 use std::fmt;
@@ -76,18 +76,24 @@ impl TitleType {
   }
 }
 
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+pub struct TitleId(u64);
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, new)]
 pub struct Title {
+  title_id: TitleId,
   title_type: TitleType,
   is_adult: bool,
   start_year: Option<u16>,
   end_year: Option<u16>,
   runtime_minutes: Option<u16>,
   genres: Genres,
-  #[new(default)]
-  average_rating: u8,
-  #[new(default)]
-  num_votes: u64,
+}
+
+impl Title {
+  pub fn title_id(&self) -> TitleId {
+    self.title_id
+  }
 }
 
 impl fmt::Display for Title {

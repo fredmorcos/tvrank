@@ -139,7 +139,13 @@ fn run(opt: &Opt) -> Res<()> {
     println!("No results");
   } else {
     for result in results {
-      println!("{} -> {}", name, result);
+      let title_id = result.title_id();
+
+      if let Some((rating, votes)) = imdb.rating(title_id) {
+        println!("{} -> {} -- Rating: {}/100 ({} votes)", name, result, rating, votes);
+      } else {
+        println!("{} -> {} -- Rating not found", name, result);
+      }
     }
   }
 

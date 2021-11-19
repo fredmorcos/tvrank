@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+use super::title::TitleId;
 use crate::Res;
 use derive_more::Display;
 use std::error::Error;
@@ -26,7 +27,9 @@ pub enum Err {
   #[display(fmt = "Unexpected end of file")]
   Eof,
   #[display(fmt = "Duplicate IMDB ID: {}", _0)]
-  Duplicate(u64),
+  Duplicate(TitleId),
+  #[display(fmt = "Number of votes is not a number")]
+  Votes,
 }
 
 impl Err {
@@ -38,7 +41,7 @@ impl Err {
     Err(Box::new(Err::Adult))
   }
 
-  pub(crate) fn duplicate<T>(id: u64) -> Res<T> {
+  pub(crate) fn duplicate<T>(id: TitleId) -> Res<T> {
     Err(Box::new(Err::Duplicate(id)))
   }
 }
