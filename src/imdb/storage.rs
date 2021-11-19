@@ -4,12 +4,11 @@ use crate::Res;
 use flate2::bufread::GzDecoder;
 use log::{debug, info};
 use reqwest::{blocking::Client, Url};
-use std::{
-  fs::{self, File},
-  io::{self, BufReader, Read},
-  path::Path,
-  time::{Duration, SystemTime},
-};
+use size::Size;
+use std::fs::{self, File};
+use std::io::{self, BufReader, Read};
+use std::path::Path;
+use std::time::{Duration, SystemTime};
 
 pub(crate) struct Storage {
   pub basics_db_buf: Vec<u8>,
@@ -56,8 +55,12 @@ impl Storage {
       info!("IMDB {} DB URL: {}", db_name, url);
       let mut res = client.get(url).send()?;
       debug!("Sent request for IMDB {} DB, downloading...", db_name);
-      let bytes = res.copy_to(&mut file)?;
-      info!("Downloaded IMDB {} DB ({} bytes)", db_name, bytes);
+      let size = Size::Bytes(res.copy_to(&mut file)?);
+      info!(
+        "Downloaded IMDB {} DB ({})",
+        db_name,
+        size.to_string(size::Base::Base10, size::Style::Abbreviated)
+      );
     } else {
       info!("IMDB {} DB exists and is less than a month old", db_name);
     }
@@ -71,8 +74,12 @@ impl Storage {
     let mut decoder = GzDecoder::new(reader);
     let mut buf = Vec::new();
     info!("Decompressing IMDB {} DB...", db_name);
-    let size = decoder.read_to_end(&mut buf)?;
-    info!("Read IMDB {} DB: {} bytes", db_name, size);
+    let size = Size::Bytes(decoder.read_to_end(&mut buf)?);
+    info!(
+      "Read IMDB {} DB: {}",
+      db_name,
+      size.to_string(size::Base::Base10, size::Style::Abbreviated)
+    );
     Ok(buf)
   }
 

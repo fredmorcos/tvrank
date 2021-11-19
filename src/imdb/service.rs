@@ -1,17 +1,14 @@
 #![warn(clippy::all)]
 
-use super::{
-  basics::Basics,
-  title::{Title, TitleId},
-};
-use crate::{
-  imdb::{ratings::Ratings, storage::Storage},
-  Res,
-};
+use super::basics::Basics;
+use super::title::{Title, TitleId};
+use crate::imdb::{ratings::Ratings, storage::Storage};
 use crate::mem::MemSize;
+use crate::Res;
 use crossbeam::thread;
 use log::{debug, error, info};
 use parking_lot::const_mutex;
+use size::Size;
 use std::{ops::DerefMut, path::Path, sync::Arc};
 
 pub struct Service {
@@ -98,14 +95,32 @@ impl Service {
 
     let mut total_movies = 0;
     let mut total_series = 0;
+    let mut total_size = 0;
     for (i, db) in basics_dbs.iter().enumerate() {
       let n_movies = db.n_movies();
       let n_series = db.n_series();
       total_movies += n_movies;
       total_series += n_series;
-      debug!("DB {} has {} movies and {} series", i, n_movies, n_series);
+
+      let size = db.mem_size();
+      total_size += size;
+      let size = Size::Bytes(size);
+
+      debug!(
+        "DB {} has {} movies and {} series (Mem: {})",
+        i,
+        n_movies,
+        n_series,
+        size.to_string(size::Base::Base10, size::Style::Abbreviated)
+      );
     }
-    debug!("DB has a total of {} movies and {} series", total_movies, total_series);
+    let total_size = Size::Bytes(total_size);
+    debug!(
+      "DB has a total of {} movies and {} series (Mem: {})",
+      total_movies,
+      total_series,
+      total_size.to_string(size::Base::Base10, size::Style::Abbreviated)
+    );
 
     Ok(Self { basics_dbs, ratings_db })
   }
