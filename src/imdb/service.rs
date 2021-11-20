@@ -6,9 +6,10 @@ use crate::imdb::{ratings::Ratings, storage::Storage};
 use crate::mem::MemSize;
 use crate::Res;
 use crossbeam::thread;
+use indicatif::HumanBytes;
 use log::{debug, error, info};
 use parking_lot::const_mutex;
-use size::Size;
+use std::convert::TryInto;
 use std::{ops::DerefMut, path::Path, sync::Arc};
 
 pub struct Service {
@@ -104,22 +105,20 @@ impl Service {
 
       let size = db.mem_size();
       total_size += size;
-      let size = Size::Bytes(size);
 
       debug!(
         "DB {} has {} movies and {} series (Mem: {})",
         i,
         n_movies,
         n_series,
-        size.to_string(size::Base::Base10, size::Style::Abbreviated)
+        HumanBytes(size.try_into()?)
       );
     }
-    let total_size = Size::Bytes(total_size);
     debug!(
       "DB has a total of {} movies and {} series (Mem: {})",
       total_movies,
       total_series,
-      total_size.to_string(size::Base::Base10, size::Style::Abbreviated)
+      HumanBytes(total_size.try_into()?)
     );
 
     Ok(Self { basics_dbs, ratings_db })

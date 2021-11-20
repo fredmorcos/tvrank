@@ -10,7 +10,7 @@ use regex::Regex;
 use reqwest::Url;
 use std::error::Error;
 use std::fs;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use titlecase::titlecase;
 use tvrank::imdb::{Imdb, ImdbErr};
@@ -128,7 +128,10 @@ fn run(opt: &Opt) -> Res<()> {
     }
   };
 
+  let start_time = Instant::now();
   let imdb = Imdb::new(cache_dir)?;
+  let duration = Instant::now().duration_since(start_time);
+  info!("Loaded IMDB in {}", format_duration(duration));
 
   let query_fn = if opt.series {
     Imdb::series
@@ -142,6 +145,7 @@ fn run(opt: &Opt) -> Res<()> {
     Imdb::movie_names
   };
 
+  let start_time = Instant::now();
   // TODO: Need to properly shutdown the multi-threaded service before exiting the main
   // thread. Replace the ? with a proper match on the error, print the error and wait for
   // the threads to shutdown. This will also require a shutdown() method on the Imdb
@@ -255,12 +259,16 @@ fn run(opt: &Opt) -> Res<()> {
     table.printstd();
   }
 
+  let duration = Instant::now().duration_since(start_time);
+  info!("IMDB query took {}", format_duration(duration));
+
   std::mem::forget(imdb);
 
   Ok(())
 }
 
 fn main() {
+  let start_time = Instant::now();
   let opt = Opt::from_args();
 
   let log_level = match opt.verbose {
@@ -292,5 +300,13 @@ fn main() {
     } else {
       eprintln!("Error: {}", e);
     }
+  }
+
+  let total_time = Instant::now().duration_since(start_time);
+
+  if logger_available {
+    info!("Total time: {}", format_duration(total_time));
+  } else {
+    eprintln!("Total time: {}", format_duration(total_time));
   }
 }

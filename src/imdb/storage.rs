@@ -1,12 +1,15 @@
 #![warn(clippy::all)]
 
+use crate::io::write_interactive;
+use crate::progressbar::{create_progress_bar, create_progress_spinner};
 use crate::Res;
 use flate2::bufread::GzDecoder;
+use indicatif::HumanBytes;
 use log::{debug, info};
 use reqwest::{blocking::Client, Url};
-use size::Size;
+use std::convert::TryInto;
 use std::fs::{self, File};
-use std::io::{self, BufReader, Read};
+use std::io::{self, BufReader};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
@@ -50,17 +53,29 @@ impl Storage {
     };
 
     if needs_update {
-      info!("IMDB {} DB does not exist or is more than a month old", db_name);
-      let mut file = std::fs::File::create(filename)?;
       info!("IMDB {} DB URL: {}", db_name, url);
-      let mut res = client.get(url).send()?;
-      debug!("Sent request for IMDB {} DB, downloading...", db_name);
-      let size = Size::Bytes(res.copy_to(&mut file)?);
-      info!(
-        "Downloaded IMDB {} DB ({})",
-        db_name,
-        size.to_string(size::Base::Base10, size::Style::Abbreviated)
-      );
+      let mut resp = client.get(url).send()?;
+
+      info!("IMDB {} DB does not exist or is more than a month old", db_name);
+      let mut file = File::create(filename)?;
+
+      let msg = format!("Downloading IMDB {} DB", db_name);
+      let bar = if let Some(file_length) = resp.content_length() {
+        info!("IMDB {} DB compressed file size is {}", db_name, HumanBytes(file_length));
+        create_progress_bar(msg, file_length)
+      } else {
+        info!("IMDB {} DB compressed file size is unknown", db_name);
+        create_progress_spinner(msg)
+      };
+
+      let total = write_interactive(&mut resp, &mut file, |delta| {
+        bar.inc(delta.try_into()?);
+        Ok(())
+      })?;
+
+      bar.finish_and_clear();
+
+      info!("Downloaded IMDB {} DB ({})", db_name, HumanBytes(total.try_into()?));
     } else {
       info!("IMDB {} DB exists and is less than a month old", db_name);
     }
@@ -73,13 +88,18 @@ impl Storage {
     let reader = BufReader::new(file);
     let mut decoder = GzDecoder::new(reader);
     let mut buf = Vec::new();
-    info!("Decompressing IMDB {} DB...", db_name);
-    let size = Size::Bytes(decoder.read_to_end(&mut buf)?);
-    info!(
-      "Read IMDB {} DB: {}",
-      db_name,
-      size.to_string(size::Base::Base10, size::Style::Abbreviated)
-    );
+
+    let msg = format!("Decompressing IMDB {} DB...", db_name);
+    let spinner = create_progress_spinner(msg);
+
+    let total = write_interactive(&mut decoder, &mut buf, |delta| {
+      spinner.inc(delta.try_into()?);
+      Ok(())
+    })?;
+
+    spinner.finish_and_clear();
+
+    info!("Read IMDB {} DB: {}", db_name, HumanBytes(total.try_into()?));
     Ok(buf)
   }
 
