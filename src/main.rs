@@ -3,11 +3,16 @@
 use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
+use humantime::format_duration;
 use log::{debug, error, info, trace, warn};
+use prettytable::{color, format, Attr, Cell, Row, Table};
 use regex::Regex;
+use reqwest::Url;
 use std::error::Error;
 use std::fs;
+use std::time::Duration;
 use structopt::StructOpt;
+use titlecase::titlecase;
 use tvrank::imdb::{Imdb, ImdbErr};
 use tvrank::Res;
 
@@ -124,29 +129,130 @@ fn run(opt: &Opt) -> Res<()> {
   };
 
   let imdb = Imdb::new(cache_dir)?;
+
   let query_fn = if opt.series {
     Imdb::series
   } else {
     Imdb::movie
   };
 
+  let names_fn = if opt.series {
+    Imdb::series_names
+  } else {
+    Imdb::movie_names
+  };
+
   // TODO: Need to properly shutdown the multi-threaded service before exiting the main
   // thread. Replace the ? with a proper match on the error, print the error and wait for
   // the threads to shutdown. This will also require a shutdown() method on the Imdb
   // Service.
-  let results = query_fn(&imdb, &name.to_ascii_lowercase(), year)?;
+  let mut results = query_fn(&imdb, name.to_ascii_lowercase().as_bytes(), year)?;
+  results.sort_unstable();
+
   if results.is_empty() {
     println!("No results");
   } else {
-    for result in results {
-      let title_id = result.title_id();
+    let mut table = Table::new();
 
-      if let Some((rating, votes)) = imdb.rating(title_id) {
-        println!("{} -> {} -- Rating: {}/100 ({} votes)", name, result, rating, votes);
-      } else {
-        println!("{} -> {} -- Rating not found", name, result);
-      }
+    let table_format = format::FormatBuilder::new()
+      .column_separator('│')
+      .borders('│')
+      .padding(1, 1)
+      .build();
+
+    table.set_format(table_format);
+
+    table.add_row(Row::new(vec![
+      Cell::new("Primary Title").with_style(Attr::Bold),
+      Cell::new("Original Title").with_style(Attr::Bold),
+      Cell::new("Year").with_style(Attr::Bold),
+      Cell::new("Rating").with_style(Attr::Bold),
+      Cell::new("Votes").with_style(Attr::Bold),
+      Cell::new("Runtime").with_style(Attr::Bold),
+      Cell::new("Genres").with_style(Attr::Bold),
+      Cell::new("Type").with_style(Attr::Bold),
+      Cell::new("IMDB ID").with_style(Attr::Bold),
+      Cell::new("IMDB Link").with_style(Attr::Bold),
+    ]));
+
+    fn humantitle(title: &[u8]) -> String {
+      titlecase(unsafe { std::str::from_utf8_unchecked(title) })
     }
+
+    const IMDB: &str = "https://www.imdb.com/title/";
+    let imdb_url = Url::parse(IMDB)?;
+
+    for result in results {
+      let mut row = Row::new(vec![]);
+
+      let title_id = result.title_id();
+      let titles = names_fn(&imdb, title_id)?;
+
+      match titles[..] {
+        [] => {
+          row.add_cell(Cell::new("N/A"));
+          row.add_cell(Cell::new(""));
+        }
+        [ptitle] => {
+          row.add_cell(Cell::new(&humantitle(ptitle)));
+          row.add_cell(Cell::new(""));
+        }
+        [ptitle, otitle] => {
+          row.add_cell(Cell::new(&humantitle(ptitle)));
+          row.add_cell(Cell::new(&humantitle(otitle)));
+        }
+        [ptitle, otitle, ..] => {
+          for title in titles {
+            debug!("Title with ID {} has name: {}", title_id, &humantitle(title));
+          }
+          row.add_cell(Cell::new(&humantitle(ptitle)));
+          row.add_cell(Cell::new(&humantitle(otitle)));
+        }
+      }
+
+      if let Some(year) = result.start_year() {
+        row.add_cell(Cell::new(&format!("{}", year)));
+      } else {
+        row.add_cell(Cell::new(""));
+      }
+
+      if let Some(&(rating, votes)) = imdb.rating(title_id) {
+        let rating_text = &format!("{}/100", rating);
+
+        let rating_cell = if rating >= 70 {
+          Cell::new(rating_text).with_style(Attr::ForegroundColor(color::GREEN))
+        } else if (60..70).contains(&rating) {
+          Cell::new(rating_text).with_style(Attr::ForegroundColor(color::YELLOW))
+        } else {
+          Cell::new(rating_text).with_style(Attr::ForegroundColor(color::RED))
+        };
+
+        row.add_cell(rating_cell);
+        row.add_cell(Cell::new(&format!("{}", votes)));
+      } else {
+        row.add_cell(Cell::new(""));
+        row.add_cell(Cell::new(""));
+      }
+
+      if let Some(runtime) = result.runtime_minutes() {
+        row.add_cell(Cell::new(
+          &format_duration(Duration::from_secs(u64::from(runtime) * 60)).to_string(),
+        ));
+      } else {
+        row.add_cell(Cell::new(""));
+      }
+
+      row.add_cell(Cell::new(&format!("{}", result.genres())));
+      row.add_cell(Cell::new(&format!("{}", result.title_type())));
+      row.add_cell(Cell::new(&format!("{}", title_id)));
+
+      let url = imdb_url.join(&format!("tt{}", title_id))?;
+      row.add_cell(Cell::new(url.as_str()));
+
+      table.add_row(row);
+    }
+
+    table.printstd();
   }
 
   std::mem::forget(imdb);

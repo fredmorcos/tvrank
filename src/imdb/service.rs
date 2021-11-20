@@ -125,7 +125,10 @@ impl Service {
     Ok(Self { basics_dbs, ratings_db })
   }
 
-  fn query(&self, f: impl Fn(&Basics) -> Vec<&Title> + Copy + Send) -> Res<Vec<&Title>> {
+  fn query<'a, T: 'a + Copy + Send>(
+    &'a self,
+    f: impl Fn(&'a Basics) -> Vec<T> + Copy + Send,
+  ) -> Res<Vec<T>> {
     let mut res = Vec::new();
 
     let _ = thread::scope(|s| {
@@ -160,7 +163,7 @@ impl Service {
     Ok(res)
   }
 
-  pub fn movie(&self, name: &str, year: Option<u16>) -> Res<Vec<&Title>> {
+  pub fn movie(&self, name: &[u8], year: Option<u16>) -> Res<Vec<&Title>> {
     self.query(|db| {
       if let Some(year) = year {
         db.movie_with_year(name, year)
@@ -170,7 +173,7 @@ impl Service {
     })
   }
 
-  pub fn series(&self, name: &str, year: Option<u16>) -> Res<Vec<&Title>> {
+  pub fn series(&self, name: &[u8], year: Option<u16>) -> Res<Vec<&Title>> {
     self.query(|db| {
       if let Some(year) = year {
         db.series_with_year(name, year)
@@ -178,6 +181,14 @@ impl Service {
         db.series(name)
       }
     })
+  }
+
+  pub fn movie_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {
+    self.query(|db| db.movie_names(id))
+  }
+
+  pub fn series_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {
+    self.query(|db| db.series_names(id))
   }
 
   pub fn rating(&self, title_id: TitleId) -> Option<&(u8, u64)> {

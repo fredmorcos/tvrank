@@ -4,7 +4,7 @@ use crate::{imdb::genre::Genres, mem::MemSize};
 use derive_more::{Display, From, Into};
 use derive_new::new;
 use enum_utils::FromStr;
-use std::fmt;
+use std::cmp::Ordering;
 
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[enumeration(rename_all = "camelCase")]
@@ -91,6 +91,18 @@ impl MemSize for TitleId {
   }
 }
 
+impl PartialOrd for TitleId {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.0.partial_cmp(&other.0)
+  }
+}
+
+impl Ord for TitleId {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.0.cmp(&other.0)
+  }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, new)]
 pub struct Title {
   title_id: TitleId,
@@ -118,16 +130,40 @@ impl Title {
   pub fn title_id(&self) -> TitleId {
     self.title_id
   }
+
+  pub fn title_type(&self) -> TitleType {
+    self.title_type
+  }
+
+  pub fn start_year(&self) -> Option<u16> {
+    self.start_year
+  }
+
+  pub fn runtime_minutes(&self) -> Option<u16> {
+    self.runtime_minutes
+  }
+
+  pub fn genres(&self) -> Genres {
+    self.genres
+  }
 }
 
-impl fmt::Display for Title {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}", self.title_type)?;
+impl PartialOrd for Title {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
 
-    if let Some(year) = self.start_year {
-      write!(f, " ({})", year)?;
+impl Ord for Title {
+  fn cmp(&self, other: &Self) -> Ordering {
+    match self.start_year.cmp(&other.start_year) {
+      Ordering::Equal => {}
+      ord => return ord,
     }
-
-    write!(f, " [{}]", self.genres)
+    match self.title_id.cmp(&other.title_id) {
+      Ordering::Equal => {}
+      ord => return ord,
+    }
+    self.end_year.cmp(&other.end_year)
   }
 }
