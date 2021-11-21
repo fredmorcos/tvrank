@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use titlecase::titlecase;
+use tvrank::imdb::title::TitleId;
 use tvrank::imdb::{Imdb, ImdbTitle};
 use tvrank::Res;
 
@@ -171,9 +172,11 @@ fn create_output_table() -> Table {
 }
 
 fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> {
-  let mut row = Row::new(vec![]);
+  static GREEN: Attr = Attr::ForegroundColor(color::GREEN);
+  static YELLOW: Attr = Attr::ForegroundColor(color::YELLOW);
+  static RED: Attr = Attr::ForegroundColor(color::RED);
 
-  let title_id = title.imdb_title.title_id();
+  let mut row = Row::new(vec![]);
 
   row.add_cell(Cell::new(&humantitle(title.imdb_primary_title)));
   row.add_cell(Cell::new(&humantitle(title.imdb_original_title)));
@@ -187,13 +190,11 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
   if let Some(&(rating, votes)) = title.imdb_rating {
     let rating_text = &format!("{}/100", rating);
 
-    let rating_cell = if rating >= 70 {
-      Cell::new(rating_text).with_style(Attr::ForegroundColor(color::GREEN))
-    } else if (60..70).contains(&rating) {
-      Cell::new(rating_text).with_style(Attr::ForegroundColor(color::YELLOW))
-    } else {
-      Cell::new(rating_text).with_style(Attr::ForegroundColor(color::RED))
-    };
+    let rating_cell = Cell::new(rating_text).with_style(match rating {
+      rating if rating >= 70 => GREEN,
+      rating if (60..70).contains(&rating) => YELLOW,
+      _ => RED,
+    });
 
     row.add_cell(rating_cell);
     row.add_cell(Cell::new(&format!("{}", votes)));
@@ -212,6 +213,8 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
 
   row.add_cell(Cell::new(&format!("{}", title.imdb_title.genres())));
   row.add_cell(Cell::new(&format!("{}", title.imdb_title.title_type())));
+
+  let title_id = title.imdb_title.title_id();
   row.add_cell(Cell::new(&format!("{}", title_id)));
 
   let url = imdb_url.join(&format!("tt{}", title_id))?;
@@ -220,14 +223,11 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
   Ok(row)
 }
 
-fn imdb_lookup(
-  input: &str,
-  cache_dir: &Path,
-  is_series: bool,
-  sort_by_rating: bool,
-) -> Res<()> {
-  let (name, year) = parse_name_and_year(input);
+type QueryFn<'a> =
+  fn(db: &'a Imdb, name: &[u8], year: Option<u16>) -> Res<Vec<&'a ImdbTitle>>;
+type NamesFn<'a> = fn(db: &'a Imdb, id: TitleId) -> Res<Vec<&'a [u8]>>;
 
+fn setup_imdb_db(cache_dir: &Path, is_series: bool) -> Res<(Imdb, QueryFn, NamesFn)> {
   let start_time = Instant::now();
   let imdb = Imdb::new(cache_dir)?;
   let duration = Instant::now().duration_since(start_time);
@@ -244,6 +244,19 @@ fn imdb_lookup(
   } else {
     Imdb::movie_names
   };
+
+  Ok((imdb, query_fn, names_fn))
+}
+
+fn imdb_lookup(
+  input: &str,
+  cache_dir: &Path,
+  is_series: bool,
+  sort_by_rating: bool,
+) -> Res<()> {
+  let (name, year) = parse_name_and_year(input);
+
+  let (imdb, query_fn, names_fn) = setup_imdb_db(cache_dir, is_series)?;
 
   let start_time = Instant::now();
   let mut results = Vec::new();
