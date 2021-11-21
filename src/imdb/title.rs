@@ -139,31 +139,15 @@ impl Title {
     self.start_year
   }
 
+  pub fn end_year(&self) -> Option<u16> {
+    self.end_year
+  }
+
   pub fn runtime_minutes(&self) -> Option<u16> {
     self.runtime_minutes
   }
 
   pub fn genres(&self) -> Genres {
     self.genres
-  }
-}
-
-impl PartialOrd for Title {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    Some(self.cmp(other))
-  }
-}
-
-impl Ord for Title {
-  fn cmp(&self, other: &Self) -> Ordering {
-    match self.start_year.cmp(&other.start_year) {
-      Ordering::Equal => {}
-      ord => return ord,
-    }
-    match self.title_id.cmp(&other.title_id) {
-      Ordering::Equal => {}
-      ord => return ord,
-    }
-    self.end_year.cmp(&other.end_year)
   }
 }

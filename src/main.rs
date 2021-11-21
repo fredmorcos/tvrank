@@ -8,41 +8,29 @@ use log::{debug, error, info, trace, warn};
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use regex::Regex;
 use reqwest::Url;
+use std::cmp::Ordering;
 use std::error::Error;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use titlecase::titlecase;
-use tvrank::imdb::{Imdb, ImdbErr};
+use tvrank::imdb::{Imdb, ImdbTitle};
 use tvrank::Res;
 
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
 enum TvRankErr {
-  #[display(fmt = "Invalid title format, must match TITLE (YYYY)")]
-  Input,
-
-  #[display(fmt = "Could not read title from input")]
-  Title,
-
-  #[display(fmt = "Could not read year from input")]
-  Year,
+  #[display(fmt = "Must provide either --title or --dir")]
+  TitleOrDir,
 
   #[display(fmt = "Could not find cache directory")]
   CacheDir,
 }
 
 impl TvRankErr {
-  fn input<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::Input))
-  }
-
-  fn title<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::Title))
-  }
-
-  fn year<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::Year))
+  fn title_or_dir<T>() -> Res<T> {
+    Err(Box::new(TvRankErr::TitleOrDir))
   }
 
   fn cache_dir<T>() -> Res<T> {
@@ -52,31 +40,37 @@ impl TvRankErr {
 
 impl Error for TvRankErr {}
 
-fn parse_name_and_year(input: &str) -> Res<(&str, &str)> {
+fn parse_name_and_year(input: &str) -> (&str, Option<u16>) {
   debug!("Input: {}", input);
 
-  let regex = Regex::new(r"^(.+)\s+\((\d{4})\)$")?;
-  let captures = if let Some(captures) = regex.captures(input) {
-    captures
-  } else {
-    return TvRankErr::input();
+  let regex = match Regex::new(r"^(.+)\s+\((\d{4})\)$") {
+    Ok(regex) => regex,
+    Err(e) => {
+      warn!("Failed to parse title: {}", e);
+      return (input, None);
+    }
   };
 
-  let title = if let Some(title) = captures.get(1) {
-    debug!("{:?}", title);
-    title.as_str()
-  } else {
-    return TvRankErr::title();
-  };
+  if let Some(captures) = regex.captures(input) {
+    if let Some(title_match) = captures.get(1) {
+      debug!("Title Match: {:?}", title_match);
 
-  let year = if let Some(year) = captures.get(2) {
-    debug!("{:?}", year);
-    year.as_str()
-  } else {
-    return TvRankErr::year();
-  };
+      if let Some(year_match) = captures.get(2) {
+        debug!("Year Match: {:?}", year_match);
 
-  Ok((title, year))
+        if let Some(year_val) = atoi::<u16>(year_match.as_str().as_bytes()) {
+          let title = title_match.as_str();
+          info!("Title: `{}`, Year: `{}`", title, year_val);
+          return (title, Some(year_val));
+        }
+      }
+    }
+  }
+
+  debug!("Failed to parse title in TITLE (YYYY) format");
+  debug!("Using full input as title");
+  info!("Title: `{}`", input);
+  (input, None)
 }
 
 fn create_project() -> Res<ProjectDirs> {
@@ -92,66 +86,122 @@ fn create_project() -> Res<ProjectDirs> {
 #[structopt(about = "Query information about movies and series")]
 #[structopt(author = "Fred Morcos <fm@fredmorcos.com>")]
 struct Opt {
-  /// Verbose output (can be specified multiple times).
+  /// Verbose output (can be specified multiple times)
   #[structopt(short, long, parse(from_occurrences))]
   verbose: u8,
 
-  /// Whether to lookup series instead of movies.
+  /// Whether to lookup series instead of movies
   #[structopt(short, long)]
   series: bool,
 
-  /// Input in the format of "TITLE (YYYY)".
-  #[structopt(name = "INPUT")]
-  input: String,
+  /// Sort results by rating, year and title instead of year, rating and title
+  #[structopt(short, long)]
+  sort_by_rating: bool,
+
+  /// Lookup a single title using "TITLE" or "TITLE (YYYY)"
+  #[structopt(short, long, name = "TITLE")]
+  title: Option<String>,
+
+  /// Lookup titles from a directory
+  #[structopt(short, long, name = "DIR")]
+  dir: Option<PathBuf>,
 }
 
-fn run(opt: &Opt) -> Res<()> {
-  let project = create_project()?;
-  let cache_dir = project.cache_dir();
-  info!("Cache directory: {}", cache_dir.display());
+struct Title<'db> {
+  imdb_title: &'db ImdbTitle,
+  imdb_rating: Option<&'db (u8, u64)>,
+  imdb_primary_title: &'db [u8],
+  imdb_original_title: &'db [u8],
+}
 
-  fs::create_dir_all(cache_dir)?;
-  debug!("Created cache directory");
+fn sort_results(results: &mut Vec<Title>, sort_by_rating: bool) {
+  if sort_by_rating {
+    results.sort_unstable_by(|a, b| {
+      match b.imdb_rating.cmp(&a.imdb_rating) {
+        Ordering::Equal => {}
+        ord => return ord,
+      }
+      match b.imdb_title.start_year().cmp(&a.imdb_title.start_year()) {
+        Ordering::Equal => {}
+        ord => return ord,
+      }
+      b.imdb_primary_title.cmp(a.imdb_primary_title)
+    })
+  } else {
+    results.sort_unstable_by(|a, b| {
+      match b.imdb_title.start_year().cmp(&a.imdb_title.start_year()) {
+        Ordering::Equal => {}
+        ord => return ord,
+      }
+      match b.imdb_rating.cmp(&a.imdb_rating) {
+        Ordering::Equal => {}
+        ord => return ord,
+      }
+      b.imdb_primary_title.cmp(a.imdb_primary_title)
+    })
+  }
+}
 
-  let input = opt.input.trim();
-  let (name, year) = match parse_name_and_year(input) {
-    Ok((title, year)) => {
-      let year = atoi::<u16>(year.as_bytes()).ok_or(ImdbErr::IdNumber)?;
-      info!("Title: `{}`, Year: `{}`", title, year);
-      (title, Some(year))
-    }
-    Err(err) => {
-      debug!("Failed to parse title and year: {}", err);
-      debug!("Using full input as title");
-      info!("Title: `{}`", input);
-      (input, None)
-    }
-  };
+fn humantitle(title: &[u8]) -> String {
+  titlecase(unsafe { std::str::from_utf8_unchecked(title) })
+}
+
+fn imdb_lookup(
+  input: &str,
+  cache_dir: &Path,
+  is_series: bool,
+  sort_by_rating: bool,
+) -> Res<()> {
+  let (name, year) = parse_name_and_year(input);
 
   let start_time = Instant::now();
   let imdb = Imdb::new(cache_dir)?;
   let duration = Instant::now().duration_since(start_time);
   info!("Loaded IMDB in {}", format_duration(duration));
 
-  let query_fn = if opt.series {
+  let query_fn = if is_series {
     Imdb::series
   } else {
     Imdb::movie
   };
 
-  let names_fn = if opt.series {
+  let names_fn = if is_series {
     Imdb::series_names
   } else {
     Imdb::movie_names
   };
 
   let start_time = Instant::now();
-  // TODO: Need to properly shutdown the multi-threaded service before exiting the main
-  // thread. Replace the ? with a proper match on the error, print the error and wait for
-  // the threads to shutdown. This will also require a shutdown() method on the Imdb
-  // Service.
-  let mut results = query_fn(&imdb, name.to_ascii_lowercase().as_bytes(), year)?;
-  results.sort_unstable();
+  let mut results = Vec::new();
+
+  for result in query_fn(&imdb, name.to_ascii_lowercase().as_bytes(), year)?.into_iter() {
+    let titles = names_fn(&imdb, result.title_id())?;
+
+    let (imdb_primary_title, imdb_original_title): (&[u8], &[u8]) = match titles[..] {
+      [] => {
+        debug!("Title with ID {} has no names", result.title_id());
+        (b"N/A", b"")
+      }
+      [ptitle] => (ptitle, b""),
+      [ptitle, otitle] => (ptitle, otitle),
+      [ptitle, otitle, ..] => {
+        for title in titles {
+          debug!("Title with ID {} has name: {}", result.title_id(), &humantitle(title));
+        }
+        debug!("Only the first two will be used (as primary and original titles)");
+        (ptitle, otitle)
+      }
+    };
+
+    results.push(Title {
+      imdb_title: result,
+      imdb_rating: imdb.rating(result.title_id()),
+      imdb_primary_title,
+      imdb_original_title,
+    });
+  }
+
+  sort_results(&mut results, sort_by_rating);
 
   if results.is_empty() {
     println!("No results");
@@ -179,48 +229,24 @@ fn run(opt: &Opt) -> Res<()> {
       Cell::new("IMDB Link").with_style(Attr::Bold),
     ]));
 
-    fn humantitle(title: &[u8]) -> String {
-      titlecase(unsafe { std::str::from_utf8_unchecked(title) })
-    }
-
     const IMDB: &str = "https://www.imdb.com/title/";
     let imdb_url = Url::parse(IMDB)?;
 
     for result in results {
       let mut row = Row::new(vec![]);
 
-      let title_id = result.title_id();
-      let titles = names_fn(&imdb, title_id)?;
+      let title_id = result.imdb_title.title_id();
 
-      match titles[..] {
-        [] => {
-          row.add_cell(Cell::new("N/A"));
-          row.add_cell(Cell::new(""));
-        }
-        [ptitle] => {
-          row.add_cell(Cell::new(&humantitle(ptitle)));
-          row.add_cell(Cell::new(""));
-        }
-        [ptitle, otitle] => {
-          row.add_cell(Cell::new(&humantitle(ptitle)));
-          row.add_cell(Cell::new(&humantitle(otitle)));
-        }
-        [ptitle, otitle, ..] => {
-          for title in titles {
-            debug!("Title with ID {} has name: {}", title_id, &humantitle(title));
-          }
-          row.add_cell(Cell::new(&humantitle(ptitle)));
-          row.add_cell(Cell::new(&humantitle(otitle)));
-        }
-      }
+      row.add_cell(Cell::new(&humantitle(result.imdb_primary_title)));
+      row.add_cell(Cell::new(&humantitle(result.imdb_original_title)));
 
-      if let Some(year) = result.start_year() {
+      if let Some(year) = result.imdb_title.start_year() {
         row.add_cell(Cell::new(&format!("{}", year)));
       } else {
         row.add_cell(Cell::new(""));
       }
 
-      if let Some(&(rating, votes)) = imdb.rating(title_id) {
+      if let Some(&(rating, votes)) = result.imdb_rating {
         let rating_text = &format!("{}/100", rating);
 
         let rating_cell = if rating >= 70 {
@@ -238,7 +264,7 @@ fn run(opt: &Opt) -> Res<()> {
         row.add_cell(Cell::new(""));
       }
 
-      if let Some(runtime) = result.runtime_minutes() {
+      if let Some(runtime) = result.imdb_title.runtime_minutes() {
         row.add_cell(Cell::new(
           &format_duration(Duration::from_secs(u64::from(runtime) * 60)).to_string(),
         ));
@@ -246,8 +272,8 @@ fn run(opt: &Opt) -> Res<()> {
         row.add_cell(Cell::new(""));
       }
 
-      row.add_cell(Cell::new(&format!("{}", result.genres())));
-      row.add_cell(Cell::new(&format!("{}", result.title_type())));
+      row.add_cell(Cell::new(&format!("{}", result.imdb_title.genres())));
+      row.add_cell(Cell::new(&format!("{}", result.imdb_title.title_type())));
       row.add_cell(Cell::new(&format!("{}", title_id)));
 
       let url = imdb_url.join(&format!("tt{}", title_id))?;
@@ -263,6 +289,23 @@ fn run(opt: &Opt) -> Res<()> {
   info!("IMDB query took {}", format_duration(duration));
 
   std::mem::forget(imdb);
+
+  Ok(())
+}
+
+fn run(opt: &Opt) -> Res<()> {
+  let project = create_project()?;
+  let cache_dir = project.cache_dir();
+  info!("Cache directory: {}", cache_dir.display());
+
+  fs::create_dir_all(cache_dir)?;
+  debug!("Created cache directory");
+
+  match (&opt.title, &opt.dir) {
+    (None, None) | (Some(_), Some(_)) => return TvRankErr::title_or_dir(),
+    (None, Some(_)) => todo!("Directory lookup is still not implemented"),
+    (Some(title), None) => imdb_lookup(title, cache_dir, opt.series, opt.sort_by_rating)?,
+  }
 
   Ok(())
 }
