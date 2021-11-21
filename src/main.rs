@@ -41,14 +41,14 @@ impl TvRankErr {
 
 impl Error for TvRankErr {}
 
-fn parse_name_and_year(input: &str) -> (&str, Option<u16>) {
+fn parse_name_and_year(input: &str) -> Option<(&str, u16)> {
   debug!("Input: {}", input);
 
   let regex = match Regex::new(r"^(.+)\s+\((\d{4})\)$") {
     Ok(regex) => regex,
     Err(e) => {
-      warn!("Failed to parse title: {}", e);
-      return (input, None);
+      warn!("Could not parse input `{}` as TITLE (YYYY): {}", input, e);
+      return None;
     }
   };
 
@@ -62,16 +62,23 @@ fn parse_name_and_year(input: &str) -> (&str, Option<u16>) {
         if let Some(year_val) = atoi::<u16>(year_match.as_str().as_bytes()) {
           let title = title_match.as_str();
           info!("Title: `{}`, Year: `{}`", title, year_val);
-          return (title, Some(year_val));
+          Some((title, year_val))
+        } else {
+          warn!("Could not parse year `{}`", year_match.as_str());
+          None
         }
+      } else {
+        warn!("Could not parse year from {}", input);
+        None
       }
+    } else {
+      warn!("Could not parse title from {}", input);
+      None
     }
+  } else {
+    warn!("Could not parse title and year from {}", input);
+    None
   }
-
-  debug!("Failed to parse title in TITLE (YYYY) format");
-  debug!("Using full input as title");
-  info!("Title: `{}`", input);
-  (input, None)
 }
 
 fn create_project() -> Res<ProjectDirs> {
@@ -227,19 +234,19 @@ type QueryFn<'a> =
   fn(db: &'a Imdb, name: &[u8], year: Option<u16>) -> Res<Vec<&'a ImdbTitle>>;
 type NamesFn<'a> = fn(db: &'a Imdb, id: TitleId) -> Res<Vec<&'a [u8]>>;
 
-fn setup_imdb_db(cache_dir: &Path, is_series: bool) -> Res<(Imdb, QueryFn, NamesFn)> {
+fn setup_imdb_db(cache_dir: &Path, series: bool) -> Res<(Imdb, QueryFn, NamesFn)> {
   let start_time = Instant::now();
   let imdb = Imdb::new(cache_dir)?;
   let duration = Instant::now().duration_since(start_time);
-  info!("Loaded IMDB in {}", format_duration(duration));
+  info!("Loaded IMDB database in {}", format_duration(duration));
 
-  let query_fn = if is_series {
+  let query_fn = if series {
     Imdb::series
   } else {
     Imdb::movie
   };
 
-  let names_fn = if is_series {
+  let names_fn = if series {
     Imdb::series_names
   } else {
     Imdb::movie_names
@@ -248,32 +255,36 @@ fn setup_imdb_db(cache_dir: &Path, is_series: bool) -> Res<(Imdb, QueryFn, Names
   Ok((imdb, query_fn, names_fn))
 }
 
-fn imdb_lookup(
-  input: &str,
-  cache_dir: &Path,
-  is_series: bool,
-  sort_by_rating: bool,
-) -> Res<()> {
-  let (name, year) = parse_name_and_year(input);
+fn imdb_lookup<'a>(
+  name: &str,
+  year: Option<u16>,
+  imdb: &'a Imdb,
+  query_fn: QueryFn<'a>,
+  names_fn: NamesFn<'a>,
+  results: &mut Vec<Title<'a>>,
+) -> Res<Vec<Title<'a>>> {
+  let qresults = query_fn(imdb, name.to_ascii_lowercase().as_bytes(), year)?;
+  let mut indiv_results = vec![];
 
-  let (imdb, query_fn, names_fn) = setup_imdb_db(cache_dir, is_series)?;
+  let results: &mut Vec<Title> = if !qresults.is_empty() {
+    &mut indiv_results
+  } else {
+    results
+  };
 
-  let start_time = Instant::now();
-  let mut results = Vec::new();
-
-  for result in query_fn(&imdb, name.to_ascii_lowercase().as_bytes(), year)?.into_iter() {
-    let titles = names_fn(&imdb, result.title_id())?;
+  for qresult in qresults {
+    let titles = names_fn(imdb, qresult.title_id())?;
 
     let (imdb_primary_title, imdb_original_title): (&[u8], &[u8]) = match titles[..] {
       [] => {
-        debug!("Title with ID {} has no names", result.title_id());
+        debug!("Title with ID {} has no names", qresult.title_id());
         (b"N/A", b"")
       }
       [ptitle] => (ptitle, b""),
       [ptitle, otitle] => (ptitle, otitle),
       [ptitle, otitle, ..] => {
         for title in titles {
-          debug!("Title with ID {} has name: {}", result.title_id(), &humantitle(title));
+          debug!("Title with ID {} has name: {}", qresult.title_id(), &humantitle(title));
         }
         debug!("Only the first two will be used (as primary and original titles)");
         (ptitle, otitle)
@@ -281,37 +292,14 @@ fn imdb_lookup(
     };
 
     results.push(Title {
-      imdb_title: result,
-      imdb_rating: imdb.rating(result.title_id()),
+      imdb_title: qresult,
+      imdb_rating: imdb.rating(qresult.title_id()),
       imdb_primary_title,
       imdb_original_title,
     });
   }
 
-  sort_results(&mut results, sort_by_rating);
-
-  if results.is_empty() {
-    println!("No results");
-  } else {
-    let mut table = create_output_table();
-
-    const IMDB: &str = "https://www.imdb.com/title/";
-    let imdb_url = Url::parse(IMDB)?;
-
-    for result in results {
-      let row = create_output_table_row_for_title(&result, &imdb_url)?;
-      table.add_row(row);
-    }
-
-    table.printstd();
-  }
-
-  let duration = Instant::now().duration_since(start_time);
-  info!("IMDB query took {}", format_duration(duration));
-
-  std::mem::forget(imdb);
-
-  Ok(())
+  Ok(indiv_results)
 }
 
 fn run(opt: &Opt) -> Res<()> {
@@ -322,11 +310,80 @@ fn run(opt: &Opt) -> Res<()> {
   fs::create_dir_all(cache_dir)?;
   debug!("Created cache directory");
 
-  match (&opt.title, &opt.dir) {
+  const IMDB: &str = "https://www.imdb.com/title/";
+  let imdb_url = Url::parse(IMDB)?;
+
+  let queries = match (&opt.title, &opt.dir) {
     (None, None) | (Some(_), Some(_)) => return TvRankErr::title_or_dir(),
     (None, Some(_)) => todo!("Directory lookup is still not implemented"),
-    (Some(title), None) => imdb_lookup(title, cache_dir, opt.series, opt.sort_by_rating)?,
+    (Some(title), None) => {
+      if let Some((name, year)) = parse_name_and_year(title) {
+        vec![(name, Some(year))]
+      } else {
+        vec![(title.as_str(), None)]
+      }
+    }
+  };
+
+  let db = setup_imdb_db(cache_dir, opt.series)?;
+  let imdb = db.0;
+  let query_fn = db.1;
+  let names_fn = db.2;
+
+  let start_time = Instant::now();
+  let mut results = Vec::with_capacity(queries.len());
+
+  for &(name, year) in &queries {
+    let mut indiv_results =
+      imdb_lookup(name, year, &imdb, query_fn, names_fn, &mut results)?;
+
+    if !indiv_results.is_empty() {
+      println!(
+        "Found {} matches for `{}{}`:",
+        indiv_results.len(),
+        name,
+        if let Some(year) = year {
+          format!(" ({})", year)
+        } else {
+          "".to_string()
+        }
+      );
+
+      sort_results(&mut indiv_results, opt.sort_by_rating);
+
+      let mut table = create_output_table();
+
+      for indiv_result in indiv_results {
+        let row = create_output_table_row_for_title(&indiv_result, &imdb_url)?;
+        table.add_row(row);
+      }
+
+      table.printstd();
+    }
   }
+
+  let duration = Instant::now().duration_since(start_time);
+  info!("IMDB query took {}", format_duration(duration));
+
+  if queries.len() > 1 {
+    if results.is_empty() {
+      println!("No results");
+    } else {
+      sort_results(&mut results, opt.sort_by_rating);
+
+      let mut table = create_output_table();
+
+      for result in &results {
+        let row = create_output_table_row_for_title(result, &imdb_url)?;
+        table.add_row(row);
+      }
+
+      table.printstd();
+    }
+  }
+
+  std::mem::forget(results);
+  std::mem::forget(imdb);
 
   Ok(())
 }

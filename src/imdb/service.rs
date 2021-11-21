@@ -79,12 +79,12 @@ impl Service {
     Ok(basics_dbs)
   }
 
-  pub fn new(app_cache_dir: &Path) -> Res<Self> {
+  pub fn new(cache_dir: &Path) -> Res<Self> {
+    info!("Loading IMDB Databases...");
+    let storage = Storage::load_db_files(cache_dir)?;
+
     let ncpus = num_cpus::get() / 2;
     debug!("Going to use {} threads", ncpus);
-
-    info!("Loading IMDB Databases...");
-    let storage = Storage::load_db_files(app_cache_dir)?;
 
     info!("Parsing IMDB Basics DB...");
     let basics_dbs = Self::parse_basics(ncpus, &storage)?;
