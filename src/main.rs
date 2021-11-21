@@ -146,6 +146,80 @@ fn humantitle(title: &[u8]) -> String {
   titlecase(unsafe { std::str::from_utf8_unchecked(title) })
 }
 
+fn create_output_table() -> Table {
+  let mut table = Table::new();
+
+  let table_format =
+    format::FormatBuilder::new().column_separator('│').borders('│').padding(1, 1).build();
+
+  table.set_format(table_format);
+
+  table.add_row(Row::new(vec![
+    Cell::new("Primary Title").with_style(Attr::Bold),
+    Cell::new("Original Title").with_style(Attr::Bold),
+    Cell::new("Year").with_style(Attr::Bold),
+    Cell::new("Rating").with_style(Attr::Bold),
+    Cell::new("Votes").with_style(Attr::Bold),
+    Cell::new("Runtime").with_style(Attr::Bold),
+    Cell::new("Genres").with_style(Attr::Bold),
+    Cell::new("Type").with_style(Attr::Bold),
+    Cell::new("IMDB ID").with_style(Attr::Bold),
+    Cell::new("IMDB Link").with_style(Attr::Bold),
+  ]));
+
+  table
+}
+
+fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> {
+  let mut row = Row::new(vec![]);
+
+  let title_id = title.imdb_title.title_id();
+
+  row.add_cell(Cell::new(&humantitle(title.imdb_primary_title)));
+  row.add_cell(Cell::new(&humantitle(title.imdb_original_title)));
+
+  if let Some(year) = title.imdb_title.start_year() {
+    row.add_cell(Cell::new(&format!("{}", year)));
+  } else {
+    row.add_cell(Cell::new(""));
+  }
+
+  if let Some(&(rating, votes)) = title.imdb_rating {
+    let rating_text = &format!("{}/100", rating);
+
+    let rating_cell = if rating >= 70 {
+      Cell::new(rating_text).with_style(Attr::ForegroundColor(color::GREEN))
+    } else if (60..70).contains(&rating) {
+      Cell::new(rating_text).with_style(Attr::ForegroundColor(color::YELLOW))
+    } else {
+      Cell::new(rating_text).with_style(Attr::ForegroundColor(color::RED))
+    };
+
+    row.add_cell(rating_cell);
+    row.add_cell(Cell::new(&format!("{}", votes)));
+  } else {
+    row.add_cell(Cell::new(""));
+    row.add_cell(Cell::new(""));
+  }
+
+  if let Some(runtime) = title.imdb_title.runtime_minutes() {
+    row.add_cell(Cell::new(
+      &format_duration(Duration::from_secs(u64::from(runtime) * 60)).to_string(),
+    ));
+  } else {
+    row.add_cell(Cell::new(""));
+  }
+
+  row.add_cell(Cell::new(&format!("{}", title.imdb_title.genres())));
+  row.add_cell(Cell::new(&format!("{}", title.imdb_title.title_type())));
+  row.add_cell(Cell::new(&format!("{}", title_id)));
+
+  let url = imdb_url.join(&format!("tt{}", title_id))?;
+  row.add_cell(Cell::new(url.as_str()));
+
+  Ok(row)
+}
+
 fn imdb_lookup(
   input: &str,
   cache_dir: &Path,
@@ -206,79 +280,13 @@ fn imdb_lookup(
   if results.is_empty() {
     println!("No results");
   } else {
-    let mut table = Table::new();
-
-    let table_format = format::FormatBuilder::new()
-      .column_separator('│')
-      .borders('│')
-      .padding(1, 1)
-      .build();
-
-    table.set_format(table_format);
-
-    table.add_row(Row::new(vec![
-      Cell::new("Primary Title").with_style(Attr::Bold),
-      Cell::new("Original Title").with_style(Attr::Bold),
-      Cell::new("Year").with_style(Attr::Bold),
-      Cell::new("Rating").with_style(Attr::Bold),
-      Cell::new("Votes").with_style(Attr::Bold),
-      Cell::new("Runtime").with_style(Attr::Bold),
-      Cell::new("Genres").with_style(Attr::Bold),
-      Cell::new("Type").with_style(Attr::Bold),
-      Cell::new("IMDB ID").with_style(Attr::Bold),
-      Cell::new("IMDB Link").with_style(Attr::Bold),
-    ]));
+    let mut table = create_output_table();
 
     const IMDB: &str = "https://www.imdb.com/title/";
     let imdb_url = Url::parse(IMDB)?;
 
     for result in results {
-      let mut row = Row::new(vec![]);
-
-      let title_id = result.imdb_title.title_id();
-
-      row.add_cell(Cell::new(&humantitle(result.imdb_primary_title)));
-      row.add_cell(Cell::new(&humantitle(result.imdb_original_title)));
-
-      if let Some(year) = result.imdb_title.start_year() {
-        row.add_cell(Cell::new(&format!("{}", year)));
-      } else {
-        row.add_cell(Cell::new(""));
-      }
-
-      if let Some(&(rating, votes)) = result.imdb_rating {
-        let rating_text = &format!("{}/100", rating);
-
-        let rating_cell = if rating >= 70 {
-          Cell::new(rating_text).with_style(Attr::ForegroundColor(color::GREEN))
-        } else if (60..70).contains(&rating) {
-          Cell::new(rating_text).with_style(Attr::ForegroundColor(color::YELLOW))
-        } else {
-          Cell::new(rating_text).with_style(Attr::ForegroundColor(color::RED))
-        };
-
-        row.add_cell(rating_cell);
-        row.add_cell(Cell::new(&format!("{}", votes)));
-      } else {
-        row.add_cell(Cell::new(""));
-        row.add_cell(Cell::new(""));
-      }
-
-      if let Some(runtime) = result.imdb_title.runtime_minutes() {
-        row.add_cell(Cell::new(
-          &format_duration(Duration::from_secs(u64::from(runtime) * 60)).to_string(),
-        ));
-      } else {
-        row.add_cell(Cell::new(""));
-      }
-
-      row.add_cell(Cell::new(&format!("{}", result.imdb_title.genres())));
-      row.add_cell(Cell::new(&format!("{}", result.imdb_title.title_type())));
-      row.add_cell(Cell::new(&format!("{}", title_id)));
-
-      let url = imdb_url.join(&format!("tt{}", title_id))?;
-      row.add_cell(Cell::new(url.as_str()));
-
+      let row = create_output_table_row_for_title(&result, &imdb_url)?;
       table.add_row(row);
     }
 
