@@ -31,7 +31,7 @@ impl MemSize for SeriesCookie {
 
 type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type DbByName<C> = FnvHashMap<Arc<[u8]>, DbByYear<C>>;
-type DbById<C> = FnvHashMap<TitleId, (C, Arc<[u8]>, Arc<[u8]>)>;
+type DbById = FnvHashMap<TitleId, (Arc<[u8]>, Option<Arc<[u8]>>)>;
 
 #[derive(Default)]
 pub(crate) struct Basics {
@@ -40,14 +40,14 @@ pub(crate) struct Basics {
   /// Map from movie names to years to movies.
   movies_db: DbByName<MovieCookie>,
   /// Map from IMDB ID to movie names.
-  movies_ids_names: DbById<MovieCookie>,
+  movies_ids_names: DbById,
 
   /// Series information.
   series: Vec<Title>,
   /// Map from series or episode names to years to series.
   series_db: DbByName<SeriesCookie>,
   /// Map from IMDB ID to series names.
-  series_ids_names: DbById<SeriesCookie>,
+  series_ids_names: DbById,
 }
 
 impl MemSize for Basics {
@@ -86,19 +86,15 @@ impl Basics {
     self.series.len()
   }
 
-  pub(crate) fn movie_names(&self, id: TitleId) -> Vec<&[u8]> {
-    if let Some((_, ptitle, otitle)) = self.movies_ids_names.get(&id) {
-      if Arc::ptr_eq(ptitle, otitle) {
-        vec![ptitle]
-      } else {
-        vec![ptitle, otitle]
-      }
-    } else {
-      vec![]
+  pub(crate) fn movies_names(&self, id: TitleId) -> Vec<&[u8]> {
+    match self.movies_ids_names.get(&id) {
+      Some((p, None)) => vec![p],
+      Some((p, Some(o))) => vec![p, o],
+      None => vec![],
     }
   }
 
-  pub(crate) fn movie_with_year(&self, name: &[u8], year: u16) -> Vec<&Title> {
+  pub(crate) fn movies_with_year(&self, name: &[u8], year: u16) -> Vec<&Title> {
     if let Some(by_year) = self.movies_db.get(name) {
       if let Some(cookies) = by_year.get(&Some(year)) {
         return cookies.iter().map(|cookie| &self[cookie]).collect();
@@ -108,7 +104,7 @@ impl Basics {
     vec![]
   }
 
-  pub(crate) fn movie(&self, name: &[u8]) -> Vec<&Title> {
+  pub(crate) fn movies(&self, name: &[u8]) -> Vec<&Title> {
     if let Some(by_year) = self.movies_db.get(name) {
       return by_year.values().flatten().map(|cookie| &self[cookie]).collect();
     }
@@ -117,14 +113,10 @@ impl Basics {
   }
 
   pub(crate) fn series_names(&self, id: TitleId) -> Vec<&[u8]> {
-    if let Some((_, ptitle, otitle)) = self.series_ids_names.get(&id) {
-      if Arc::ptr_eq(ptitle, otitle) {
-        vec![ptitle]
-      } else {
-        vec![ptitle, otitle]
-      }
-    } else {
-      vec![]
+    match self.series_ids_names.get(&id) {
+      Some((p, None)) => vec![p],
+      Some((p, Some(o))) => vec![p, o],
+      None => vec![],
     }
   }
 
@@ -173,10 +165,10 @@ impl Basics {
     let ptitle_lowercase = ptitle.to_ascii_lowercase();
     let (ptitle, otitle) = if ptitle.eq_ignore_ascii_case(otitle) {
       let ptitle = Arc::from(ptitle_lowercase);
-      (Arc::clone(&ptitle), ptitle)
+      (Arc::clone(&ptitle), None)
     } else {
       let otitle = otitle.to_ascii_lowercase();
-      (Arc::from(ptitle_lowercase), Arc::from(otitle))
+      (Arc::from(ptitle_lowercase), Some(Arc::from(otitle)))
     };
 
     let is_adult = {
@@ -242,12 +234,12 @@ impl Basics {
       let cookie = MovieCookie::from(self.movies.len());
       self.movies.push(title);
 
-      let value = (cookie, Arc::clone(&ptitle), Arc::clone(&otitle));
+      let value = (Arc::clone(&ptitle), otitle.as_ref().map(|otitle| Arc::clone(otitle)));
       if self.movies_ids_names.insert(title_id, value).is_some() {
         return Err::duplicate(title_id);
       }
 
-      if !Arc::ptr_eq(&otitle, &ptitle) {
+      if let Some(otitle) = otitle {
         Self::db(&mut self.movies_db, cookie, otitle, start_year);
       }
 
@@ -256,12 +248,12 @@ impl Basics {
       let cookie = SeriesCookie::from(self.series.len());
       self.series.push(title);
 
-      let value = (cookie, Arc::clone(&ptitle), Arc::clone(&otitle));
+      let value = (Arc::clone(&ptitle), otitle.as_ref().map(|otitle| Arc::clone(otitle)));
       if self.series_ids_names.insert(title_id, value).is_some() {
         return Err::duplicate(title_id);
       }
 
-      if !Arc::ptr_eq(&otitle, &ptitle) {
+      if let Some(otitle) = otitle {
         Self::db(&mut self.series_db, cookie, otitle, start_year);
       }
 

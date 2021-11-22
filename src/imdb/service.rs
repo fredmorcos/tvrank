@@ -39,7 +39,7 @@ impl Service {
         let handle =
           s.builder().name(format!("IMDB Parsing Thread #{}", i)).spawn(move |_| {
             let mut basics_db = Basics::default();
-            let mut lines = Vec::new();
+            let mut lines = vec![];
 
             loop {
               lines.extend(basics_source.lock().deref_mut().take(200_000));
@@ -124,11 +124,11 @@ impl Service {
     Ok(Self { basics_dbs, ratings_db })
   }
 
-  fn query<'a, T: 'a + Copy + Send>(
+  fn query<'a, T: 'a + Send + Copy>(
     &'a self,
     f: impl Fn(&'a Basics) -> Vec<T> + Copy + Send,
   ) -> Res<Vec<T>> {
-    let mut res = Vec::new();
+    let mut res = vec![];
 
     let _ = thread::scope(|s| {
       let mut handles = Vec::with_capacity(self.basics_dbs.len());
@@ -153,7 +153,7 @@ impl Service {
 
       for (i, handle) in handles.into_iter().enumerate() {
         match handle.join() {
-          Ok(titles) => res.extend_from_slice(titles.as_slice()),
+          Ok(titles) => res.extend(titles),
           Err(e) => error!("Could not join thread {}: {:?}", i, e),
         }
       }
@@ -162,12 +162,12 @@ impl Service {
     Ok(res)
   }
 
-  pub fn movie(&self, name: &[u8], year: Option<u16>) -> Res<Vec<&Title>> {
+  pub fn movies<'a>(&'a self, name: &[u8], year: Option<u16>) -> Res<Vec<&'a Title>> {
     self.query(|db| {
       if let Some(year) = year {
-        db.movie_with_year(name, year)
+        db.movies_with_year(name, year)
       } else {
-        db.movie(name)
+        db.movies(name)
       }
     })
   }
@@ -182,8 +182,8 @@ impl Service {
     })
   }
 
-  pub fn movie_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {
-    self.query(|db| db.movie_names(id))
+  pub fn movies_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {
+    self.query(|db| db.movies_names(id))
   }
 
   pub fn series_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {

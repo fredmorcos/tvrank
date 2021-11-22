@@ -87,7 +87,7 @@ impl Storage {
     let file = File::open(&filename)?;
     let reader = BufReader::new(file);
     let mut decoder = GzDecoder::new(reader);
-    let mut buf = Vec::new();
+    let mut buf = vec![];
 
     let msg = format!("Decompressing IMDB {} DB...", db_name);
     let spinner = create_progress_spinner(msg);
