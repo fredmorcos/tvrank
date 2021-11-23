@@ -4,6 +4,7 @@ use super::basics::Basics;
 use super::title::{Title, TitleId};
 use crate::imdb::{ratings::Ratings, storage::Storage};
 use crate::mem::MemSize;
+use crate::utils::humantitle;
 use crate::Res;
 use crossbeam::thread;
 use indicatif::HumanBytes;
@@ -124,9 +125,9 @@ impl Service {
     Ok(Self { basics_dbs, ratings_db })
   }
 
-  fn query<'a, T: 'a + Send + Copy>(
+  fn query<'a, T: 'a + Clone + Send>(
     &'a self,
-    f: impl Fn(&'a Basics) -> Vec<T> + Copy + Send,
+    f: impl Fn(&'a Basics) -> Vec<T> + Clone + Send + Copy,
   ) -> Res<Vec<T>> {
     let mut res = vec![];
 
@@ -182,12 +183,12 @@ impl Service {
     })
   }
 
-  pub fn movies_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {
-    self.query(|db| db.movies_names(id))
+  pub fn movies_names(&self, id: TitleId) -> Res<Vec<String>> {
+    self.query(|db| db.movies_names(id).into_iter().map(humantitle).collect())
   }
 
-  pub fn series_names(&self, id: TitleId) -> Res<Vec<&[u8]>> {
-    self.query(|db| db.series_names(id))
+  pub fn series_names(&self, id: TitleId) -> Res<Vec<String>> {
+    self.query(|db| db.series_names(id).into_iter().map(humantitle).collect())
   }
 
   pub fn rating(&self, title_id: TitleId) -> Option<&(u8, u64)> {

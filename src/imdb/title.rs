@@ -4,7 +4,7 @@ use crate::{imdb::genre::Genres, mem::MemSize};
 use derive_more::{Display, From, Into};
 use derive_new::new;
 use enum_utils::FromStr;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, time::Duration};
 
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[enumeration(rename_all = "camelCase")]
@@ -143,8 +143,8 @@ impl Title {
     self.end_year
   }
 
-  pub fn runtime_minutes(&self) -> Option<u16> {
-    self.runtime_minutes
+  pub fn runtime(&self) -> Option<Duration> {
+    self.runtime_minutes.map(|runtime| Duration::from_secs(u64::from(runtime) * 60))
   }
 
   pub fn genres(&self) -> Genres {

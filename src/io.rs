@@ -1,7 +1,7 @@
 use crate::Res;
 use std::io::{Read, Write};
 
-pub fn write_interactive<R: Read, W: Write>(
+pub(crate) fn write_interactive<R: Read, W: Write>(
   reader: &mut R,
   writer: &mut W,
   f: impl Fn(usize) -> Res<()>,

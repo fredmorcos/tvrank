@@ -12,11 +12,9 @@ use std::cmp::Ordering;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use structopt::StructOpt;
-use titlecase::titlecase;
-use tvrank::imdb::title::TitleId;
-use tvrank::imdb::{Imdb, ImdbTitle};
+use tvrank::imdb::{Imdb, ImdbTitle, ImdbTitleId};
 use tvrank::Res;
 use walkdir::WalkDir;
 
@@ -122,8 +120,8 @@ enum Command {
 struct Title<'db> {
   imdb_title: &'db ImdbTitle,
   imdb_rating: Option<&'db (u8, u64)>,
-  imdb_primary_title: &'db [u8],
-  imdb_original_title: &'db [u8],
+  imdb_primary_title: String,
+  imdb_original_title: String,
 }
 
 fn sort_results(results: &mut Vec<Title>, sort_by_rating: bool) {
@@ -137,7 +135,7 @@ fn sort_results(results: &mut Vec<Title>, sort_by_rating: bool) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      b.imdb_primary_title.cmp(a.imdb_primary_title)
+      b.imdb_primary_title.cmp(&a.imdb_primary_title)
     })
   } else {
     results.sort_unstable_by(|a, b| {
@@ -149,13 +147,9 @@ fn sort_results(results: &mut Vec<Title>, sort_by_rating: bool) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      b.imdb_primary_title.cmp(a.imdb_primary_title)
+      b.imdb_primary_title.cmp(&a.imdb_primary_title)
     })
   }
-}
-
-fn humantitle(title: &[u8]) -> String {
-  titlecase(unsafe { std::str::from_utf8_unchecked(title) })
 }
 
 fn create_output_table() -> Table {
@@ -189,8 +183,8 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
 
   let mut row = Row::new(vec![]);
 
-  row.add_cell(Cell::new(&humantitle(title.imdb_primary_title)));
-  row.add_cell(Cell::new(&humantitle(title.imdb_original_title)));
+  row.add_cell(Cell::new(&title.imdb_primary_title));
+  row.add_cell(Cell::new(&title.imdb_original_title));
 
   if let Some(year) = title.imdb_title.start_year() {
     row.add_cell(Cell::new(&format!("{}", year)));
@@ -214,10 +208,8 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
     row.add_cell(Cell::new(""));
   }
 
-  if let Some(runtime) = title.imdb_title.runtime_minutes() {
-    row.add_cell(Cell::new(
-      &format_duration(Duration::from_secs(u64::from(runtime) * 60)).to_string(),
-    ));
+  if let Some(runtime) = title.imdb_title.runtime() {
+    row.add_cell(Cell::new(&format_duration(runtime).to_string()));
   } else {
     row.add_cell(Cell::new(""));
   }
@@ -236,7 +228,7 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
 
 type QueryFn<'a> =
   fn(db: &'a Imdb, name: &[u8], year: Option<u16>) -> Res<Vec<&'a ImdbTitle>>;
-type NamesFn<'a> = fn(db: &'a Imdb, id: TitleId) -> Res<Vec<&'a [u8]>>;
+type NamesFn = fn(db: &Imdb, id: ImdbTitleId) -> Res<Vec<String>>;
 
 fn setup_imdb_db(cache_dir: &Path, series: bool) -> Res<(Imdb, QueryFn, NamesFn)> {
   let start_time = Instant::now();
@@ -264,25 +256,25 @@ fn imdb_lookup<'a>(
   year: Option<u16>,
   imdb: &'a Imdb,
   query_fn: QueryFn<'a>,
-  names_fn: NamesFn<'a>,
+  names_fn: NamesFn,
   results: &mut Vec<Title<'a>>,
 ) -> Res<()> {
   for qresult in query_fn(imdb, name.to_ascii_lowercase().as_bytes(), year)? {
     let titles = names_fn(imdb, qresult.title_id())?;
 
-    let (imdb_primary_title, imdb_original_title): (&[u8], &[u8]) = match titles[..] {
+    let (imdb_primary_title, imdb_original_title) = match &titles[..] {
       [] => {
         debug!("Title with ID {} has no names", qresult.title_id());
-        (b"N/A", b"")
+        ("N/A".to_string(), "".to_string())
       }
-      [ptitle] => (ptitle, b""),
-      [ptitle, otitle] => (ptitle, otitle),
+      [ptitle] => (ptitle.to_string(), "".to_string()),
+      [ptitle, otitle] => (ptitle.to_string(), otitle.to_string()),
       [ptitle, otitle, ..] => {
-        for title in titles {
-          debug!("Title with ID {} has name: {}", qresult.title_id(), &humantitle(title));
+        for title in &titles {
+          debug!("Title with ID {} has name: {}", qresult.title_id(), title);
         }
         debug!("Only the first two will be used (as primary and original titles)");
-        (ptitle, otitle)
+        (ptitle.to_string(), otitle.to_string())
       }
     };
 
@@ -313,7 +305,7 @@ fn handle_single_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   query_fn: QueryFn<'a>,
-  names_fn: NamesFn<'a>,
+  names_fn: NamesFn,
   imdb_url: &Url,
   sort_by_rating: bool,
 ) -> Res<()> {
@@ -352,7 +344,7 @@ fn handle_dir_of_titles<'a>(
   dir: &Path,
   imdb: &'a Imdb,
   query_fn: QueryFn<'a>,
-  names_fn: NamesFn<'a>,
+  names_fn: NamesFn,
   imdb_url: &Url,
   series: bool,
   sort_by_rating: bool,
