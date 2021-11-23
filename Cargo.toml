@@ -1,13 +1,16 @@
 [package]
 name = "tvrank"
-description = "Query information about movies and series"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
+description = "Query and sort information about movies and series"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
-readme = "README.md"
 license = "MIT"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+homepage = "https://github.com/fredmorcos/tvrank"
+repository = "https://github.com/fredmorcos/tvrank"
+readme = "README.md"
+keywords = ["tv", "series", "movies", "imdb", "rank"]
+categories = [ "caching", "command-line-utilities", "filesystem", "multimedia::video", "parsing"]
+exclude = ["/.github", "/.gitignore", "/screencasts", "/screenshots"]
 
 [lib]
 name = "tvrank"
