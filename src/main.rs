@@ -23,18 +23,11 @@ use walkdir::WalkDir;
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
 enum TvRankErr {
-  #[display(fmt = "Must provide either --title or --dir")]
-  TitleOrDir,
-
   #[display(fmt = "Could not find cache directory")]
   CacheDir,
 }
 
 impl TvRankErr {
-  fn title_or_dir<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::TitleOrDir))
-  }
-
   fn cache_dir<T>() -> Res<T> {
     Err(Box::new(TvRankErr::CacheDir))
   }
@@ -104,16 +97,25 @@ struct Opt {
   series: bool,
 
   /// Sort results by rating, year and title instead of year, rating and title
-  #[structopt(short, long)]
+  #[structopt(short = "r", long)]
   sort_by_rating: bool,
 
-  /// Lookup a single title using "TITLE" or "TITLE (YYYY)"
-  #[structopt(short, long, name = "TITLE")]
-  title: Option<String>,
+  #[structopt(subcommand)]
+  command: Command,
+}
 
+#[derive(Debug, StructOpt)]
+enum Command {
+  /// Lookup a single title using "TITLE" or "TITLE (YYYY)"
+  Title {
+    #[structopt(name = "TITLE")]
+    title: String,
+  },
   /// Lookup titles from a directory
-  #[structopt(short, long, name = "DIR")]
-  dir: Option<PathBuf>,
+  Dir {
+    #[structopt(name = "DIR")]
+    dir: PathBuf,
+  },
 }
 
 #[derive(Debug)]
@@ -464,23 +466,22 @@ fn run(opt: &Opt) -> Res<()> {
 
   let start_time = Instant::now();
 
-  match (&opt.title, &opt.dir) {
-    (None, None) | (Some(_), Some(_)) => return TvRankErr::title_or_dir(),
-    (None, Some(dir)) => handle_dir_of_titles(
+  match &opt.command {
+    Command::Title { title } => handle_single_title(
+      title,
+      &imdb,
+      query_fn,
+      names_fn,
+      &imdb_url,
+      opt.sort_by_rating,
+    )?,
+    Command::Dir { dir } => handle_dir_of_titles(
       dir,
       &imdb,
       query_fn,
       names_fn,
       &imdb_url,
       opt.series,
-      opt.sort_by_rating,
-    )?,
-    (Some(title), None) => handle_single_title(
-      title,
-      &imdb,
-      query_fn,
-      names_fn,
-      &imdb_url,
       opt.sort_by_rating,
     )?,
   }
