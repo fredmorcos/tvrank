@@ -3,37 +3,25 @@
 use super::error::Err;
 use super::genre::{Genre, Genres};
 use super::title::{Title, TitleId, TitleType};
-use crate::mem::MemSize;
 use crate::Res;
 use atoi::atoi;
+use deepsize::DeepSizeOf;
 use derive_more::{Display, From};
 use fnv::FnvHashMap;
 use std::sync::Arc;
 use std::{ops::Index, str::FromStr};
 
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
 struct MovieCookie(usize);
 
-impl MemSize for MovieCookie {
-  fn mem_size(&self) -> usize {
-    self.0.mem_size()
-  }
-}
-
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From)]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
 struct SeriesCookie(usize);
-
-impl MemSize for SeriesCookie {
-  fn mem_size(&self) -> usize {
-    self.0.mem_size()
-  }
-}
 
 type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type DbByName<C> = FnvHashMap<Arc<[u8]>, DbByYear<C>>;
 type DbById = FnvHashMap<TitleId, (Arc<[u8]>, Option<Arc<[u8]>>)>;
 
-#[derive(Default)]
+#[derive(Default, DeepSizeOf)]
 pub(crate) struct Basics {
   /// Movies information.
   movies: Vec<Title>,
@@ -48,17 +36,6 @@ pub(crate) struct Basics {
   series_db: DbByName<SeriesCookie>,
   /// Map from IMDB ID to series names.
   series_ids_names: DbById,
-}
-
-impl MemSize for Basics {
-  fn mem_size(&self) -> usize {
-    self.movies.mem_size()
-      + self.movies_db.mem_size()
-      + self.movies_ids_names.mem_size()
-      + self.series.mem_size()
-      + self.series_db.mem_size()
-      + self.series_ids_names.mem_size()
-  }
 }
 
 impl Index<&MovieCookie> for Basics {

@@ -3,25 +3,20 @@
 use super::basics::Basics;
 use super::title::{Title, TitleId};
 use crate::imdb::{ratings::Ratings, storage::Storage};
-use crate::mem::MemSize;
 use crate::utils::humantitle;
 use crate::Res;
 use crossbeam::thread;
+use deepsize::DeepSizeOf;
 use indicatif::HumanBytes;
 use log::{debug, error, info};
 use parking_lot::const_mutex;
 use std::convert::TryInto;
 use std::{ops::DerefMut, path::Path, sync::Arc};
 
+#[derive(DeepSizeOf)]
 pub struct Service {
   basics_dbs: Vec<Basics>,
   ratings_db: Ratings,
-}
-
-impl MemSize for Service {
-  fn mem_size(&self) -> usize {
-    self.basics_dbs.mem_size() + self.ratings_db.mem_size()
-  }
 }
 
 impl Service {
@@ -104,7 +99,7 @@ impl Service {
       total_movies += n_movies;
       total_series += n_series;
 
-      let size = db.mem_size();
+      let size = db.deep_size_of();
       total_size += size;
 
       debug!(

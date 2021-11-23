@@ -1,12 +1,13 @@
 #![warn(clippy::all)]
 
-use crate::{imdb::genre::Genres, mem::MemSize};
+use crate::imdb::genre::Genres;
+use deepsize::DeepSizeOf;
 use derive_more::{Display, From, Into};
 use derive_new::new;
 use enum_utils::FromStr;
 use std::{cmp::Ordering, time::Duration};
 
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, DeepSizeOf)]
 #[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
 pub enum TitleType {
@@ -30,12 +31,6 @@ pub enum TitleType {
   TvSeries,
   TvMiniSeries,
   RadioSeries,
-}
-
-impl MemSize for TitleType {
-  fn mem_size(&self) -> usize {
-    std::mem::size_of::<Self>()
-  }
 }
 
 impl TitleType {
@@ -82,14 +77,8 @@ impl TitleType {
   }
 }
 
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into, DeepSizeOf)]
 pub struct TitleId(u64);
-
-impl MemSize for TitleId {
-  fn mem_size(&self) -> usize {
-    self.0.mem_size()
-  }
-}
 
 impl PartialOrd for TitleId {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -103,7 +92,7 @@ impl Ord for TitleId {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, new)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, new, DeepSizeOf)]
 pub struct Title {
   title_id: TitleId,
   title_type: TitleType,
@@ -112,18 +101,6 @@ pub struct Title {
   end_year: Option<u16>,
   runtime_minutes: Option<u16>,
   genres: Genres,
-}
-
-impl MemSize for Title {
-  fn mem_size(&self) -> usize {
-    self.title_id.mem_size()
-      + self.title_type.mem_size()
-      + self.is_adult.mem_size()
-      + self.start_year.mem_size()
-      + self.end_year.mem_size()
-      + self.runtime_minutes.mem_size()
-      + self.genres.mem_size()
-  }
 }
 
 impl Title {
