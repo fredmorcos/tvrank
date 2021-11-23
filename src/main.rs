@@ -322,7 +322,16 @@ fn handle_single_title<'a>(
   if results.is_empty() {
     println!("No matches found for `{}`", display_title(name, year));
   } else {
-    println!("Found {} matche(s) for `{}`:", results.len(), display_title(name, year));
+    println!(
+      "Found {} {} for `{}`:",
+      results.len(),
+      if results.len() == 1 {
+        "match"
+      } else {
+        "matches"
+      },
+      display_title(name, year)
+    );
 
     sort_results(&mut results, sort_by_rating);
 
