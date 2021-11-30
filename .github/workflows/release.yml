@@ -70,11 +70,11 @@ jobs:
         with:
           command: test
           args: --all-features --release
-      - name: Strip + UPX release binary
-        uses: svenstaro/upx-action@v2
-        with:
-          file: target/release/tvrank
-          strip: true
+      # - name: Strip + UPX release binary
+      #   uses: svenstaro/upx-action@v2
+      #   with:
+      #     file: target/release/tvrank
+      #     strip: true
       - name: Build tarball
         shell: bash
         run: |
@@ -154,11 +154,11 @@ jobs:
         with:
           command: test
           args: --all-features --release
-      - name: Strip + UPX release binary
-        uses: svenstaro/upx-action@v2
-        with:
-          file: target/release/tvrank
-          strip: true
+      # - name: Strip + UPX release binary
+      #   uses: svenstaro/upx-action@v2
+      #   with:
+      #     file: target/release/tvrank
+      #     strip: true
       - name: Build tarball
         shell: bash
         run: |
@@ -238,11 +238,11 @@ jobs:
         with:
           command: test
           args: --all-features --release
-      - name: Strip + UPX release binary
-        uses: svenstaro/upx-action@v2
-        with:
-          file: target/release/tvrank.exe
-          strip: false
+      # - name: Strip + UPX release binary
+      #   uses: svenstaro/upx-action@v2
+      #   with:
+      #     file: target/release/tvrank.exe
+      #     strip: false
       - name: Build tarball
         shell: bash
         run: |
