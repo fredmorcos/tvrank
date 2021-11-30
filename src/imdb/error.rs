@@ -9,7 +9,7 @@ use std::error::Error;
 #[display(fmt = "{}")]
 pub enum Err {
   #[display(fmt = "ID does not start with `tt` (e.g. ttXXXXXXX)")]
-  Id,
+  Id(&'static [u8]),
   #[display(fmt = "ID does not contain a number (e.g. ttXXXXXXX)")]
   IdNumber,
   #[display(fmt = "Unknown title type")]
@@ -33,8 +33,8 @@ pub enum Err {
 }
 
 impl Err {
-  pub(crate) fn id<T>() -> Res<T> {
-    Err(Box::new(Err::Id))
+  pub(crate) fn id<T>(id: &'static [u8]) -> Res<T> {
+    Err(Box::new(Err::Id(id)))
   }
 
   pub(crate) fn adult<T>() -> Res<T> {

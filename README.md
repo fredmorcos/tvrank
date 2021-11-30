@@ -112,45 +112,67 @@ Include the `Imdb` type:
 use tvrank::imdb::Imdb;
 ```
 
-Create a directory for the cache using the `tempfile` crate, and pass that to the `Imdb`
-database constructor:
+Create a directory for the cache using the `tempfile` crate, and pass that to the
+`ImdbStorage` constructor then create the database service:
 
 ```rust
-  let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
-  let imdb = Imdb::new(cache_dir.path())?;
+let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
+let storage = ImdbStorage::new(
+  cache_dir.path(),
+  |db_name, content_len| {
+    println!("Starting download of {} (size = {:?})", db_name, content_len);
+  },
+  |_, _| {},
+  |_| {
+    println!("Finished download");
+  },
+  |db_name| {
+    println!("Decompressing {}", db_name);
+  },
+  |_, _| {},
+  |_| {
+    println!("Finished decompression");
+  },
+)?;
+let imdb = Imdb::new(&storage)?;
 ```
 
-Then, query the database using either `imdb.movies(...)` or `imdb.series(...)`, and print
-out some information about the results. Note the use of `imdb.movies_names(...)` or
-`imdb.series_names(...)` to query the available titles for a result and the use of
-`imdb.rating(...)` to query the rating of a result:
+Note that the storage constructor takes 6 closures: `on_download_init`,
+`on_download_progress`, `on_download_finish`, `on_extract_init`, `on_extract_progress` and
+`on_extract_finish`. These are meant to print progress, or create a progress bar object
+and pass it around for updates.
+
+Afterwards, one can query the database using either `imdb.movies_by_title(...)` or
+`imdb.series_by_title(...)`, and print out some information about the results. Note that
+the return type of `Imdb::movies_by_title` is a vector of vectors of titles, this is due
+to the multi-threaded nature of the service: each vector contains the resulting titles
+from each thread.
 
 ```rust
-  let results = imdb.movies("city of god".as_bytes(), Some(2002))?;
-
-  for result in results {
-    let id = result.title_id();
+for titles in imdb.movies_by_title("city of god".as_bytes(), Some(2002))? {
+  for title in titles {
+    let id = title.title_id();
 
     println!("ID: {}", id);
+    println!("Primary name: {}", title.primary_title());
+    println!("Original name: {}", title.original_title());
 
-    for name in imdb.movies_names(id)? {
-      println!("Name: {}", name);
-    }
-
-    if let Some((rating, votes)) = imdb.rating(id) {
+    if let Some((rating, votes)) = title.rating() {
       println!("Rating: {}/100 ({} votes)", rating, votes);
     } else {
       println!("Rating: N/A");
     }
 
-    if let Some(runtime) = result.runtime() {
+    if let Some(runtime) = title.runtime() {
       println!("Runtime: {}", humantime::format_duration(runtime));
     } else {
       println!("Runtime: N/A");
     }
 
-    println!("Genres: {}", result.genres());
+    println!("Genres: {}", title.genres());
+    println!("--");
   }
+}
 ```
 
 See the `examples/` directory for a fully-functioning version of the above.

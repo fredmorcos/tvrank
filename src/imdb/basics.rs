@@ -2,52 +2,58 @@
 
 use super::error::Err;
 use super::genre::{Genre, Genres};
-use super::title::{Title, TitleId, TitleType};
+use super::title::{TitleId, TitleType};
+use crate::imdb::title::TitleBasics;
 use crate::Res;
 use atoi::atoi;
 use deepsize::DeepSizeOf;
 use derive_more::{Display, From};
 use fnv::FnvHashMap;
-use std::sync::Arc;
-use std::{ops::Index, str::FromStr};
+use std::ops::Index;
+use std::str::FromStr;
 
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
-struct MovieCookie(usize);
+struct MoviesCookie(usize);
 
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
 struct SeriesCookie(usize);
 
-type DbByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
-type DbByName<C> = FnvHashMap<Arc<[u8]>, DbByYear<C>>;
-type DbById = FnvHashMap<TitleId, (Arc<[u8]>, Option<Arc<[u8]>>)>;
+type ByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
+type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
+type ByKeyword<C> = FnvHashMap<&'static [u8], ByYear<C>>;
+type ByGenre<C> = FnvHashMap<Genre, Vec<C>>;
 
 #[derive(Default, DeepSizeOf)]
 pub(crate) struct Basics {
   /// Movies information.
-  movies: Vec<Title>,
-  /// Map from movie names to years to movies.
-  movies_db: DbByName<MovieCookie>,
-  /// Map from IMDB ID to movie names.
-  movies_ids_names: DbById,
+  movies: Vec<TitleBasics>,
+  /// Map from movies names to years to movies.
+  movies_titles: ByTitle<MoviesCookie>,
+  /// Map from keyword to years to movies.
+  movies_keywords: ByKeyword<MoviesCookie>,
+  /// Map from Genre to movies.
+  movies_genres: ByGenre<MoviesCookie>,
 
   /// Series information.
-  series: Vec<Title>,
-  /// Map from series or episode names to years to series.
-  series_db: DbByName<SeriesCookie>,
-  /// Map from IMDB ID to series names.
-  series_ids_names: DbById,
+  series: Vec<TitleBasics>,
+  /// Map from series names to years to series.
+  series_titles: ByTitle<SeriesCookie>,
+  /// Map from keyword to years to series.
+  series_keywords: ByKeyword<SeriesCookie>,
+  /// Map from Genre to series.
+  series_genres: ByGenre<SeriesCookie>,
 }
 
-impl Index<&MovieCookie> for Basics {
-  type Output = Title;
+impl Index<&MoviesCookie> for Basics {
+  type Output = TitleBasics;
 
-  fn index(&self, index: &MovieCookie) -> &Self::Output {
+  fn index(&self, index: &MoviesCookie) -> &Self::Output {
     unsafe { self.movies.get_unchecked(index.0) }
   }
 }
 
 impl Index<&SeriesCookie> for Basics {
-  type Output = Title;
+  type Output = TitleBasics;
 
   fn index(&self, index: &SeriesCookie) -> &Self::Output {
     unsafe { self.series.get_unchecked(index.0) }
@@ -63,59 +69,51 @@ impl Basics {
     self.series.len()
   }
 
-  pub(crate) fn movies_names(&self, id: TitleId) -> Vec<&[u8]> {
-    match self.movies_ids_names.get(&id) {
-      Some((p, None)) => vec![p],
-      Some((p, Some(o))) => vec![p, o],
-      None => vec![],
-    }
-  }
-
-  pub(crate) fn movies_with_year(&self, name: &[u8], year: u16) -> Vec<&Title> {
-    if let Some(by_year) = self.movies_db.get(name) {
+  pub(crate) fn movies_by_title_with_year(
+    &self,
+    name: &str,
+    year: u16,
+  ) -> Option<impl Iterator<Item = &TitleBasics>> {
+    if let Some(by_year) = self.movies_titles.get(name) {
       if let Some(cookies) = by_year.get(&Some(year)) {
-        return cookies.iter().map(|cookie| &self[cookie]).collect();
+        return Some(cookies.iter().map(|cookie| &self[cookie]));
       }
     }
 
-    vec![]
+    None
   }
 
-  pub(crate) fn movies(&self, name: &[u8]) -> Vec<&Title> {
-    if let Some(by_year) = self.movies_db.get(name) {
-      return by_year.values().flatten().map(|cookie| &self[cookie]).collect();
+  pub(crate) fn movies_by_title(&self, name: &str) -> Option<impl Iterator<Item = &TitleBasics>> {
+    if let Some(by_year) = self.movies_titles.get(name) {
+      return Some(by_year.values().flatten().map(|cookie| &self[cookie]));
     }
 
-    vec![]
+    None
   }
 
-  pub(crate) fn series_names(&self, id: TitleId) -> Vec<&[u8]> {
-    match self.series_ids_names.get(&id) {
-      Some((p, None)) => vec![p],
-      Some((p, Some(o))) => vec![p, o],
-      None => vec![],
-    }
-  }
-
-  pub(crate) fn series_with_year(&self, name: &[u8], year: u16) -> Vec<&Title> {
-    if let Some(by_year) = self.series_db.get(name) {
+  pub(crate) fn series_by_title_with_year(
+    &self,
+    name: &str,
+    year: u16,
+  ) -> Option<impl Iterator<Item = &TitleBasics>> {
+    if let Some(by_year) = self.series_titles.get(name) {
       if let Some(cookies) = by_year.get(&Some(year)) {
-        return cookies.iter().map(|cookie| &self[cookie]).collect();
+        return Some(cookies.iter().map(|cookie| &self[cookie]));
       }
     }
 
-    vec![]
+    None
   }
 
-  pub(crate) fn series(&self, name: &[u8]) -> Vec<&Title> {
-    if let Some(by_year) = self.series_db.get(name) {
-      return by_year.values().flatten().map(|cookie| &self[cookie]).collect();
+  pub(crate) fn series_by_title(&self, name: &str) -> Option<impl Iterator<Item = &TitleBasics>> {
+    if let Some(by_year) = self.series_titles.get(name) {
+      return Some(by_year.values().flatten().map(|cookie| &self[cookie]));
     }
 
-    vec![]
+    None
   }
 
-  pub(crate) fn add_basics_from_line(&mut self, line: &[u8]) -> Res<()> {
+  pub(crate) fn add_basics_from_line(&mut self, line: &'static [u8]) -> Res<()> {
     let mut iter = line.split(|&b| b == super::parsing::TAB);
 
     macro_rules! next {
@@ -124,7 +122,7 @@ impl Basics {
       }};
     }
 
-    let title_id = TitleId::from(super::parsing::parse_title_id(next!())?);
+    let title_id = TitleId::try_from(next!())?;
 
     let title_type = {
       let title_type = next!();
@@ -136,17 +134,8 @@ impl Basics {
       return Ok(());
     }
 
-    let ptitle = next!();
-    let otitle = next!();
-
-    let ptitle_lowercase = ptitle.to_ascii_lowercase();
-    let (ptitle, otitle) = if ptitle.eq_ignore_ascii_case(otitle) {
-      let ptitle = Arc::from(ptitle_lowercase);
-      (Arc::clone(&ptitle), None)
-    } else {
-      let otitle = otitle.to_ascii_lowercase();
-      (Arc::from(ptitle_lowercase), Some(Arc::from(otitle)))
-    };
+    let primary_title = unsafe { std::str::from_utf8_unchecked(next!()) };
+    let original_title = unsafe { std::str::from_utf8_unchecked(next!()) };
 
     let is_adult = {
       let is_adult = next!();
@@ -197,50 +186,46 @@ impl Basics {
       result
     };
 
-    let title = Title::new(
+    let title = TitleBasics {
       title_id,
       title_type,
+      primary_title,
+      original_title,
       is_adult,
       start_year,
       end_year,
       runtime_minutes,
       genres,
-    );
+    };
 
     if title_type.is_movie() {
-      let cookie = MovieCookie::from(self.movies.len());
+      let cookie = MoviesCookie::from(self.movies.len());
       self.movies.push(title);
 
-      let value = (Arc::clone(&ptitle), otitle.as_ref().map(|otitle| Arc::clone(otitle)));
-      if self.movies_ids_names.insert(title_id, value).is_some() {
-        return Err::duplicate(title_id);
-      }
+      let lc_primary_title = primary_title.to_lowercase();
+      Self::insert_title(&mut self.movies_titles, cookie, lc_primary_title, start_year);
 
-      if let Some(otitle) = otitle {
-        Self::db(&mut self.movies_db, cookie, otitle, start_year);
+      if original_title != primary_title {
+        let lc_original_title = original_title.to_lowercase();
+        Self::insert_title(&mut self.movies_titles, cookie, lc_original_title, start_year);
       }
-
-      Self::db(&mut self.movies_db, cookie, ptitle, start_year);
     } else if title_type.is_series() {
       let cookie = SeriesCookie::from(self.series.len());
       self.series.push(title);
 
-      let value = (Arc::clone(&ptitle), otitle.as_ref().map(|otitle| Arc::clone(otitle)));
-      if self.series_ids_names.insert(title_id, value).is_some() {
-        return Err::duplicate(title_id);
-      }
+      let lc_primary_title = primary_title.to_lowercase();
+      Self::insert_title(&mut self.series_titles, cookie, lc_primary_title, start_year);
 
-      if let Some(otitle) = otitle {
-        Self::db(&mut self.series_db, cookie, otitle, start_year);
+      if original_title != primary_title {
+        let lc_original_title = original_title.to_lowercase();
+        Self::insert_title(&mut self.series_titles, cookie, lc_original_title, start_year);
       }
-
-      Self::db(&mut self.series_db, cookie, ptitle, start_year);
     }
 
     Ok(())
   }
 
-  fn db<T>(db: &mut DbByName<T>, cookie: T, title: Arc<[u8]>, year: Option<u16>)
+  fn insert_title<T>(db: &mut ByTitle<T>, cookie: T, title: String, year: Option<u16>)
   where
     T: From<usize> + Copy,
   {
@@ -252,7 +237,7 @@ impl Basics {
           .or_insert_with(|| vec![cookie]);
       })
       .or_insert_with(|| {
-        let mut by_year = DbByYear::default();
+        let mut by_year = ByYear::default();
         by_year.insert(year, vec![cookie]);
         by_year
       });

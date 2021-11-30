@@ -14,7 +14,7 @@ pub(crate) struct Ratings {
 }
 
 impl Ratings {
-  pub(crate) fn new_from_buf(buf: &[u8]) -> Res<Self> {
+  pub(crate) fn new_from_buf(buf: &'static [u8]) -> Res<Self> {
     let mut res = Self::default();
 
     for line in buf.split(|&b| b == b'\n').skip(1) {
@@ -24,7 +24,7 @@ impl Ratings {
     Ok(res)
   }
 
-  fn add_rating_from_line(&mut self, line: &[u8]) -> Res<()> {
+  fn add_rating_from_line(&mut self, line: &'static [u8]) -> Res<()> {
     if line.is_empty() {
       return Ok(());
     }
@@ -37,7 +37,7 @@ impl Ratings {
       }};
     }
 
-    let title_id = TitleId::from(super::parsing::parse_title_id(next!())?);
+    let title_id = TitleId::try_from(next!())?;
     let rating = f32::from_str(unsafe { std::str::from_utf8_unchecked(next!()) })?;
     let rating = unsafe { (rating * 10.0).to_int_unchecked() };
     let votes = atoi::<u64>(next!()).ok_or(Err::Votes)?;
@@ -49,7 +49,7 @@ impl Ratings {
     Ok(())
   }
 
-  pub(crate) fn get(&self, title_id: TitleId) -> Option<&(u8, u64)> {
-    self.ratings.get(&title_id)
+  pub(crate) fn get<'a>(&'a self, id: &TitleId) -> Option<&'a (u8, u64)> {
+    self.ratings.get(id)
   }
 }

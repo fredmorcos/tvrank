@@ -5,7 +5,7 @@ use derive_more::Display;
 use enum_utils::FromStr;
 use std::fmt;
 
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, DeepSizeOf)]
 #[display(fmt = "{}")]
 pub enum Genre {
   Drama = 0,

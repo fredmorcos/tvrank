@@ -1,9 +1,12 @@
 #![warn(clippy::all)]
 
+mod ui;
+
 use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
+use indicatif::{HumanBytes, ProgressBar};
 use log::{debug, error, info, trace, warn};
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use regex::Regex;
@@ -14,9 +17,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbTitle, ImdbTitleId};
+use tvrank::imdb::{Imdb, ImdbStorage, ImdbTitle};
 use tvrank::Res;
 use walkdir::WalkDir;
+
+use crate::ui::{create_progress_bar, create_progress_spinner};
 
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
@@ -116,38 +121,30 @@ enum Command {
   },
 }
 
-#[derive(Debug)]
-struct Title<'db> {
-  imdb_title: &'db ImdbTitle,
-  imdb_rating: Option<&'db (u8, u64)>,
-  imdb_primary_title: String,
-  imdb_original_title: String,
-}
-
-fn sort_results(results: &mut Vec<Title>, sort_by_rating: bool) {
+fn sort_results(results: &mut Vec<ImdbTitle>, sort_by_rating: bool) {
   if sort_by_rating {
     results.sort_unstable_by(|a, b| {
-      match b.imdb_rating.cmp(&a.imdb_rating) {
+      match b.rating().cmp(&a.rating()) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      match b.imdb_title.start_year().cmp(&a.imdb_title.start_year()) {
+      match b.start_year().cmp(&a.start_year()) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      b.imdb_primary_title.cmp(&a.imdb_primary_title)
+      b.primary_title().cmp(a.primary_title())
     })
   } else {
     results.sort_unstable_by(|a, b| {
-      match b.imdb_title.start_year().cmp(&a.imdb_title.start_year()) {
+      match b.start_year().cmp(&a.start_year()) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      match b.imdb_rating.cmp(&a.imdb_rating) {
+      match b.rating().cmp(&a.rating()) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      b.imdb_primary_title.cmp(&a.imdb_primary_title)
+      b.primary_title().cmp(a.primary_title())
     })
   }
 }
@@ -155,8 +152,11 @@ fn sort_results(results: &mut Vec<Title>, sort_by_rating: bool) {
 fn create_output_table() -> Table {
   let mut table = Table::new();
 
-  let table_format =
-    format::FormatBuilder::new().column_separator('│').borders('│').padding(1, 1).build();
+  let table_format = format::FormatBuilder::new()
+    .column_separator('│')
+    .borders('│')
+    .padding(1, 1)
+    .build();
 
   table.set_format(table_format);
 
@@ -176,23 +176,23 @@ fn create_output_table() -> Table {
   table
 }
 
-fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> {
+fn create_output_table_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
   static GREEN: Attr = Attr::ForegroundColor(color::GREEN);
   static YELLOW: Attr = Attr::ForegroundColor(color::YELLOW);
   static RED: Attr = Attr::ForegroundColor(color::RED);
 
   let mut row = Row::new(vec![]);
 
-  row.add_cell(Cell::new(&title.imdb_primary_title));
-  row.add_cell(Cell::new(&title.imdb_original_title));
+  row.add_cell(Cell::new(title.primary_title()));
+  row.add_cell(Cell::new(title.original_title()));
 
-  if let Some(year) = title.imdb_title.start_year() {
+  if let Some(year) = title.start_year() {
     row.add_cell(Cell::new(&format!("{}", year)));
   } else {
     row.add_cell(Cell::new(""));
   }
 
-  if let Some(&(rating, votes)) = title.imdb_rating {
+  if let Some(&(rating, votes)) = title.rating() {
     let rating_text = &format!("{}/100", rating);
 
     let rating_cell = Cell::new(rating_text).with_style(match rating {
@@ -208,47 +208,70 @@ fn create_output_table_row_for_title(title: &Title, imdb_url: &Url) -> Res<Row> 
     row.add_cell(Cell::new(""));
   }
 
-  if let Some(runtime) = title.imdb_title.runtime() {
+  if let Some(runtime) = title.runtime() {
     row.add_cell(Cell::new(&format_duration(runtime).to_string()));
   } else {
     row.add_cell(Cell::new(""));
   }
 
-  row.add_cell(Cell::new(&format!("{}", title.imdb_title.genres())));
-  row.add_cell(Cell::new(&format!("{}", title.imdb_title.title_type())));
+  row.add_cell(Cell::new(&format!("{}", title.genres())));
+  row.add_cell(Cell::new(&format!("{}", title.title_type())));
 
-  let title_id = title.imdb_title.title_id();
+  let title_id = title.title_id();
   row.add_cell(Cell::new(&format!("{}", title_id)));
 
-  let url = imdb_url.join(&format!("tt{}", title_id))?;
+  let url = imdb_url.join(&format!("{}", title_id))?;
   row.add_cell(Cell::new(url.as_str()));
 
   Ok(row)
 }
 
-type QueryFn<'a> =
-  fn(db: &'a Imdb, name: &[u8], year: Option<u16>) -> Res<Vec<&'a ImdbTitle>>;
-type NamesFn = fn(db: &Imdb, id: ImdbTitleId) -> Res<Vec<String>>;
+fn setup_imdb_storage(cache_dir: &Path) -> Res<ImdbStorage> {
+  info!("Loading IMDB Databases...");
 
-fn setup_imdb_db(cache_dir: &Path, series: bool) -> Res<(Imdb, QueryFn, NamesFn)> {
-  let start_time = Instant::now();
-  let imdb = Imdb::new(cache_dir)?;
-  let duration = Instant::now().duration_since(start_time);
-  info!("Loaded IMDB database in {}", format_duration(duration));
+  // Downloading callbacks.
+  let download_init = |db_name: &'_ str, content_len| {
+    let msg = format!("Downloading IMDB {} DB", db_name);
+    let bar = if let Some(file_length) = content_len {
+      info!("IMDB {} DB compressed file size is {}", db_name, HumanBytes(file_length));
+      create_progress_bar(msg, file_length)
+    } else {
+      info!("IMDB {} DB compressed file size is unknown", db_name);
+      create_progress_spinner(msg)
+    };
 
-  let query_fn = if series {
-    Imdb::series
-  } else {
-    Imdb::movies
+    bar
+  };
+  let download_during = |bar: &ProgressBar, delta| {
+    bar.inc(delta);
+  };
+  let download_finish = |bar: &ProgressBar| {
+    bar.finish_and_clear();
   };
 
-  let names_fn = if series {
-    Imdb::series_names
-  } else {
-    Imdb::movies_names
+  // Extracting callbacks.
+  let decomp_init = |db_name: &'_ str| {
+    let msg = format!("Decompressing IMDB {} DB...", db_name);
+    create_progress_spinner(msg)
+  };
+  let decomp_during = |spinner: &ProgressBar, delta| {
+    spinner.inc(delta);
+  };
+  let decomp_finish = |spinner: &ProgressBar| {
+    spinner.finish_and_clear();
   };
 
-  Ok((imdb, query_fn, names_fn))
+  let imdb_storage = ImdbStorage::new(
+    cache_dir,
+    download_init,
+    download_during,
+    download_finish,
+    decomp_init,
+    decomp_during,
+    decomp_finish,
+  )?;
+
+  Ok(imdb_storage)
 }
 
 fn imdb_lookup<'a>(
@@ -256,36 +279,9 @@ fn imdb_lookup<'a>(
   year: Option<u16>,
   imdb: &'a Imdb,
   query_fn: QueryFn<'a>,
-  names_fn: NamesFn,
-  results: &mut Vec<Title<'a>>,
+  results: &mut Vec<ImdbTitle<'a, 'a>>,
 ) -> Res<()> {
-  for qresult in query_fn(imdb, name.to_ascii_lowercase().as_bytes(), year)? {
-    let titles = names_fn(imdb, qresult.title_id())?;
-
-    let (imdb_primary_title, imdb_original_title) = match &titles[..] {
-      [] => {
-        debug!("Title with ID {} has no names", qresult.title_id());
-        ("N/A".to_string(), "".to_string())
-      }
-      [ptitle] => (ptitle.to_string(), "".to_string()),
-      [ptitle, otitle] => (ptitle.to_string(), otitle.to_string()),
-      [ptitle, otitle, ..] => {
-        for title in &titles {
-          debug!("Title with ID {} has name: {}", qresult.title_id(), title);
-        }
-        debug!("Only the first two will be used (as primary and original titles)");
-        (ptitle.to_string(), otitle.to_string())
-      }
-    };
-
-    results.push(Title {
-      imdb_title: qresult,
-      imdb_rating: imdb.rating(qresult.title_id()),
-      imdb_primary_title,
-      imdb_original_title,
-    });
-  }
-
+  results.extend(query_fn(imdb, &name.to_lowercase(), year)?.into_iter().flatten());
   Ok(())
 }
 
@@ -301,11 +297,10 @@ fn display_title(name: &str, year: Option<u16>) -> String {
   )
 }
 
-fn handle_single_title<'a>(
+fn single_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   query_fn: QueryFn<'a>,
-  names_fn: NamesFn,
   imdb_url: &Url,
   sort_by_rating: bool,
 ) -> Res<()> {
@@ -317,7 +312,7 @@ fn handle_single_title<'a>(
   };
 
   let mut results = vec![];
-  imdb_lookup(name, year, imdb, query_fn, names_fn, &mut results)?;
+  imdb_lookup(name, year, imdb, query_fn, &mut results)?;
 
   if results.is_empty() {
     println!("No matches found for `{}`", display_title(name, year));
@@ -349,11 +344,10 @@ fn handle_single_title<'a>(
   Ok(())
 }
 
-fn handle_dir_of_titles<'a>(
+fn titles_dir<'a>(
   dir: &Path,
   imdb: &'a Imdb,
   query_fn: QueryFn<'a>,
-  names_fn: NamesFn,
   imdb_url: &Url,
   series: bool,
   sort_by_rating: bool,
@@ -392,18 +386,14 @@ fn handle_dir_of_titles<'a>(
         };
 
         let mut local_results = vec![];
-        imdb_lookup(name, year, imdb, query_fn, names_fn, &mut local_results)?;
+        imdb_lookup(name, year, imdb, query_fn, &mut local_results)?;
 
         if local_results.is_empty() {
           println!("No matches found for `{}`", display_title(name, year));
         } else if local_results.len() > 1 {
           at_least_one_matched = true;
 
-          println!(
-            "Found {} matche(s) for `{}`:",
-            local_results.len(),
-            display_title(name, year)
-          );
+          println!("Found {} matche(s) for `{}`:", local_results.len(), display_title(name, year));
 
           sort_results(&mut local_results, sort_by_rating);
 
@@ -449,6 +439,8 @@ fn handle_dir_of_titles<'a>(
   Ok(())
 }
 
+type QueryFn<'a> = fn(db: &'a Imdb, name: &str, year: Option<u16>) -> Res<Vec<Vec<ImdbTitle<'a, 'a>>>>;
+
 fn run(opt: &Opt) -> Res<()> {
   let project = create_project()?;
   let cache_dir = project.cache_dir();
@@ -460,37 +452,29 @@ fn run(opt: &Opt) -> Res<()> {
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
 
-  let db = setup_imdb_db(cache_dir, opt.series)?;
-  let imdb = db.0;
-  let query_fn = db.1;
-  let names_fn = db.2;
+  let start_time = Instant::now();
+  let imdb_storage = setup_imdb_storage(cache_dir)?;
+  let imdb = Imdb::new(&imdb_storage)?;
+  info!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
+
+  let query_fn = if opt.series {
+    Imdb::series_by_title
+  } else {
+    Imdb::movies_by_title
+  };
 
   let start_time = Instant::now();
 
   match &opt.command {
-    Command::Title { title } => handle_single_title(
-      title,
-      &imdb,
-      query_fn,
-      names_fn,
-      &imdb_url,
-      opt.sort_by_rating,
-    )?,
-    Command::Dir { dir } => handle_dir_of_titles(
-      dir,
-      &imdb,
-      query_fn,
-      names_fn,
-      &imdb_url,
-      opt.series,
-      opt.sort_by_rating,
-    )?,
+    Command::Title { title } => single_title(title, &imdb, query_fn, &imdb_url, opt.sort_by_rating)?,
+    Command::Dir { dir } => titles_dir(dir, &imdb, query_fn, &imdb_url, opt.series, opt.sort_by_rating)?,
   }
 
-  let duration = Instant::now().duration_since(start_time);
-  info!("IMDB query took {}", format_duration(duration));
+  info!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
 
   std::mem::forget(imdb);
+  std::mem::forget(imdb_storage);
+
   Ok(())
 }
 
@@ -507,13 +491,12 @@ fn main() {
     _ => log::LevelFilter::Trace,
   };
 
-  let logger_available =
-    if let Err(e) = env_logger::Builder::new().filter_level(log_level).try_init() {
-      eprintln!("Error initializing logger: {}", e);
-      false
-    } else {
-      true
-    };
+  let logger_available = if let Err(e) = env_logger::Builder::new().filter_level(log_level).try_init() {
+    eprintln!("Error initializing logger: {}", e);
+    false
+  } else {
+    true
+  };
 
   error!("Error output enabled.");
   warn!("Warning output enabled.");
@@ -529,11 +512,9 @@ fn main() {
     }
   }
 
-  let total_time = Instant::now().duration_since(start_time);
-
   if logger_available {
-    info!("Total time: {}", format_duration(total_time));
+    info!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));
   } else {
-    eprintln!("Total time: {}", format_duration(total_time));
+    eprintln!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));
   }
 }
