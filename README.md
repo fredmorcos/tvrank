@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/CI?label=Master&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
 [![Crates.io](https://img.shields.io/crates/v/tvrank?style=for-the-badge)](https://crates.io/crates/tvrank)
-[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.2.3/tvrank/)
+[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.2.0/tvrank/)
 
 `tvrank` is a library and command-line utility written in Rust for querying and ranking
 information about movies and series. It can be used to query a single title or scan
@@ -97,7 +97,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tvrank = "0.1"
+tvrank = "0.2"
 ```
 
 Or, using `cargo add`:
