@@ -1,3 +1,4 @@
+---
 name: CI
 
 on:
@@ -80,3 +81,4 @@ jobs:
         with:
           command: test
           args: --all-features --release
+...

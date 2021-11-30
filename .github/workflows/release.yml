@@ -1,3 +1,4 @@
+---
 name: Release
 
 on:
@@ -319,3 +320,4 @@ jobs:
           asset_path: tvrank-${{steps.tag.outputs.tag}}-windows.zip
           asset_name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
           asset_content_type: application/zip
+...
