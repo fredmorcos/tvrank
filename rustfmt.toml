@@ -1,4 +1,5 @@
-max_width = 90
+max_width = 110
+chain_width = 80
 # struct_lit_width = 80
 # comment_width = 97
 # wrap_comments = true
