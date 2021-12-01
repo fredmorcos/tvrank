@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use indicatif::{ProgressBar, ProgressStyle};
 
 pub fn create_progress_bar(msg: String, len: u64) -> ProgressBar {

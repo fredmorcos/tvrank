@@ -19,9 +19,8 @@ use std::time::Instant;
 use structopt::StructOpt;
 use tvrank::imdb::{Imdb, ImdbStorage, ImdbTitle};
 use tvrank::Res;
+use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
-
-use crate::ui::{create_progress_bar, create_progress_spinner};
 
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
@@ -491,7 +490,8 @@ fn main() {
     _ => log::LevelFilter::Trace,
   };
 
-  let logger_available = if let Err(e) = env_logger::Builder::new().filter_level(log_level).try_init() {
+  let logger = env_logger::Builder::new().filter_level(log_level).try_init();
+  let have_logger = if let Err(e) = logger {
     eprintln!("Error initializing logger: {}", e);
     false
   } else {
@@ -505,14 +505,14 @@ fn main() {
   trace!("Trace output enabled.");
 
   if let Err(e) = run(&opt) {
-    if logger_available {
+    if have_logger {
       error!("Error: {}", e);
     } else {
       eprintln!("Error: {}", e);
     }
   }
 
-  if logger_available {
+  if have_logger {
     info!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));
   } else {
     eprintln!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));

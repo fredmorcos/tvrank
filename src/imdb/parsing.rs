@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 pub(crate) const TAB: u8 = b'\t';
 pub(crate) const COMMA: u8 = b',';
 
