@@ -248,7 +248,7 @@ fn setup_imdb_storage(cache_dir: &Path) -> Res<ImdbStorage> {
     bar.finish_and_clear();
   };
 
-  // Extracting callbacks.
+  // Extraction callbacks.
   let decomp_init = |db_name: &'_ str| {
     let msg = format!("Decompressing IMDB {} DB...", db_name);
     create_progress_spinner(msg)
