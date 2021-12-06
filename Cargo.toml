@@ -39,7 +39,7 @@ reqwest = { version = "0.11", features = ["blocking"] }
 atoi = "0.4"
 fnv = "1.0"
 # num_cpus = "1.13"
-crossbeam = "0.8"
+# crossbeam = "0.8"
 parking_lot = "0.11"
 humantime = "2.1"
 prettytable-rs = "0.8"
@@ -48,7 +48,14 @@ indicatif = "0.16"
 walkdir = "2.3"
 tempfile = "3.2"
 deepsize = "0.2"
+rayon = "1.5"
 # bitvec = "0.22.3"
 
 [profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+incremental = false
 debug = true
+overflow-checks = false
+panic = "abort"

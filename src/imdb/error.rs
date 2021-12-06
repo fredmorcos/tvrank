@@ -30,6 +30,10 @@ pub enum Err {
   Duplicate(TitleId),
   #[display(fmt = "Number of votes is not a number")]
   Votes,
+  #[display(fmt = "Error building the IMDB basics DB")]
+  BasicsDbBuild,
+  #[display(fmt = "Error querying the IMDB basics DB")]
+  BasicsDbQuery,
 }
 
 impl Err {
@@ -43,6 +47,14 @@ impl Err {
 
   pub(crate) fn duplicate<T>(id: TitleId) -> Res<T> {
     Err(Box::new(Err::Duplicate(id)))
+  }
+
+  pub(crate) fn basics_db_build<T>() -> Res<T> {
+    Err(Box::new(Err::BasicsDbBuild))
+  }
+
+  pub(crate) fn basics_db_query<T>() -> Res<T> {
+    Err(Box::new(Err::BasicsDbQuery))
   }
 }
 
