@@ -8,6 +8,8 @@
 [![Crates.io](https://img.shields.io/crates/v/tvrank?style=for-the-badge)](https://crates.io/crates/tvrank)
 [![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.2.0/tvrank/)
 
+[Github Repository](https://github.com/fredmorcos/tvrank)
+
 `tvrank` is a library and command-line utility written in Rust for querying and ranking
 information about movies and series. It can be used to query a single title or scan
 directories.
