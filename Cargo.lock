@@ -1560,7 +1560,6 @@ dependencies = [
  "humantime",
  "indicatif",
  "log",
- "num_cpus",
  "parking_lot",
  "prettytable-rs",
  "regex",

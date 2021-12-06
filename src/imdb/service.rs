@@ -19,8 +19,7 @@ pub struct Service {
 }
 
 impl Service {
-  pub fn new(storage: &Storage) -> Res<Self> {
-    let ncpus = num_cpus::get() / 2;
+  pub fn new(ncpus: usize, storage: &Storage) -> Res<Self> {
     debug!("Going to use {} threads", ncpus);
 
     info!("Parsing IMDB Basics DB...");

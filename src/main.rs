@@ -453,7 +453,9 @@ fn run(opt: &Opt) -> Res<()> {
 
   let start_time = Instant::now();
   let imdb_storage = setup_imdb_storage(cache_dir)?;
-  let imdb = Imdb::new(&imdb_storage)?;
+
+  let ncpus = rayon::current_num_threads();
+  let imdb = Imdb::new(ncpus / 2, &imdb_storage)?;
   info!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
 
   let query_fn = if opt.series {

@@ -21,7 +21,7 @@ fn main() -> tvrank::Res<()> {
       println!("Finished decompression");
     },
   )?;
-  let imdb = Imdb::new(&storage)?;
+  let imdb = Imdb::new(8, &storage)?;
 
   let name = "city of god";
   let year = Some(2002);
