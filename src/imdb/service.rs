@@ -5,10 +5,12 @@ use super::title::Title;
 use crate::imdb::{error::Err, ratings::Ratings, storage::Storage};
 use crate::Res;
 use deepsize::DeepSizeOf;
+use humantime::format_duration;
 use indicatif::HumanBytes;
 use log::{debug, info};
 use parking_lot::{const_mutex, Mutex};
 use std::convert::TryInto;
+use std::time::Instant;
 use std::{ops::DerefMut, sync::Arc};
 
 #[derive(DeepSizeOf)]
@@ -22,12 +24,14 @@ impl Service {
     debug!("Going to use {} threads", ncpus);
 
     info!("Parsing IMDB Basics DB...");
+    let start_time = Instant::now();
     let basics_dbs = Self::parse_basics(ncpus, storage)?;
-    info!("Done parsing IMDB Basics DB");
+    info!("Done parsing IMDB Basics DB in {}", format_duration(Instant::now().duration_since(start_time)));
 
     info!("Parsing IMDB Ratings DB...");
+    let start_time = Instant::now();
     let ratings_db = Ratings::new_from_buf(storage.ratings_db_buf)?;
-    info!("Done parsing IMDB Ratings DB");
+    info!("Done parsing IMDB Ratings DB in {}", format_duration(Instant::now().duration_since(start_time)));
 
     let mut total_movies = 0;
     let mut total_series = 0;
