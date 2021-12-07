@@ -25,6 +25,6 @@ pub fn create_progress_spinner(msg: String) -> ProgressBar {
   bar
 }
 
-pub fn leak_string(s: String) -> &'static str {
+fn leak_string(s: String) -> &'static str {
   Box::leak(s.into_boxed_str())
 }
