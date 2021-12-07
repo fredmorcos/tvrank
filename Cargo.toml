@@ -52,10 +52,13 @@ rayon = "1.5"
 # bitvec = "0.22.3"
 
 [profile.release]
+debug = true
+
+[profile.production]
+inherits = "release"
 lto = true
 codegen-units = 1
 opt-level = 3
 incremental = false
-debug = true
 overflow-checks = false
 panic = "abort"
