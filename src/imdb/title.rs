@@ -15,11 +15,15 @@ pub enum TitleType {
   VideoGame,
 
   // Movies
+  #[display(fmt = "Short Movie")]
   Short,
   Video,
   Movie,
+  #[display(fmt = "TV Short")]
   TvShort,
+  #[display(fmt = "TV Movie")]
   TvMovie,
+  #[display(fmt = "TV Special")]
   TvSpecial,
 
   // Episodes
@@ -28,8 +32,13 @@ pub enum TitleType {
   RadioEpisode,
 
   // Series
+  #[display(fmt = "TV Series")]
   TvSeries,
+  #[display(fmt = "TV Mini-Series")]
   TvMiniSeries,
+
+  // Radio
+  #[display(fmt = "Radio Series")]
   RadioSeries,
 }
 
@@ -51,7 +60,10 @@ impl TitleType {
       TitleType::TvEpisode | TitleType::TvPilot | TitleType::RadioEpisode => false,
 
       // Series
-      TitleType::TvSeries | TitleType::TvMiniSeries | TitleType::RadioSeries => false,
+      TitleType::TvSeries | TitleType::TvMiniSeries => false,
+
+      // Radio
+      TitleType::RadioSeries => false,
     }
   }
 
@@ -72,7 +84,10 @@ impl TitleType {
       TitleType::TvEpisode | TitleType::TvPilot | TitleType::RadioEpisode => false,
 
       // Series
-      TitleType::TvSeries | TitleType::TvMiniSeries | TitleType::RadioSeries => true,
+      TitleType::TvSeries | TitleType::TvMiniSeries => true,
+
+      // Radio
+      TitleType::RadioSeries => false,
     }
   }
 }
