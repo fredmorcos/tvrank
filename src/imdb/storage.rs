@@ -114,10 +114,10 @@ impl Storage {
     };
 
     if needs_update {
+      info!("IMDB {} DB does not exist or is more than a month old", db_name);
+
       info!("IMDB {} DB URL: {}", db_name, url);
       let mut resp = client.get(url).send()?;
-
-      info!("IMDB {} DB does not exist or is more than a month old", db_name);
       let mut file = File::create(filename)?;
 
       let obj = init(db_name, resp.content_length());
