@@ -238,46 +238,46 @@ fn setup_imdb_storage(app_cache_dir: &Path, force_update: bool) -> Res<ImdbStora
   info!("Loading IMDB Databases...");
 
   // Downloading callbacks.
-  fn download_init(db_name: &str, content_len: Option<u64>) -> ProgressBar {
-    let msg = format!("Downloading IMDB {} DB", db_name);
-    let bar = if let Some(file_length) = content_len {
-      info!("IMDB {} DB compressed file size is {}", db_name, HumanBytes(file_length));
-      create_progress_bar(msg, file_length)
+  let download_init = |name: &str, content_len: Option<u64>| -> ProgressBar {
+    let msg = format!("Downloading {}", name);
+    let bar = if let Some(file_len) = content_len {
+      info!("{} compressed file size is {}", name, HumanBytes(file_len));
+      create_progress_bar(msg, file_len)
     } else {
-      info!("IMDB {} DB compressed file size is unknown", db_name);
+      info!("{} compressed file size is unknown", name);
       create_progress_spinner(msg)
     };
 
     bar
-  }
+  };
 
-  fn download_progress(bar: &ProgressBar, delta: u64) {
+  let download_progress = |bar: &ProgressBar, delta: u64| {
     bar.inc(delta);
-  }
+  };
 
-  fn download_finish(bar: &ProgressBar) {
+  let download_finish = |bar: &ProgressBar| {
     bar.finish_and_clear();
-  }
+  };
 
   // Extraction callbacks.
-  fn extract_init(db_name: &str) -> ProgressBar {
-    let msg = format!("Decompressing IMDB {} DB...", db_name);
+  let extract_init = |name: &str| -> ProgressBar {
+    let msg = format!("Decompressing {}...", name);
     create_progress_spinner(msg)
-  }
+  };
 
-  fn extract_progress(spinner: &ProgressBar, delta: u64) {
-    spinner.inc(delta);
-  }
+  let extract_progress = |bar: &ProgressBar, delta: u64| {
+    bar.inc(delta);
+  };
 
-  fn extract_finish(spinner: &ProgressBar) {
-    spinner.finish_and_clear();
-  }
+  let extract_finish = |bar: &ProgressBar| {
+    bar.finish_and_clear();
+  };
 
   let imdb_storage = ImdbStorage::new(
     app_cache_dir,
     force_update,
-    (download_init, download_progress, download_finish),
-    (extract_init, extract_progress, extract_finish),
+    &(download_init, download_progress, download_finish),
+    &(extract_init, extract_progress, extract_finish),
   )?;
 
   Ok(imdb_storage)

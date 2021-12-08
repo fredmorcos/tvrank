@@ -5,17 +5,12 @@ use crate::Res;
 use flate2::bufread::GzDecoder;
 use indicatif::HumanBytes;
 use log::{debug, info};
-use reqwest::{blocking::Client, Url};
+use reqwest::{Client, Url};
 use std::convert::TryInto;
 use std::fs::{self, File};
-use std::io::{self, BufReader};
+use std::io::{self, BufReader, Write};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
-
-type DownloadInitFunction<T> = fn(&str, Option<u64>) -> T;
-type ExtractInitFunction<T> = fn(&str) -> T;
-type ProgressFunction<T> = fn(&T, u64);
-type FinishFunction<T> = fn(&T);
 
 pub struct Storage {
   pub basics: &'static [u8],
@@ -26,31 +21,61 @@ impl Storage {
   pub fn new<T1, T2>(
     app_cache_dir: &Path,
     force_update: bool,
-    download_funcs: (DownloadInitFunction<T1>, ProgressFunction<T1>, FinishFunction<T1>),
-    extract_funcs: (ExtractInitFunction<T2>, ProgressFunction<T2>, FinishFunction<T2>),
+    download_cbs: &(impl Fn(&str, Option<u64>) -> T1, impl Fn(&T1, u64), impl Fn(&T1)),
+    extract_cbs: &(impl Fn(&str) -> T2, impl Fn(&T2, u64), impl Fn(&T2)),
   ) -> Res<Self> {
     const IMDB: &str = "https://datasets.imdbws.com/";
-    const BASICS_FILENAME: &str = "title.basics.tsv.gz";
     const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
+    const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 
     let cache_dir = app_cache_dir.join("imdb");
     fs::create_dir_all(&cache_dir)?;
     debug!("Created Imdb cache directory");
 
-    let client = reqwest::blocking::Client::builder().build()?;
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
     let base_url = Url::parse(IMDB)?;
 
-    let basics_file = cache_dir.join(BASICS_FILENAME);
-    let basics_url = base_url.join(BASICS_FILENAME)?;
-    Self::ensure_file(&client, &basics_file, basics_url, force_update, "Basics", download_funcs)?;
-    let basics = Self::extract(&basics_file, "Basics", extract_funcs)?;
+    let (basics, ratings) = runtime.block_on(async {
+      let basics = Self::load(
+        "IMDB Basics DB",
+        &cache_dir,
+        &base_url,
+        BASICS_FILENAME,
+        force_update,
+        download_cbs,
+        extract_cbs,
+      );
+      let ratings = Self::load(
+        "IMDB Ratings DB",
+        &cache_dir,
+        &base_url,
+        RATINGS_FILENAME,
+        force_update,
+        download_cbs,
+        extract_cbs,
+      );
 
-    let ratings_file = cache_dir.join(RATINGS_FILENAME);
-    let ratings_url = base_url.join(RATINGS_FILENAME)?;
-    Self::ensure_file(&client, &ratings_file, ratings_url, force_update, "Ratings", download_funcs)?;
-    let ratings = Self::extract(&ratings_file, "Ratings", extract_funcs)?;
+      tokio::join!(basics, ratings)
+    });
+    let (basics, ratings) = (basics?, ratings?);
 
-    Ok(Self { basics: Box::leak(basics.into_boxed_slice()), ratings: Box::leak(ratings.into_boxed_slice()) })
+    Ok(Self { basics, ratings })
+  }
+
+  async fn load<T1, T2>(
+    name: &str,
+    cache_dir: &Path,
+    base_url: &Url,
+    filename: &str,
+    force_update: bool,
+    download_cbs: &(impl Fn(&str, Option<u64>) -> T1, impl Fn(&T1, u64), impl Fn(&T1)),
+    extract_cbs: &(impl Fn(&str) -> T2, impl Fn(&T2, u64), impl Fn(&T2)),
+  ) -> Res<&'static [u8]> {
+    let url = base_url.join(filename)?;
+    let filename = cache_dir.join(filename);
+    Self::ensure(&filename, url, force_update, name, download_cbs).await?;
+    let res = Self::extract(&filename, name, extract_cbs)?;
+    Ok(Box::leak(res.into_boxed_slice()))
   }
 
   fn file_exists(path: &Path) -> Res<Option<File>> {
@@ -82,13 +107,12 @@ impl Storage {
     }
   }
 
-  fn ensure_file<T>(
-    client: &Client,
+  async fn ensure<T>(
     filename: &Path,
     url: Url,
     force_update: bool,
-    db_name: &str,
-    download_funcs: (DownloadInitFunction<T>, ProgressFunction<T>, FinishFunction<T>),
+    name: &str,
+    download_cbs: &(impl Fn(&str, Option<u64>) -> T, impl Fn(&T, u64), impl Fn(&T)),
   ) -> Res<()> {
     let needs_update = {
       let file = Self::file_exists(filename)?;
@@ -96,41 +120,62 @@ impl Storage {
     };
 
     if needs_update {
-      info!("IMDB {} DB does not exist or is more than a month old", db_name);
+      if force_update {
+        info!("Force-update is enabled, {} is going to re-fetched", name);
+      } else {
+        info!("{} does not exist or is more than a month old", name);
+      }
 
-      info!("IMDB {} DB URL: {}", db_name, url);
-      let mut resp = client.get(url).send()?;
-      let mut file = File::create(filename)?;
-
-      let (init, progress, finish) = download_funcs;
-      let obj = init(db_name, resp.content_length());
-      let total = write_interactive(&mut resp, &mut file, |delta| progress(&obj, delta))?;
-      finish(&obj);
-
-      info!("Downloaded IMDB {} DB ({})", db_name, HumanBytes(total.try_into()?));
+      let total = Self::download(filename, url, name, download_cbs).await?;
+      info!("Downloaded {} ({})", name, HumanBytes(total.try_into()?));
     } else {
-      info!("IMDB {} DB exists and is less than a month old", db_name);
+      info!("{} exists and is less than a month old", name);
     }
 
     Ok(())
   }
 
+  async fn download<T>(
+    filename: &Path,
+    url: Url,
+    name: &str,
+    download_cbs: &(impl Fn(&str, Option<u64>) -> T, impl Fn(&T, u64), impl Fn(&T)),
+  ) -> Res<usize> {
+    info!("{} URL: {}", name, url);
+    let client = Client::builder().build()?;
+    let mut resp = client.get(url).send().await?;
+    let mut file = File::create(filename)?;
+
+    let (init, progress, finish) = download_cbs;
+    let obj = init(name, resp.content_length());
+    let mut total = 0;
+    while let Some(chunk) = resp.chunk().await? {
+      file.write_all(&chunk)?;
+      let delta = chunk.len();
+      total += delta;
+      progress(&obj, delta.try_into()?);
+    }
+    finish(&obj);
+
+    Ok(total)
+  }
+
   fn extract<T>(
     filename: &Path,
-    db_name: &str,
-    extract_funcs: (ExtractInitFunction<T>, ProgressFunction<T>, FinishFunction<T>),
+    name: &str,
+    extract_cbs: &(impl Fn(&str) -> T, impl Fn(&T, u64), impl Fn(&T)),
   ) -> Res<Vec<u8>> {
     let file = File::open(&filename)?;
     let reader = BufReader::new(file);
     let mut decoder = GzDecoder::new(reader);
     let mut buf = vec![];
 
-    let (init, progress, finish) = extract_funcs;
-    let obj = init(db_name);
+    let (init, progress, finish) = extract_cbs;
+    let obj = init(name);
     let total = write_interactive(&mut decoder, &mut buf, |delta| progress(&obj, delta))?;
     finish(&obj);
 
-    info!("Read IMDB {} DB: {}", db_name, HumanBytes(total.try_into()?));
+    info!("Read {}: {}", name, HumanBytes(total.try_into()?));
     Ok(buf)
   }
 }
