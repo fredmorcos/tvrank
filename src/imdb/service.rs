@@ -10,8 +10,9 @@ use indicatif::HumanBytes;
 use log::{debug, info};
 use parking_lot::{const_mutex, Mutex};
 use std::convert::TryInto;
+use std::ops::DerefMut;
+use std::sync::Arc;
 use std::time::Instant;
-use std::{ops::DerefMut, sync::Arc};
 
 #[derive(DeepSizeOf)]
 pub struct Service {
@@ -30,7 +31,7 @@ impl Service {
 
     info!("Parsing IMDB Ratings DB...");
     let start_time = Instant::now();
-    let ratings_db = Ratings::new_from_buf(storage.ratings_db_buf)?;
+    let ratings_db = Ratings::new_from_buf(storage.ratings)?;
     info!("Done parsing IMDB Ratings DB in {}", format_duration(Instant::now().duration_since(start_time)));
 
     let mut total_movies = 0;
@@ -68,7 +69,7 @@ impl Service {
   fn parse_basics(n: usize, storage: &Storage) -> Res<Vec<Basics>> {
     let basics_dbs = Arc::new(const_mutex(Vec::with_capacity(n)));
 
-    let basics_source = storage.basics_db_buf.split(|&b| b == b'\n').skip(1);
+    let basics_source = storage.basics.split(|&b| b == b'\n').skip(1);
     let basics_source = Arc::new(const_mutex(basics_source));
 
     rayon::scope(|scope| {

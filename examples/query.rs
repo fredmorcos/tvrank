@@ -3,23 +3,32 @@
 use tvrank::imdb::{Imdb, ImdbStorage};
 
 fn main() -> tvrank::Res<()> {
+  fn download_init(db_name: &str, content_len: Option<u64>) {
+    println!("Starting download of {} (size = {:?})", db_name, content_len);
+  }
+
+  fn download_progress(_userdata: &(), _delta: u64) {}
+
+  fn download_finish(_userdata: &()) {
+    println!("Finished download");
+  }
+
+  fn extract_init(db_name: &str) {
+    println!("Extracting {}", db_name);
+  }
+
+  fn extract_progress(_userdata: &(), _delta: u64) {}
+
+  fn extract_finish(_userdata: &()) {
+    println!("Finished extracting");
+  }
+
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
   let storage = ImdbStorage::new(
     cache_dir.path(),
-    |db_name, content_len| {
-      println!("Starting download of {} (size = {:?})", db_name, content_len);
-    },
-    |_, _| {},
-    |_| {
-      println!("Finished download");
-    },
-    |db_name| {
-      println!("Decompressing {}", db_name);
-    },
-    |_, _| {},
-    |_| {
-      println!("Finished decompression");
-    },
+    false,
+    (download_init, download_progress, download_finish),
+    (extract_init, extract_progress, extract_finish),
   )?;
   let imdb = Imdb::new(8, &storage)?;
 

@@ -94,6 +94,10 @@ struct Opt {
   #[structopt(short, long, parse(from_occurrences))]
   verbose: u8,
 
+  /// Force updating internal databases.
+  #[structopt(short, long)]
+  force_update: bool,
+
   /// Whether to lookup series instead of movies
   #[structopt(short, long)]
   series: bool,
@@ -225,11 +229,11 @@ fn create_output_table_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<R
   Ok(row)
 }
 
-fn setup_imdb_storage(cache_dir: &Path) -> Res<ImdbStorage> {
+fn setup_imdb_storage(app_cache_dir: &Path, force_update: bool) -> Res<ImdbStorage> {
   info!("Loading IMDB Databases...");
 
   // Downloading callbacks.
-  let download_init = |db_name: &'_ str, content_len| {
+  fn download_init(db_name: &str, content_len: Option<u64>) -> ProgressBar {
     let msg = format!("Downloading IMDB {} DB", db_name);
     let bar = if let Some(file_length) = content_len {
       info!("IMDB {} DB compressed file size is {}", db_name, HumanBytes(file_length));
@@ -240,34 +244,35 @@ fn setup_imdb_storage(cache_dir: &Path) -> Res<ImdbStorage> {
     };
 
     bar
-  };
-  let download_during = |bar: &ProgressBar, delta| {
+  }
+
+  fn download_progress(bar: &ProgressBar, delta: u64) {
     bar.inc(delta);
-  };
-  let download_finish = |bar: &ProgressBar| {
+  }
+
+  fn download_finish(bar: &ProgressBar) {
     bar.finish_and_clear();
-  };
+  }
 
   // Extraction callbacks.
-  let decomp_init = |db_name: &'_ str| {
+  fn extract_init(db_name: &str) -> ProgressBar {
     let msg = format!("Decompressing IMDB {} DB...", db_name);
     create_progress_spinner(msg)
-  };
-  let decomp_during = |spinner: &ProgressBar, delta| {
+  }
+
+  fn extract_progress(spinner: &ProgressBar, delta: u64) {
     spinner.inc(delta);
-  };
-  let decomp_finish = |spinner: &ProgressBar| {
+  }
+
+  fn extract_finish(spinner: &ProgressBar) {
     spinner.finish_and_clear();
-  };
+  }
 
   let imdb_storage = ImdbStorage::new(
-    cache_dir,
-    download_init,
-    download_during,
-    download_finish,
-    decomp_init,
-    decomp_during,
-    decomp_finish,
+    app_cache_dir,
+    force_update,
+    (download_init, download_progress, download_finish),
+    (extract_init, extract_progress, extract_finish),
   )?;
 
   Ok(imdb_storage)
@@ -442,17 +447,17 @@ type QueryFn<'a> = fn(db: &'a Imdb, name: &str, year: Option<u16>) -> Res<Vec<Ve
 
 fn run(opt: &Opt) -> Res<()> {
   let project = create_project()?;
-  let cache_dir = project.cache_dir();
-  info!("Cache directory: {}", cache_dir.display());
+  let app_cache_dir = project.cache_dir();
+  info!("Cache directory: {}", app_cache_dir.display());
 
-  fs::create_dir_all(cache_dir)?;
+  fs::create_dir_all(app_cache_dir)?;
   debug!("Created cache directory");
 
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
 
   let start_time = Instant::now();
-  let imdb_storage = setup_imdb_storage(cache_dir)?;
+  let imdb_storage = setup_imdb_storage(app_cache_dir, opt.force_update)?;
 
   let ncpus = rayon::current_num_threads();
   let imdb = Imdb::new(ncpus / 2, &imdb_storage)?;
