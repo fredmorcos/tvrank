@@ -187,7 +187,12 @@ fn create_output_table_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<R
   let mut row = Row::new(vec![]);
 
   row.add_cell(Cell::new(title.primary_title()));
-  row.add_cell(Cell::new(title.original_title()));
+
+  if title.primary_title() == title.original_title() {
+    row.add_cell(Cell::new(""));
+  } else {
+    row.add_cell(Cell::new(title.original_title()));
+  }
 
   if let Some(year) = title.start_year() {
     row.add_cell(Cell::new(&format!("{}", year)));
