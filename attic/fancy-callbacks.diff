@@ -1,0 +1,252 @@
+modified   examples/query.rs
+@@ -1,18 +1,8 @@
+ #![warn(clippy::all)]
+
+-use tvrank::imdb::{Imdb, ImdbStorage};
++use tvrank::imdb::{Imdb, ImdbDownloadCallbacks, ImdbStorage};
+
+ fn main() -> tvrank::Res<()> {
+-  fn download_init(name: &str, content_len: Option<u64>) {
+-    println!("Starting download of {} (size = {:?})", name, content_len);
+-  }
+-
+-  fn download_progress(_userdata: &(), _delta: u64) {}
+-
+-  fn download_finish(_userdata: &()) {
+-    println!("Finished download");
+-  }
+-
+   fn extract_init(name: &str) {
+     println!("Extracting {}", name);
+   }
+@@ -23,11 +13,20 @@ fn main() -> tvrank::Res<()> {
+     println!("Finished extracting");
+   }
+
++  fn create_download_callbacks() -> ImdbDownloadCallbacks<String> {
++    ImdbDownloadCallbacks::default()
++      .with_create(Box::new(|name| name.to_string()))
++      .with_init(Box::new(|name, content_len| {
++        println!("Starting download of {} (size = {:?})", name, content_len);
++      }))
++      .with_fin(Box::new(|name| println!("Finished downloading {}", name)))
++  }
++
+   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
+   let storage = ImdbStorage::new(
+     cache_dir.path(),
+     false,
+-    &(download_init, download_progress, download_finish),
++    create_download_callbacks,
+     &(extract_init, extract_progress, extract_finish),
+   )?;
+   let imdb = Imdb::new(8, &storage)?;
+modified   src/imdb/mod.rs
+@@ -13,5 +13,6 @@ pub mod title;
+ pub use error::Err as ImdbErr;
+ pub use genre::{Genre as ImdbGenre, Genres as ImdbGenres};
+ pub use service::Service as Imdb;
++pub use storage::DownloadCallbacks as ImdbDownloadCallbacks;
+ pub use storage::Storage as ImdbStorage;
+ pub use title::{Title as ImdbTitle, TitleId as ImdbTitleId, TitleType as ImdbTitleType};
+modified   src/imdb/storage.rs
+@@ -17,11 +17,55 @@ pub struct Storage {
+   pub ratings: &'static [u8],
+ }
+
++pub struct DownloadCallbacks<T = ()> {
++  create: Box<dyn FnOnce(&str) -> T>,
++  init: Box<dyn Fn(&mut T, Option<u64>)>,
++  prog: Box<dyn Fn(&mut T, u64)>,
++  fin: Box<dyn Fn(&mut T)>,
++}
++
++impl<T: 'static + Default> Default for DownloadCallbacks<T> {
++  fn default() -> Self {
++    Self::new(Default::default())
++  }
++}
++
++impl<T: 'static> DownloadCallbacks<T> {
++  pub fn new(default: T) -> Self {
++    Self {
++      create: Box::new(|_name| default),
++      init: Box::new(|_obj, _bytes| {}),
++      prog: Box::new(|_obj, _delta| {}),
++      fin: Box::new(|_obj| {}),
++    }
++  }
++
++  pub fn with_create(mut self, create: Box<dyn FnOnce(&str) -> T>) -> Self {
++    self.create = create;
++    self
++  }
++
++  pub fn with_init(mut self, init: Box<dyn Fn(&mut T, Option<u64>)>) -> Self {
++    self.init = init;
++    self
++  }
++
++  pub fn with_prog(mut self, prog: Box<dyn Fn(&mut T, u64)>) -> Self {
++    self.prog = prog;
++    self
++  }
++
++  pub fn with_fin(mut self, fin: Box<dyn Fn(&mut T)>) -> Self {
++    self.fin = fin;
++    self
++  }
++}
++
+ impl Storage {
+   pub fn new<T1, T2>(
+     app_cache_dir: &Path,
+     force_update: bool,
+-    download_cbs: &(impl Fn(&str, Option<u64>) -> T1, impl Fn(&T1, u64), impl Fn(&T1)),
++    download_cbs: impl Fn() -> DownloadCallbacks<T1>,
+     extract_cbs: &(impl Fn(&str) -> T2, impl Fn(&T2, u64), impl Fn(&T2)),
+   ) -> Res<Self> {
+     const IMDB: &str = "https://datasets.imdbws.com/";
+@@ -36,22 +80,35 @@ impl Storage {
+     let base_url = Url::parse(IMDB)?;
+
+     let (basics, ratings) = runtime.block_on(async {
++      let basics_name = "IMDB Basics DB";
++      let basics_download_cbs = download_cbs();
++      let mut basics_download_user_obj = (basics_download_cbs.create)(basics_name);
+       let basics = Self::load(
+-        "IMDB Basics DB",
++        basics_name,
+         &cache_dir,
+         &base_url,
+         BASICS_FILENAME,
+         force_update,
+-        download_cbs,
++        basics_download_cbs.init,
++        basics_download_cbs.prog,
++        basics_download_cbs.fin,
++        &mut basics_download_user_obj,
+         extract_cbs,
+       );
++
++      let ratings_name = "IMDB Ratings DB";
++      let ratings_download_cbs = download_cbs();
++      let mut ratings_download_user_obj = (ratings_download_cbs.create)(ratings_name);
+       let ratings = Self::load(
+-        "IMDB Ratings DB",
++        ratings_name,
+         &cache_dir,
+         &base_url,
+         RATINGS_FILENAME,
+         force_update,
+-        download_cbs,
++        ratings_download_cbs.init,
++        ratings_download_cbs.prog,
++        ratings_download_cbs.fin,
++        &mut ratings_download_user_obj,
+         extract_cbs,
+       );
+
+@@ -68,12 +125,25 @@ impl Storage {
+     base_url: &Url,
+     filename: &str,
+     force_update: bool,
+-    download_cbs: &(impl Fn(&str, Option<u64>) -> T1, impl Fn(&T1, u64), impl Fn(&T1)),
++    download_init: Box<dyn Fn(&mut T1, Option<u64>)>,
++    download_prog: Box<dyn Fn(&mut T1, u64)>,
++    download_fin: Box<dyn Fn(&mut T1)>,
++    download_user_obj: &mut T1,
+     extract_cbs: &(impl Fn(&str) -> T2, impl Fn(&T2, u64), impl Fn(&T2)),
+   ) -> Res<&'static [u8]> {
+     let url = base_url.join(filename)?;
+     let filename = cache_dir.join(filename);
+-    Self::ensure(&filename, url, force_update, name, download_cbs).await?;
++    Self::ensure(
++      &filename,
++      url,
++      force_update,
++      name,
++      download_init,
++      download_prog,
++      download_fin,
++      download_user_obj,
++    )
++    .await?;
+     let res = Self::extract(&filename, name, extract_cbs)?;
+     Ok(Box::leak(res.into_boxed_slice()))
+   }
+@@ -112,7 +182,10 @@ impl Storage {
+     url: Url,
+     force_update: bool,
+     name: &str,
+-    download_cbs: &(impl Fn(&str, Option<u64>) -> T, impl Fn(&T, u64), impl Fn(&T)),
++    download_init: Box<dyn Fn(&mut T, Option<u64>)>,
++    download_prog: Box<dyn Fn(&mut T, u64)>,
++    download_fin: Box<dyn Fn(&mut T)>,
++    download_user_obj: &mut T,
+   ) -> Res<()> {
+     let needs_update = {
+       let file = Self::file_exists(filename)?;
+@@ -126,7 +199,9 @@ impl Storage {
+         info!("{} does not exist or is more than a month old", name);
+       }
+
+-      let total = Self::download(filename, url, name, download_cbs).await?;
++      let total =
++        Self::download(filename, url, name, download_init, download_prog, download_fin, download_user_obj)
++          .await?;
+       info!("Downloaded {} ({})", name, HumanBytes(total.try_into()?));
+     } else {
+       info!("{} exists and is less than a month old", name);
+@@ -139,23 +214,25 @@ impl Storage {
+     filename: &Path,
+     url: Url,
+     name: &str,
+-    download_cbs: &(impl Fn(&str, Option<u64>) -> T, impl Fn(&T, u64), impl Fn(&T)),
++    download_init: Box<dyn Fn(&mut T, Option<u64>)>,
++    download_prog: Box<dyn Fn(&mut T, u64)>,
++    download_fin: Box<dyn Fn(&mut T)>,
++    download_user_obj: &mut T,
+   ) -> Res<usize> {
+     info!("{} URL: {}", name, url);
+     let client = Client::builder().build()?;
+     let mut resp = client.get(url).send().await?;
+     let mut file = File::create(filename)?;
+
+-    let (init, progress, finish) = download_cbs;
+-    let obj = init(name, resp.content_length());
++    download_init(download_user_obj, resp.content_length());
+     let mut total = 0;
+     while let Some(chunk) = resp.chunk().await? {
+       file.write_all(&chunk)?;
+       let delta = chunk.len();
+       total += delta;
+-      progress(&obj, delta.try_into()?);
++      download_prog(download_user_obj, delta.try_into()?);
+     }
+-    finish(&obj);
++    download_fin(download_user_obj);
+
+     Ok(total)
+   }
+modified   src/main.rs
+@@ -17,7 +17,7 @@ use std::fs;
+ use std::path::{Path, PathBuf};
+ use std::time::Instant;
+ use structopt::StructOpt;
+-use tvrank::imdb::{Imdb, ImdbStorage, ImdbTitle};
++use tvrank::imdb::{Imdb, ImdbDownloadCallbacks, ImdbStorage, ImdbTitle};
+ use tvrank::Res;
+ use ui::{create_progress_bar, create_progress_spinner};
+ use walkdir::WalkDir;
+@@ -240,6 +240,10 @@ fn setup_imdb_storage(app_cache_dir: &Path, force_update: bool) -> Res<ImdbStora
+   let multi_progress = MultiProgress::new();
+
+   // Downloading callbacks.
++  fn create_download_callbacks() -> ImdbDownloadCallbacks<ProgressBar> {
++    ImdbDownloadCallbacks::default()
++      .with_create(Box::new(|name| ProgressBar::new(0).with_message(name, message)))
++  }
+   let download_init = |name: &str, content_len: Option<u64>| -> ProgressBar {
+     let msg = format!("Downloading {}", name);
+     let bar = if let Some(file_length) = content_len {
