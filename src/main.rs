@@ -98,10 +98,6 @@ struct Opt {
   #[structopt(short, long)]
   force_update: bool,
 
-  /// Whether to lookup series instead of movies
-  #[structopt(short, long)]
-  series: bool,
-
   /// Sort results by rating, year and title instead of year, rating and title
   #[structopt(short = "r", long)]
   sort_by_rating: bool,
@@ -117,8 +113,13 @@ enum Command {
     #[structopt(name = "TITLE")]
     title: String,
   },
-  /// Lookup titles from a directory
-  Dir {
+  /// Lookup movie titles from a directory
+  MoviesDir {
+    #[structopt(name = "DIR")]
+    dir: PathBuf,
+  },
+  /// Lookup series titles from a directory
+  SeriesDir {
     #[structopt(name = "DIR")]
     dir: PathBuf,
   },
@@ -306,13 +307,7 @@ fn display_title(name: &str, year: Option<u16>) -> String {
   )
 }
 
-fn single_title<'a>(
-  title: &str,
-  imdb: &'a Imdb,
-  query_fn: QueryFn<'a>,
-  imdb_url: &Url,
-  sort_by_rating: bool,
-) -> Res<()> {
+fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_rating: bool) -> Res<()> {
   let (name, year) = if let Some((name, year)) = parse_name_and_year(title) {
     (name, Some(year))
   } else {
@@ -320,16 +315,16 @@ fn single_title<'a>(
     (title, None)
   };
 
-  let mut results = vec![];
-  imdb_lookup(name, year, imdb, query_fn, &mut results)?;
+  let mut movies_results = vec![];
+  imdb_lookup(name, year, imdb, Imdb::movies_by_title, &mut movies_results)?;
 
-  if results.is_empty() {
-    println!("No matches found for `{}`", display_title(name, year));
+  if movies_results.is_empty() {
+    println!("No movie matches found for `{}`", display_title(name, year));
   } else {
     println!(
-      "Found {} {} for `{}`:",
-      results.len(),
-      if results.len() == 1 {
+      "Found {} movie {} for `{}`:",
+      movies_results.len(),
+      if movies_results.len() == 1 {
         "match"
       } else {
         "matches"
@@ -337,11 +332,11 @@ fn single_title<'a>(
       display_title(name, year)
     );
 
-    sort_results(&mut results, sort_by_rating);
+    sort_results(&mut movies_results, sort_by_rating);
 
     let mut table = create_output_table();
 
-    for res in &results {
+    for res in &movies_results {
       let row = create_output_table_row_for_title(res, imdb_url)?;
       table.add_row(row);
     }
@@ -349,7 +344,35 @@ fn single_title<'a>(
     table.printstd();
   }
 
-  std::mem::forget(results);
+  let mut series_results = vec![];
+  imdb_lookup(name, year, imdb, Imdb::series_by_title, &mut series_results)?;
+
+  if series_results.is_empty() {
+    println!("No series matches found for `{}`", display_title(name, year));
+  } else {
+    println!(
+      "Found {} series {} for `{}`:",
+      series_results.len(),
+      if series_results.len() == 1 {
+        "match"
+      } else {
+        "matches"
+      },
+      display_title(name, year)
+    );
+
+    sort_results(&mut series_results, sort_by_rating);
+
+    let mut table = create_output_table();
+
+    for res in &series_results {
+      let row = create_output_table_row_for_title(res, imdb_url)?;
+      table.add_row(row);
+    }
+
+    table.printstd();
+  }
+
   Ok(())
 }
 
@@ -468,17 +491,16 @@ fn run(opt: &Opt) -> Res<()> {
   let imdb = Imdb::new(ncpus / 2, &imdb_storage)?;
   info!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
 
-  let query_fn = if opt.series {
-    Imdb::series_by_title
-  } else {
-    Imdb::movies_by_title
-  };
-
   let start_time = Instant::now();
 
   match &opt.command {
-    Command::Title { title } => single_title(title, &imdb, query_fn, &imdb_url, opt.sort_by_rating)?,
-    Command::Dir { dir } => titles_dir(dir, &imdb, query_fn, &imdb_url, opt.series, opt.sort_by_rating)?,
+    Command::Title { title } => single_title(title, &imdb, &imdb_url, opt.sort_by_rating)?,
+    Command::MoviesDir { dir } => {
+      titles_dir(dir, &imdb, Imdb::movies_by_title, &imdb_url, false, opt.sort_by_rating)?
+    }
+    Command::SeriesDir { dir } => {
+      titles_dir(dir, &imdb, Imdb::series_by_title, &imdb_url, true, opt.sort_by_rating)?
+    }
   }
 
   info!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
