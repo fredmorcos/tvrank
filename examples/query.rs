@@ -37,29 +37,27 @@ fn main() -> tvrank::Res<()> {
 
   println!("Matches for {} and {:?}:", name, year);
 
-  for titles in imdb.movies_by_title(name, year)? {
-    for title in titles {
-      let id = title.title_id();
+  for title in imdb.movies_by_title(name, year)? {
+    let id = title.title_id();
 
-      println!("ID: {}", id);
-      println!("Primary name: {}", title.primary_title());
-      println!("Original name: {}", title.original_title());
+    println!("ID: {}", id);
+    println!("Primary name: {}", title.primary_title());
+    println!("Original name: {}", title.original_title());
 
-      if let Some((rating, votes)) = title.rating() {
-        println!("Rating: {}/100 ({} votes)", rating, votes);
-      } else {
-        println!("Rating: N/A");
-      }
-
-      if let Some(runtime) = title.runtime() {
-        println!("Runtime: {}", humantime::format_duration(runtime));
-      } else {
-        println!("Runtime: N/A");
-      }
-
-      println!("Genres: {}", title.genres());
-      println!("--");
+    if let Some((rating, votes)) = title.rating() {
+      println!("Rating: {}/100 ({} votes)", rating, votes);
+    } else {
+      println!("Rating: N/A");
     }
+
+    if let Some(runtime) = title.runtime() {
+      println!("Runtime: {}", humantime::format_duration(runtime));
+    } else {
+      println!("Runtime: N/A");
+    }
+
+    println!("Genres: {}", title.genres());
+    println!("--");
   }
 
   Ok(())

@@ -116,8 +116,8 @@ impl Service {
 
   fn query(
     &self,
-    query_fn: impl for<'a, 'b> Fn(&'a Basics, &'b Ratings, &Mutex<Vec<Vec<Title<'a, 'b>>>>) + Send + Sync + Copy,
-  ) -> Res<Vec<Vec<Title>>> {
+    query_fn: impl for<'a, 'b> Fn(&'a Basics, &'b Ratings, &Mutex<Vec<Title<'a, 'b>>>) + Send + Sync + Copy,
+  ) -> Res<Vec<Title>> {
     let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
 
     rayon::scope(|scope| {
@@ -146,42 +146,34 @@ impl Service {
     Ok(res)
   }
 
-  pub fn movies_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Vec<Title>>> {
+  pub fn movies_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
     self.query(|basics_db, ratings_db, res| {
       if let Some(year) = year {
         if let Some(titles) = basics_db.movies_by_title_with_year(name, year) {
-          let local_res = titles
-            .map(|b| Title::new(b, ratings_db.get(&b.title_id)))
-            .collect::<Vec<Title>>();
+          let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
           let mut res = res.lock();
-          res.push(local_res);
+          res.extend(local_res);
         }
       } else if let Some(titles) = basics_db.movies_by_title(name) {
-        let local_res = titles
-          .map(|b| Title::new(b, ratings_db.get(&b.title_id)))
-          .collect::<Vec<Title>>();
+        let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
         let mut res = res.lock();
-        res.push(local_res);
+        res.extend(local_res);
       }
     })
   }
 
-  pub fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Vec<Title>>> {
+  pub fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
     self.query(|basics_db, ratings_db, res| {
       if let Some(year) = year {
         if let Some(titles) = basics_db.series_by_title_with_year(name, year) {
-          let local_res = titles
-            .map(|b| Title::new(b, ratings_db.get(&b.title_id)))
-            .collect::<Vec<Title>>();
+          let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
           let mut res = res.lock();
-          res.push(local_res);
+          res.extend(local_res);
         }
       } else if let Some(titles) = basics_db.series_by_title(name) {
-        let local_res = titles
-          .map(|b| Title::new(b, ratings_db.get(&b.title_id)))
-          .collect::<Vec<Title>>();
+        let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
         let mut res = res.lock();
-        res.push(local_res);
+        res.extend(local_res);
       }
     })
   }

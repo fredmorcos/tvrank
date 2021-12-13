@@ -291,7 +291,7 @@ fn imdb_lookup<'a>(
   query_fn: QueryFn<'a>,
   results: &mut Vec<ImdbTitle<'a, 'a>>,
 ) -> Res<()> {
-  results.extend(query_fn(imdb, &name.to_lowercase(), year)?.into_iter().flatten());
+  results.extend(query_fn(imdb, &name.to_lowercase(), year)?);
   Ok(())
 }
 
@@ -470,7 +470,7 @@ fn titles_dir<'a>(
   Ok(())
 }
 
-type QueryFn<'a> = fn(db: &'a Imdb, name: &str, year: Option<u16>) -> Res<Vec<Vec<ImdbTitle<'a, 'a>>>>;
+type QueryFn<'a> = fn(db: &'a Imdb, name: &str, year: Option<u16>) -> Res<Vec<ImdbTitle<'a, 'a>>>;
 
 fn run(opt: &Opt) -> Res<()> {
   let project = create_project()?;
