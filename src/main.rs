@@ -17,7 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage, ImdbTitle};
+use tvrank::imdb::{Imdb, ImdbKeywordSet, ImdbQueryType, ImdbStorage, ImdbTitle};
 use tvrank::Res;
 use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
@@ -27,6 +27,8 @@ use walkdir::WalkDir;
 enum TvRankErr {
   #[display(fmt = "Could not find cache directory")]
   CacheDir,
+  #[display(fmt = "Short, invalid or empty keywords")]
+  BadKeywords,
 }
 
 impl TvRankErr {
@@ -284,7 +286,7 @@ fn setup_imdb_storage(app_cache_dir: &Path, force_update: bool) -> Res<ImdbStora
   Ok(imdb_storage)
 }
 
-fn imdb_lookup<'a>(
+fn imdb_lookup_by_title_year<'a>(
   name: &str,
   year: Option<u16>,
   imdb: &'a Imdb,
@@ -292,6 +294,16 @@ fn imdb_lookup<'a>(
   results: &mut Vec<ImdbTitle<'a, 'a>>,
 ) -> Res<()> {
   results.extend(imdb.by_title(query_type, &name.to_lowercase(), year)?);
+  Ok(())
+}
+
+fn imdb_lookup_by_keywords<'a>(
+  keywords: ImdbKeywordSet,
+  imdb: &'a Imdb,
+  query_type: ImdbQueryType,
+  results: &mut Vec<ImdbTitle<'a, 'a>>,
+) -> Res<()> {
+  results.extend(imdb.by_keywords(query_type, keywords)?);
   Ok(())
 }
 
@@ -308,15 +320,25 @@ fn display_title(name: &str, year: Option<u16>) -> String {
 }
 
 fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: bool) -> Res<()> {
+  let mut keywords = None;
+
   let (name, year) = if let Some((name, year)) = parse_name_and_year(title) {
     (name, Some(year))
   } else {
-    warn!("Going to use `{}` as search query", title);
+    warn!("Going to use `{}` as keywords for search query", title);
+    let keywords_map = ImdbKeywordSet::try_from(title).map_err(|_| TvRankErr::BadKeywords)?;
+    info!("Keywords: {}", keywords_map);
+    keywords = Some(keywords_map);
     (title, None)
   };
 
   let mut movies_results = vec![];
-  imdb_lookup(name, year, imdb, ImdbQueryType::Movies, &mut movies_results)?;
+
+  if let Some(keywords) = &keywords {
+    imdb_lookup_by_keywords(keywords.clone(), imdb, ImdbQueryType::Movies, &mut movies_results)?;
+  } else {
+    imdb_lookup_by_title_year(name, year, imdb, ImdbQueryType::Movies, &mut movies_results)?;
+  }
 
   if movies_results.is_empty() {
     println!("No movie matches found for `{}`", display_title(name, year));
@@ -345,7 +367,11 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
   }
 
   let mut series_results = vec![];
-  imdb_lookup(name, year, imdb, ImdbQueryType::Series, &mut series_results)?;
+  if let Some(keywords) = &keywords {
+    imdb_lookup_by_keywords(keywords.clone(), imdb, ImdbQueryType::Series, &mut series_results)?;
+  } else {
+    imdb_lookup_by_title_year(name, year, imdb, ImdbQueryType::Series, &mut series_results)?;
+  }
 
   if series_results.is_empty() {
     println!("No series matches found for `{}`", display_title(name, year));
@@ -418,7 +444,7 @@ fn titles_dir<'a>(
         };
 
         let mut local_results = vec![];
-        imdb_lookup(name, year, imdb, query_type, &mut local_results)?;
+        imdb_lookup_by_title_year(name, year, imdb, query_type, &mut local_results)?;
 
         if local_results.is_empty() {
           println!("No matches found for `{}`", display_title(name, year));
