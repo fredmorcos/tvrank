@@ -2,6 +2,7 @@
 
 use super::error::Err;
 use super::genre::{Genre, Genres};
+use super::keywords::KeywordSet;
 use super::title::{TitleId, TitleType};
 use crate::imdb::title::TitleBasics;
 use crate::Res;
@@ -59,6 +60,15 @@ impl Basics {
     self.series.len()
   }
 
+  pub(crate) fn movies_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
+    self
+      .movies_titles
+      .iter()
+      .filter(move |(title, _)| keywords.matches(title))
+      .map(|(_, by_year)| by_year.values().flatten().map(|cookie| &self[cookie]))
+      .flatten()
+  }
+
   pub(crate) fn movies_by_title_year<'a>(
     &'a self,
     name: &str,
@@ -78,6 +88,15 @@ impl Basics {
     let by_year = self.movies_titles.get(name);
     let cookies = by_year.map(|by_year| by_year.values());
     cookies.into_iter().flatten().flatten().map(|cookie| &self[cookie])
+  }
+
+  pub(crate) fn series_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
+    self
+      .series_titles
+      .iter()
+      .filter(move |(title, _)| keywords.matches(title))
+      .map(|(_, by_year)| by_year.values().flatten().map(|cookie| &self[cookie]))
+      .flatten()
   }
 
   pub(crate) fn series_by_title_year<'a>(

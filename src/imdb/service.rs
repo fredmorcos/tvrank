@@ -1,8 +1,9 @@
 #![warn(clippy::all)]
 
 use super::basics::Basics;
+use super::keywords::KeywordSet;
 use super::title::Title;
-use crate::imdb::{error::Err, ratings::Ratings, storage::Storage};
+use super::{error::Err, ratings::Ratings, storage::Storage};
 use crate::Res;
 use deepsize::DeepSizeOf;
 use humantime::format_duration;
@@ -116,7 +117,7 @@ impl Service {
     Ok(basics_dbs)
   }
 
-  fn query(
+  fn query_by_title(
     &self,
     name: &str,
     year: Option<u16>,
@@ -171,7 +172,7 @@ impl Service {
       }
     }
 
-    self.query(name, year, query_fn)
+    self.query_by_title(name, year, query_fn)
   }
 
   pub fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
@@ -195,6 +196,74 @@ impl Service {
       }
     }
 
-    self.query(name, year, query_fn)
+    self.query_by_title(name, year, query_fn)
+  }
+
+  fn query_by_keywords(
+    &self,
+    keywords: KeywordSet,
+    query_fn: for<'a, 'b> fn(KeywordSet, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
+  ) -> Res<Vec<Title>> {
+    let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
+
+    rayon::scope(|scope| {
+      let mut dbs: &[Basics] = self.basics_dbs.as_slice();
+
+      for _ in 0..self.basics_dbs.len() {
+        let res = Arc::clone(&res);
+
+        let (db, rem) = match dbs.split_first() {
+          Some(res) => res,
+          None => break,
+        };
+
+        dbs = rem;
+
+        let keywords = keywords.clone();
+        scope.spawn(move |_| query_fn(keywords, db, &self.ratings_db, &res));
+      }
+    });
+
+    let res = if let Ok(res) = Arc::try_unwrap(res) {
+      res.into_inner()
+    } else {
+      return Err::basics_db_query();
+    };
+
+    Ok(res)
+  }
+
+  pub fn movies_by_keyword(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
+    fn query_fn<'a, 'b>(
+      keywords: KeywordSet,
+      basics: &'a Basics,
+      ratings: &'b Ratings,
+      res: &TitleResults<'a, 'b>,
+    ) {
+      let local_res = basics
+        .movies_by_keyword(keywords)
+        .map(|b| Title::new(b, ratings.get(&b.title_id)));
+      let mut res = res.lock();
+      res.extend(local_res)
+    }
+
+    self.query_by_keywords(keywords, query_fn)
+  }
+
+  pub fn series_by_keyword(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
+    fn query_fn<'a, 'b>(
+      keywords: KeywordSet,
+      basics: &'a Basics,
+      ratings: &'b Ratings,
+      res: &TitleResults<'a, 'b>,
+    ) {
+      let local_res = basics
+        .series_by_keyword(keywords)
+        .map(|b| Title::new(b, ratings.get(&b.title_id)));
+      let mut res = res.lock();
+      res.extend(local_res)
+    }
+
+    self.query_by_keywords(keywords, query_fn)
   }
 }
