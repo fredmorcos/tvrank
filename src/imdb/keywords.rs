@@ -2,12 +2,22 @@
 
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 use fnv::FnvHashSet;
-use std::collections::hash_set;
+use std::{collections::hash_set, fmt};
 
 #[derive(Clone)]
 pub struct KeywordSet {
   keywords: FnvHashSet<String>,
   matcher: AhoCorasick,
+}
+
+impl fmt::Display for KeywordSet {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    for keyword in &self.keywords {
+      write!(f, "`{}` ", keyword)?
+    }
+
+    Ok(())
+  }
 }
 
 impl KeywordSet {
