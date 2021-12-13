@@ -15,7 +15,7 @@ mod io {
     writer: &mut W,
     f: impl Fn(u64),
   ) -> Res<usize> {
-    let mut buffer: [u8; 4096] = [0; 4096];
+    let mut buffer: [u8; 1024 * 16] = [0; 1024 * 16];
     let mut total = 0;
 
     loop {
