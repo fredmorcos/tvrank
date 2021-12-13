@@ -34,7 +34,7 @@ csv = "1.1"
 regex = "1.5"
 directories = "3.0"
 # memmap = "0.7"
-flate2 = { version = "1.0", features = ["zlib-ng-compat"], default-features = false }
+flate2 = "1.0"
 reqwest = { version = "0.11" }
 atoi = "0.4"
 fnv = "1.0"
