@@ -21,6 +21,12 @@ pub struct Service {
   ratings_db: Ratings,
 }
 
+#[derive(Clone, Copy)]
+pub enum QueryType {
+  Movies,
+  Series,
+}
+
 type TitleResults<'a, 'b> = Mutex<Vec<Title<'a, 'b>>>;
 
 impl Service {
@@ -151,7 +157,7 @@ impl Service {
     Ok(res)
   }
 
-  pub fn movies_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
+  fn movies_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
     fn query_fn<'a, 'b>(
       name: &str,
       year: Option<u16>,
@@ -175,7 +181,7 @@ impl Service {
     self.query_by_title(name, year, query_fn)
   }
 
-  pub fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
+  fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
     fn query_fn<'a, 'b>(
       name: &str,
       year: Option<u16>,
@@ -197,6 +203,13 @@ impl Service {
     }
 
     self.query_by_title(name, year, query_fn)
+  }
+
+  pub fn by_title(&self, query_type: QueryType, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
+    match query_type {
+      QueryType::Movies => self.movies_by_title(name, year),
+      QueryType::Series => self.series_by_title(name, year),
+    }
   }
 
   fn query_by_keywords(
@@ -233,7 +246,7 @@ impl Service {
     Ok(res)
   }
 
-  pub fn movies_by_keyword(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
+  fn movies_by_keywords(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
     fn query_fn<'a, 'b>(
       keywords: KeywordSet,
       basics: &'a Basics,
@@ -250,7 +263,7 @@ impl Service {
     self.query_by_keywords(keywords, query_fn)
   }
 
-  pub fn series_by_keyword(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
+  fn series_by_keywords(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
     fn query_fn<'a, 'b>(
       keywords: KeywordSet,
       basics: &'a Basics,
@@ -265,5 +278,12 @@ impl Service {
     }
 
     self.query_by_keywords(keywords, query_fn)
+  }
+
+  pub fn by_keywords(&self, query_type: QueryType, keywords: KeywordSet) -> Res<Vec<Title>> {
+    match query_type {
+      QueryType::Movies => self.movies_by_keywords(keywords),
+      QueryType::Series => self.series_by_keywords(keywords),
+    }
   }
 }

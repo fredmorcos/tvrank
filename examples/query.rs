@@ -1,6 +1,6 @@
 #![warn(clippy::all)]
 
-use tvrank::imdb::{Imdb, ImdbStorage};
+use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage};
 
 fn main() -> tvrank::Res<()> {
   fn download_init(name: &str, content_len: Option<u64>) {
@@ -37,7 +37,7 @@ fn main() -> tvrank::Res<()> {
 
   println!("Matches for {} and {:?}:", name, year);
 
-  for title in imdb.movies_by_title(name, year)? {
+  for title in imdb.by_title(ImdbQueryType::Movies, name, year)? {
     let id = title.title_id();
 
     println!("ID: {}", id);

@@ -17,7 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbStorage, ImdbTitle};
+use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage, ImdbTitle};
 use tvrank::Res;
 use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
@@ -288,10 +288,10 @@ fn imdb_lookup<'a>(
   name: &str,
   year: Option<u16>,
   imdb: &'a Imdb,
-  query_fn: QueryFn<'a>,
+  query_type: ImdbQueryType,
   results: &mut Vec<ImdbTitle<'a, 'a>>,
 ) -> Res<()> {
-  results.extend(query_fn(imdb, &name.to_lowercase(), year)?);
+  results.extend(imdb.by_title(query_type, &name.to_lowercase(), year)?);
   Ok(())
 }
 
@@ -316,7 +316,7 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
   };
 
   let mut movies_results = vec![];
-  imdb_lookup(name, year, imdb, Imdb::movies_by_title, &mut movies_results)?;
+  imdb_lookup(name, year, imdb, ImdbQueryType::Movies, &mut movies_results)?;
 
   if movies_results.is_empty() {
     println!("No movie matches found for `{}`", display_title(name, year));
@@ -345,7 +345,7 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
   }
 
   let mut series_results = vec![];
-  imdb_lookup(name, year, imdb, Imdb::series_by_title, &mut series_results)?;
+  imdb_lookup(name, year, imdb, ImdbQueryType::Series, &mut series_results)?;
 
   if series_results.is_empty() {
     println!("No series matches found for `{}`", display_title(name, year));
@@ -379,7 +379,7 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
 fn titles_dir<'a>(
   dir: &Path,
   imdb: &'a Imdb,
-  query_fn: QueryFn<'a>,
+  query_type: ImdbQueryType,
   imdb_url: &Url,
   series: bool,
   sort_by_year: bool,
@@ -418,7 +418,7 @@ fn titles_dir<'a>(
         };
 
         let mut local_results = vec![];
-        imdb_lookup(name, year, imdb, query_fn, &mut local_results)?;
+        imdb_lookup(name, year, imdb, query_type, &mut local_results)?;
 
         if local_results.is_empty() {
           println!("No matches found for `{}`", display_title(name, year));
@@ -470,8 +470,6 @@ fn titles_dir<'a>(
   Ok(())
 }
 
-type QueryFn<'a> = fn(db: &'a Imdb, name: &str, year: Option<u16>) -> Res<Vec<ImdbTitle<'a, 'a>>>;
-
 fn run(opt: &Opt) -> Res<()> {
   let project = create_project()?;
   let app_cache_dir = project.cache_dir();
@@ -495,10 +493,10 @@ fn run(opt: &Opt) -> Res<()> {
   match &opt.command {
     Command::Title { title } => single_title(title, &imdb, &imdb_url, opt.sort_by_year)?,
     Command::MoviesDir { dir } => {
-      titles_dir(dir, &imdb, Imdb::movies_by_title, &imdb_url, false, opt.sort_by_year)?
+      titles_dir(dir, &imdb, ImdbQueryType::Movies, &imdb_url, false, opt.sort_by_year)?
     }
     Command::SeriesDir { dir } => {
-      titles_dir(dir, &imdb, Imdb::series_by_title, &imdb_url, true, opt.sort_by_year)?
+      titles_dir(dir, &imdb, ImdbQueryType::Series, &imdb_url, true, opt.sort_by_year)?
     }
   }
 
