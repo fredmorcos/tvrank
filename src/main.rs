@@ -467,7 +467,6 @@ fn titles_dir<'a>(
 
   table.printstd();
 
-  std::mem::forget(results);
   Ok(())
 }
 
@@ -506,7 +505,6 @@ fn run(opt: &Opt) -> Res<()> {
   info!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
 
   std::mem::forget(imdb);
-  std::mem::forget(imdb_storage);
 
   Ok(())
 }
