@@ -20,6 +20,8 @@ pub struct Service {
   ratings_db: Ratings,
 }
 
+type TitleResults<'a, 'b> = Mutex<Vec<Title<'a, 'b>>>;
+
 impl Service {
   pub fn new(ncpus: usize, storage: &Storage) -> Res<Self> {
     debug!("Going to use {} threads", ncpus);
@@ -116,7 +118,9 @@ impl Service {
 
   fn query(
     &self,
-    query_fn: impl for<'a, 'b> Fn(&'a Basics, &'b Ratings, &Mutex<Vec<Title<'a, 'b>>>) + Send + Sync + Copy,
+    name: &str,
+    year: Option<u16>,
+    query_fn: for<'a, 'b> fn(&str, Option<u16>, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
   ) -> Res<Vec<Title>> {
     let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
 
@@ -133,7 +137,7 @@ impl Service {
 
         dbs = rem;
 
-        scope.spawn(move |_| query_fn(db, &self.ratings_db, &res));
+        scope.spawn(move |_| query_fn(name, year, db, &self.ratings_db, &res));
       }
     });
 
@@ -147,34 +151,50 @@ impl Service {
   }
 
   pub fn movies_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
-    self.query(|basics_db, ratings_db, res| {
+    fn query_fn<'a, 'b>(
+      name: &str,
+      year: Option<u16>,
+      basics: &'a Basics,
+      ratings: &'b Ratings,
+      res: &TitleResults<'a, 'b>,
+    ) {
       if let Some(year) = year {
-        if let Some(titles) = basics_db.movies_by_title_with_year(name, year) {
-          let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
-          let mut res = res.lock();
-          res.extend(local_res);
-        }
-      } else if let Some(titles) = basics_db.movies_by_title(name) {
-        let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
+        let local_res = basics
+          .movies_by_title_year(name, year)
+          .map(|b| Title::new(b, ratings.get(&b.title_id)));
+        let mut res = res.lock();
+        res.extend(local_res);
+      } else {
+        let local_res = basics.movies_by_title(name).map(|b| Title::new(b, ratings.get(&b.title_id)));
         let mut res = res.lock();
         res.extend(local_res);
       }
-    })
+    }
+
+    self.query(name, year, query_fn)
   }
 
   pub fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
-    self.query(|basics_db, ratings_db, res| {
+    fn query_fn<'a, 'b>(
+      name: &str,
+      year: Option<u16>,
+      basics: &'a Basics,
+      ratings: &'b Ratings,
+      res: &TitleResults<'a, 'b>,
+    ) {
       if let Some(year) = year {
-        if let Some(titles) = basics_db.series_by_title_with_year(name, year) {
-          let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
-          let mut res = res.lock();
-          res.extend(local_res);
-        }
-      } else if let Some(titles) = basics_db.series_by_title(name) {
-        let local_res = titles.map(|b| Title::new(b, ratings_db.get(&b.title_id)));
+        let local_res = basics
+          .series_by_title_year(name, year)
+          .map(|b| Title::new(b, ratings.get(&b.title_id)));
+        let mut res = res.lock();
+        res.extend(local_res);
+      } else {
+        let local_res = basics.series_by_title(name).map(|b| Title::new(b, ratings.get(&b.title_id)));
         let mut res = res.lock();
         res.extend(local_res);
       }
-    })
+    }
+
+    self.query(name, year, query_fn)
   }
 }

@@ -20,8 +20,6 @@ struct SeriesCookie(usize);
 
 type ByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
-type ByKeyword<C> = FnvHashMap<&'static [u8], ByYear<C>>;
-type ByGenre<C> = FnvHashMap<Genre, Vec<C>>;
 
 #[derive(Default, DeepSizeOf)]
 pub(crate) struct Basics {
@@ -29,19 +27,11 @@ pub(crate) struct Basics {
   movies: Vec<TitleBasics>,
   /// Map from movies names to years to movies.
   movies_titles: ByTitle<MoviesCookie>,
-  /// Map from keyword to years to movies.
-  movies_keywords: ByKeyword<MoviesCookie>,
-  /// Map from Genre to movies.
-  movies_genres: ByGenre<MoviesCookie>,
 
   /// Series information.
   series: Vec<TitleBasics>,
   /// Map from series names to years to series.
   series_titles: ByTitle<SeriesCookie>,
-  /// Map from keyword to years to series.
-  series_keywords: ByKeyword<SeriesCookie>,
-  /// Map from Genre to series.
-  series_genres: ByGenre<SeriesCookie>,
 }
 
 impl Index<&MoviesCookie> for Basics {
@@ -69,48 +59,46 @@ impl Basics {
     self.series.len()
   }
 
-  pub(crate) fn movies_by_title_with_year(
-    &self,
+  pub(crate) fn movies_by_title_year<'a>(
+    &'a self,
     name: &str,
     year: u16,
-  ) -> Option<impl Iterator<Item = &TitleBasics>> {
-    if let Some(by_year) = self.movies_titles.get(name) {
-      if let Some(cookies) = by_year.get(&Some(year)) {
-        return Some(cookies.iter().map(|cookie| &self[cookie]));
-      }
-    }
-
-    None
+  ) -> impl Iterator<Item = &TitleBasics> + 'a {
+    let by_year = self.movies_titles.get(name);
+    let cookies = by_year.map(|by_year| by_year.get(&Some(year)));
+    let cookies = cookies.flatten();
+    cookies
+      .into_iter()
+      .map(|cookies| cookies.iter())
+      .flatten()
+      .map(|cookie| &self[cookie])
   }
 
-  pub(crate) fn movies_by_title(&self, name: &str) -> Option<impl Iterator<Item = &TitleBasics>> {
-    if let Some(by_year) = self.movies_titles.get(name) {
-      return Some(by_year.values().flatten().map(|cookie| &self[cookie]));
-    }
-
-    None
+  pub(crate) fn movies_by_title<'a>(&'a self, name: &str) -> impl Iterator<Item = &TitleBasics> + 'a {
+    let by_year = self.movies_titles.get(name);
+    let cookies = by_year.map(|by_year| by_year.values());
+    cookies.into_iter().flatten().flatten().map(|cookie| &self[cookie])
   }
 
-  pub(crate) fn series_by_title_with_year(
-    &self,
+  pub(crate) fn series_by_title_year<'a>(
+    &'a self,
     name: &str,
     year: u16,
-  ) -> Option<impl Iterator<Item = &TitleBasics>> {
-    if let Some(by_year) = self.series_titles.get(name) {
-      if let Some(cookies) = by_year.get(&Some(year)) {
-        return Some(cookies.iter().map(|cookie| &self[cookie]));
-      }
-    }
-
-    None
+  ) -> impl Iterator<Item = &TitleBasics> + 'a {
+    let by_year = self.series_titles.get(name);
+    let cookies = by_year.map(|by_year| by_year.get(&Some(year)));
+    let cookies = cookies.flatten();
+    cookies
+      .into_iter()
+      .map(|cookies| cookies.iter())
+      .flatten()
+      .map(|cookie| &self[cookie])
   }
 
-  pub(crate) fn series_by_title(&self, name: &str) -> Option<impl Iterator<Item = &TitleBasics>> {
-    if let Some(by_year) = self.series_titles.get(name) {
-      return Some(by_year.values().flatten().map(|cookie| &self[cookie]));
-    }
-
-    None
+  pub(crate) fn series_by_title<'a>(&'a self, name: &str) -> impl Iterator<Item = &TitleBasics> + 'a {
+    let by_year = self.series_titles.get(name);
+    let cookies = by_year.map(|by_year| by_year.values());
+    cookies.into_iter().flatten().flatten().map(|cookie| &self[cookie])
   }
 
   pub(crate) fn add_basics_from_line(&mut self, line: &'static [u8]) -> Res<()> {
