@@ -98,9 +98,9 @@ struct Opt {
   #[structopt(short, long)]
   force_update: bool,
 
-  /// Sort results by rating, year and title instead of year, rating and title
-  #[structopt(short = "r", long)]
-  sort_by_rating: bool,
+  /// Sort by year/rating/title instead of rating/year/title
+  #[structopt(short = "y", long)]
+  sort_by_year: bool,
 
   #[structopt(subcommand)]
   command: Command,
@@ -125,14 +125,14 @@ enum Command {
   },
 }
 
-fn sort_results(results: &mut Vec<ImdbTitle>, sort_by_rating: bool) {
-  if sort_by_rating {
+fn sort_results(results: &mut Vec<ImdbTitle>, sort_by_year: bool) {
+  if sort_by_year {
     results.sort_unstable_by(|a, b| {
-      match b.rating().cmp(&a.rating()) {
+      match b.start_year().cmp(&a.start_year()) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      match b.start_year().cmp(&a.start_year()) {
+      match b.rating().cmp(&a.rating()) {
         Ordering::Equal => {}
         ord => return ord,
       }
@@ -140,11 +140,11 @@ fn sort_results(results: &mut Vec<ImdbTitle>, sort_by_rating: bool) {
     })
   } else {
     results.sort_unstable_by(|a, b| {
-      match b.start_year().cmp(&a.start_year()) {
+      match b.rating().cmp(&a.rating()) {
         Ordering::Equal => {}
         ord => return ord,
       }
-      match b.rating().cmp(&a.rating()) {
+      match b.start_year().cmp(&a.start_year()) {
         Ordering::Equal => {}
         ord => return ord,
       }
@@ -307,7 +307,7 @@ fn display_title(name: &str, year: Option<u16>) -> String {
   )
 }
 
-fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_rating: bool) -> Res<()> {
+fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: bool) -> Res<()> {
   let (name, year) = if let Some((name, year)) = parse_name_and_year(title) {
     (name, Some(year))
   } else {
@@ -332,7 +332,7 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_rating:
       display_title(name, year)
     );
 
-    sort_results(&mut movies_results, sort_by_rating);
+    sort_results(&mut movies_results, sort_by_year);
 
     let mut table = create_output_table();
 
@@ -361,7 +361,7 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_rating:
       display_title(name, year)
     );
 
-    sort_results(&mut series_results, sort_by_rating);
+    sort_results(&mut series_results, sort_by_year);
 
     let mut table = create_output_table();
 
@@ -382,7 +382,7 @@ fn titles_dir<'a>(
   query_fn: QueryFn<'a>,
   imdb_url: &Url,
   series: bool,
-  sort_by_rating: bool,
+  sort_by_year: bool,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
@@ -427,7 +427,7 @@ fn titles_dir<'a>(
 
           println!("Found {} matche(s) for `{}`:", local_results.len(), display_title(name, year));
 
-          sort_results(&mut local_results, sort_by_rating);
+          sort_results(&mut local_results, sort_by_year);
 
           let mut table = create_output_table();
 
@@ -456,7 +456,7 @@ fn titles_dir<'a>(
     return Ok(());
   }
 
-  sort_results(&mut results, sort_by_rating);
+  sort_results(&mut results, sort_by_year);
 
   let mut table = create_output_table();
 
@@ -493,12 +493,12 @@ fn run(opt: &Opt) -> Res<()> {
   let start_time = Instant::now();
 
   match &opt.command {
-    Command::Title { title } => single_title(title, &imdb, &imdb_url, opt.sort_by_rating)?,
+    Command::Title { title } => single_title(title, &imdb, &imdb_url, opt.sort_by_year)?,
     Command::MoviesDir { dir } => {
-      titles_dir(dir, &imdb, Imdb::movies_by_title, &imdb_url, false, opt.sort_by_rating)?
+      titles_dir(dir, &imdb, Imdb::movies_by_title, &imdb_url, false, opt.sort_by_year)?
     }
     Command::SeriesDir { dir } => {
-      titles_dir(dir, &imdb, Imdb::series_by_title, &imdb_url, true, opt.sort_by_rating)?
+      titles_dir(dir, &imdb, Imdb::series_by_title, &imdb_url, true, opt.sort_by_year)?
     }
   }
 
