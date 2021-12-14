@@ -40,8 +40,6 @@ impl TvRankErr {
 impl Error for TvRankErr {}
 
 fn parse_name_and_year(input: &str) -> Option<(&str, u16)> {
-  debug!("Input: {}", input);
-
   let regex = match Regex::new(r"^(.+)\s+\((\d{4})\)$") {
     Ok(regex) => regex,
     Err(e) => {
@@ -52,14 +50,9 @@ fn parse_name_and_year(input: &str) -> Option<(&str, u16)> {
 
   if let Some(captures) = regex.captures(input) {
     if let Some(title_match) = captures.get(1) {
-      debug!("Title Match: {:?}", title_match);
-
       if let Some(year_match) = captures.get(2) {
-        debug!("Year Match: {:?}", year_match);
-
         if let Some(year_val) = atoi::<u16>(year_match.as_str().as_bytes()) {
           let title = title_match.as_str();
-          debug!("Title: `{}`, Year: `{}`", title, year_val);
           Some((title, year_val))
         } else {
           warn!("Could not parse year `{}`", year_match.as_str());
@@ -341,9 +334,9 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
   }
 
   if movies_results.is_empty() {
-    println!("No movie matches found for `{}`", display_title(name, year));
+    eprintln!("No movie matches found for `{}`", display_title(name, year));
   } else {
-    println!(
+    eprintln!(
       "Found {} movie {} for `{}`:",
       movies_results.len(),
       if movies_results.len() == 1 {
@@ -374,9 +367,9 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
   }
 
   if series_results.is_empty() {
-    println!("No series matches found for `{}`", display_title(name, year));
+    eprintln!("No series matches found for `{}`", display_title(name, year));
   } else {
-    println!(
+    eprintln!(
       "Found {} series {} for `{}`:",
       series_results.len(),
       if series_results.len() == 1 {
@@ -447,11 +440,11 @@ fn titles_dir<'a>(
         imdb_lookup_by_title_year(name, year, imdb, query_type, &mut local_results)?;
 
         if local_results.is_empty() {
-          println!("No matches found for `{}`", display_title(name, year));
+          eprintln!("No matches found for `{}`", display_title(name, year));
         } else if local_results.len() > 1 {
           at_least_one_matched = true;
 
-          println!("Found {} matche(s) for `{}`:", local_results.len(), display_title(name, year));
+          eprintln!("Found {} matche(s) for `{}`:", local_results.len(), display_title(name, year));
 
           sort_results(&mut local_results, sort_by_year);
 
@@ -512,7 +505,7 @@ fn run(opt: &Opt) -> Res<()> {
 
   let ncpus = rayon::current_num_threads();
   let imdb = Imdb::new(ncpus / 2, &imdb_storage)?;
-  info!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
+  eprintln!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
 
   let start_time = Instant::now();
 
@@ -526,7 +519,7 @@ fn run(opt: &Opt) -> Res<()> {
     }
   }
 
-  info!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+  eprintln!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
 
   std::mem::forget(imdb);
 
@@ -568,9 +561,5 @@ fn main() {
     }
   }
 
-  if have_logger {
-    info!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));
-  } else {
-    eprintln!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));
-  }
+  eprintln!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));
 }
