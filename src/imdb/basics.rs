@@ -60,6 +60,18 @@ impl Basics {
     self.series.len()
   }
 
+  fn add_movie(&mut self, title: TitleBasics) -> MoviesCookie {
+    let cookie = MoviesCookie::from(self.movies.len());
+    self.movies.push(title);
+    cookie
+  }
+
+  fn add_series(&mut self, title: TitleBasics) -> SeriesCookie {
+    let cookie = SeriesCookie::from(self.series.len());
+    self.series.push(title);
+    cookie
+  }
+
   pub(crate) fn movies_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
     self
       .movies_titles
@@ -206,30 +218,74 @@ impl Basics {
     };
 
     if title_type.is_movie() {
-      let cookie = MoviesCookie::from(self.movies.len());
-      self.movies.push(title);
+      let cookie = self.add_movie(title);
 
       let lc_primary_title = primary_title.to_lowercase();
+      let lc_original_title = original_title.to_lowercase();
+      let same_title = lc_primary_title == lc_original_title;
+
+      if let Some(escaped_primary_title) = Self::escape_title(&lc_primary_title) {
+        Self::insert_title(&mut self.movies_titles, cookie, escaped_primary_title, start_year);
+      }
+
       Self::insert_title(&mut self.movies_titles, cookie, lc_primary_title, start_year);
 
-      if original_title != primary_title {
-        let lc_original_title = original_title.to_lowercase();
+      if !same_title {
+        if let Some(escaped_original_title) = Self::escape_title(&lc_original_title) {
+          Self::insert_title(&mut self.movies_titles, cookie, escaped_original_title, start_year);
+        }
+
         Self::insert_title(&mut self.movies_titles, cookie, lc_original_title, start_year);
       }
     } else if title_type.is_series() {
-      let cookie = SeriesCookie::from(self.series.len());
-      self.series.push(title);
+      let cookie = self.add_series(title);
 
       let lc_primary_title = primary_title.to_lowercase();
+      let lc_original_title = original_title.to_lowercase();
+      let same_title = lc_primary_title == lc_original_title;
+
+      if let Some(escaped_primary_title) = Self::escape_title(&lc_primary_title) {
+        Self::insert_title(&mut self.series_titles, cookie, escaped_primary_title, start_year);
+      }
+
       Self::insert_title(&mut self.series_titles, cookie, lc_primary_title, start_year);
 
-      if original_title != primary_title {
-        let lc_original_title = original_title.to_lowercase();
+      if !same_title {
+        if let Some(escaped_original_title) = Self::escape_title(&lc_original_title) {
+          Self::insert_title(&mut self.series_titles, cookie, escaped_original_title, start_year);
+        }
+
         Self::insert_title(&mut self.series_titles, cookie, lc_original_title, start_year);
       }
     }
 
     Ok(())
+  }
+
+  fn escape_title(title: &str) -> Option<String> {
+    const ES: &[char] = &['é', 'è', 'ê'];
+
+    let mut needs_escape = false;
+    for c in title.chars() {
+      if ES.contains(&c) {
+        needs_escape = true;
+      }
+    }
+
+    if !needs_escape {
+      return None;
+    }
+
+    let mut escaped = String::with_capacity(title.len());
+    for c in title.chars() {
+      if ES.contains(&c) {
+        escaped.push('e');
+      } else {
+        escaped.push(c);
+      }
+    }
+
+    Some(escaped)
   }
 
   fn insert_title<T>(db: &mut ByTitle<T>, cookie: T, title: String, year: Option<u16>)
