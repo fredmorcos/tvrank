@@ -93,12 +93,12 @@ impl TitleType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Into, DeepSizeOf)]
-pub struct TitleId(&'static [u8]);
+pub struct TitleId<'a>(&'a [u8]);
 
-impl TryFrom<&'static [u8]> for TitleId {
+impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
   type Error = Box<dyn Error>;
 
-  fn try_from(id: &'static [u8]) -> Result<Self, Self::Error> {
+  fn try_from(id: &'a [u8]) -> Result<Self, Self::Error> {
     if &id[0..=1] != super::parsing::TT {
       return Err::id(id);
     }
@@ -107,7 +107,7 @@ impl TryFrom<&'static [u8]> for TitleId {
   }
 }
 
-impl fmt::Display for TitleId {
+impl fmt::Display for TitleId<'_> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     for &d in self.0.iter() {
       write!(f, "{}", char::from(d))?;
@@ -117,13 +117,13 @@ impl fmt::Display for TitleId {
   }
 }
 
-impl PartialOrd for TitleId {
+impl PartialOrd for TitleId<'_> {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     self.0.partial_cmp(other.0)
   }
 }
 
-impl Ord for TitleId {
+impl Ord for TitleId<'_> {
   fn cmp(&self, other: &Self) -> Ordering {
     self.0.cmp(other.0)
   }
@@ -131,7 +131,7 @@ impl Ord for TitleId {
 
 #[derive(Debug, PartialEq, Eq, Clone, DeepSizeOf)]
 pub(crate) struct TitleBasics {
-  pub(crate) title_id: TitleId,
+  pub(crate) title_id: TitleId<'static>,
   pub(crate) title_type: TitleType,
   pub(crate) primary_title: &'static str,
   pub(crate) original_title: &'static str,

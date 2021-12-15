@@ -19,6 +19,7 @@ struct MoviesCookie(usize);
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
 struct SeriesCookie(usize);
 
+type ById<C> = FnvHashMap<TitleId<'static>, C>;
 type ByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
 type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
 
@@ -26,11 +27,15 @@ type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
 pub(crate) struct Basics {
   /// Movies information.
   movies: Vec<TitleBasics>,
+  /// Map from title ID to movie.
+  movies_id: ById<MoviesCookie>,
   /// Map from movies names to years to movies.
   movies_titles: ByTitle<MoviesCookie>,
 
   /// Series information.
   series: Vec<TitleBasics>,
+  /// Map from title ID to series.
+  series_id: ById<SeriesCookie>,
   /// Map from series names to years to series.
   series_titles: ByTitle<SeriesCookie>,
 }
@@ -72,6 +77,10 @@ impl Basics {
     cookie
   }
 
+  pub(crate) fn movie_by_titleid(&self, title_id: &TitleId) -> Option<&TitleBasics> {
+    self.movies_id.get(title_id).map(|cookie| &self[cookie])
+  }
+
   pub(crate) fn movies_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
     self
       .movies_titles
@@ -100,6 +109,10 @@ impl Basics {
     let by_year = self.movies_titles.get(name);
     let cookies = by_year.map(|by_year| by_year.values());
     cookies.into_iter().flatten().flatten().map(|cookie| &self[cookie])
+  }
+
+  pub(crate) fn series_by_titleid(&self, title_id: &TitleId) -> Option<&TitleBasics> {
+    self.series_id.get(title_id).map(|cookie| &self[cookie])
   }
 
   pub(crate) fn series_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
@@ -220,6 +233,10 @@ impl Basics {
     if title_type.is_movie() {
       let cookie = self.add_movie(title);
 
+      if self.movies_id.insert(title_id, cookie).is_some() {
+        return Err::duplicate_id(title_id);
+      }
+
       let lc_primary_title = primary_title.to_lowercase();
       let lc_original_title = original_title.to_lowercase();
       let same_title = lc_primary_title == lc_original_title;
@@ -239,6 +256,10 @@ impl Basics {
       }
     } else if title_type.is_series() {
       let cookie = self.add_series(title);
+
+      if self.series_id.insert(title_id, cookie).is_some() {
+        return Err::duplicate_id(title_id);
+      }
 
       let lc_primary_title = primary_title.to_lowercase();
       let lc_original_title = original_title.to_lowercase();

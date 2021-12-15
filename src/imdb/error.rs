@@ -9,9 +9,11 @@ use std::error::Error;
 #[display(fmt = "{}")]
 pub enum Err {
   #[display(fmt = "ID does not start with `tt` (e.g. ttXXXXXXX)")]
-  Id(&'static [u8]),
+  Id(Vec<u8>),
   #[display(fmt = "ID does not contain a number (e.g. ttXXXXXXX)")]
   IdNumber,
+  #[display(fmt = "Duplicate IMDB ID `{}` found", _0)]
+  DuplicateId(TitleId<'static>),
   #[display(fmt = "Unknown title type")]
   TitleType,
   #[display(fmt = "Invalid adult marker")]
@@ -26,8 +28,6 @@ pub enum Err {
   Genre,
   #[display(fmt = "Unexpected end of file")]
   Eof,
-  #[display(fmt = "Duplicate IMDB ID: {}", _0)]
-  Duplicate(TitleId),
   #[display(fmt = "Number of votes is not a number")]
   Votes,
   #[display(fmt = "Error building the IMDB basics DB")]
@@ -37,16 +37,16 @@ pub enum Err {
 }
 
 impl Err {
-  pub(crate) fn id<T>(id: &'static [u8]) -> Res<T> {
-    Err(Box::new(Err::Id(id)))
+  pub(crate) fn id<T>(id: &[u8]) -> Res<T> {
+    Err(Box::new(Err::Id(id.into())))
+  }
+
+  pub(crate) fn duplicate_id<T>(id: TitleId<'static>) -> Res<T> {
+    Err(Box::new(Err::DuplicateId(id)))
   }
 
   pub(crate) fn adult<T>() -> Res<T> {
     Err(Box::new(Err::Adult))
-  }
-
-  pub(crate) fn duplicate<T>(id: TitleId) -> Res<T> {
-    Err(Box::new(Err::Duplicate(id)))
   }
 
   pub(crate) fn basics_db_build<T>() -> Res<T> {

@@ -11,13 +11,15 @@ use log::{debug, error, info, trace, warn};
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use regex::Regex;
 use reqwest::Url;
+use serde::Deserialize;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::fs;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbKeywordSet, ImdbQueryType, ImdbStorage, ImdbTitle};
+use tvrank::imdb::{Imdb, ImdbKeywordSet, ImdbQueryType, ImdbStorage, ImdbTitle, ImdbTitleId};
 use tvrank::Res;
 use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
@@ -300,6 +302,16 @@ fn imdb_lookup_by_keywords<'a>(
   Ok(())
 }
 
+fn imdb_lookup_by_titleid<'a>(
+  title_id: &ImdbTitleId,
+  imdb: &'a Imdb,
+  query_type: ImdbQueryType,
+  results: &mut Vec<ImdbTitle<'a, 'a>>,
+) -> Res<()> {
+  results.extend(imdb.by_titleid(query_type, title_id)?);
+  Ok(())
+}
+
 fn display_title(name: &str, year: Option<u16>) -> String {
   format!(
     "{}{}",
@@ -395,6 +407,16 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
   Ok(())
 }
 
+#[derive(Deserialize)]
+struct TitleInfo {
+  imdb: ImdbTitleInfo,
+}
+
+#[derive(Deserialize)]
+struct ImdbTitleInfo {
+  id: String,
+}
+
 fn titles_dir<'a>(
   dir: &Path,
   imdb: &'a Imdb,
@@ -418,7 +440,42 @@ fn titles_dir<'a>(
     let entry = entry?;
 
     if entry.file_type().is_dir() {
-      if let Some(filename) = entry.path().file_name() {
+      let entry_path = entry.path();
+
+      let title_info_path = entry_path.join("tvrank.json");
+      if title_info_path.exists() {
+        let title_info_file = fs::File::open(&title_info_path)?;
+        let title_info_file_reader = BufReader::new(title_info_file);
+        let title_info: Result<TitleInfo, _> = serde_json::from_reader(title_info_file_reader);
+
+        match title_info {
+          Ok(info) => match ImdbTitleId::try_from(info.imdb.id.as_ref()) {
+            Ok(title_id) => {
+              let mut local_results = vec![];
+              imdb_lookup_by_titleid(&title_id, imdb, query_type, &mut local_results)?;
+
+              if local_results.is_empty() {
+                warn!(
+                  "Could not find title ID `{}` for `{}`, ignoring `tvrank.json` file",
+                  title_id,
+                  title_info_path.display()
+                );
+              } else if local_results.len() > 1 {
+                warn!("Found {} matches for title ID `{}` for `{}`, this should not happen, ignoring `tvrank.json` file",
+                      local_results.len(), title_id, title_info_path.display());
+              } else {
+                at_least_one_matched = true;
+                results.extend(local_results);
+                continue;
+              }
+            }
+            Err(e) => warn!("Ignoring IMDB ID in `{}` due to parse error: {}", title_info_path.display(), e),
+          },
+          Err(e) => warn!("Ignoring info in `{}` due to parse error: {}", title_info_path.display(), e),
+        }
+      }
+
+      if let Some(filename) = entry_path.file_name() {
         let filename = filename.to_string_lossy();
 
         let (name, year) = if let Some((name, year)) = parse_name_and_year(&filename) {
@@ -458,7 +515,6 @@ fn titles_dir<'a>(
           table.printstd();
         } else {
           at_least_one_matched = true;
-
           results.extend(local_results);
         }
       }

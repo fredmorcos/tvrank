@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 #[derive(Default, DeepSizeOf)]
 pub(crate) struct Ratings {
-  ratings: FnvHashMap<TitleId, (u8, u64)>,
+  ratings: FnvHashMap<TitleId<'static>, (u8, u64)>,
 }
 
 impl Ratings {
@@ -43,13 +43,13 @@ impl Ratings {
     let votes = atoi::<u64>(next!()).ok_or(Err::Votes)?;
 
     if self.ratings.insert(title_id, (rating, votes)).is_some() {
-      return Err::duplicate(title_id);
+      return Err::duplicate_id(title_id);
     }
 
     Ok(())
   }
 
-  pub(crate) fn get<'a>(&'a self, id: &TitleId) -> Option<&'a (u8, u64)> {
+  pub(crate) fn get<'a>(&'a self, id: &TitleId<'static>) -> Option<&'a (u8, u64)> {
     self.ratings.get(id)
   }
 }

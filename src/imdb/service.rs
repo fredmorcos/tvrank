@@ -1,9 +1,11 @@
 #![warn(clippy::all)]
 
 use super::basics::Basics;
+use super::error::Err;
 use super::keywords::KeywordSet;
-use super::title::Title;
-use super::{error::Err, ratings::Ratings, storage::Storage};
+use super::ratings::Ratings;
+use super::storage::Storage;
+use super::title::{Title, TitleId};
 use crate::Res;
 use deepsize::DeepSizeOf;
 use humantime::format_duration;
@@ -209,6 +211,80 @@ impl Service {
     match query_type {
       QueryType::Movies => self.movies_by_title(name, year),
       QueryType::Series => self.series_by_title(name, year),
+    }
+  }
+
+  fn query_by_titleid(
+    &self,
+    title_id: &TitleId,
+    query_fn: for<'a, 'b> fn(&TitleId, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
+  ) -> Res<Vec<Title>> {
+    let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
+
+    rayon::scope(|scope| {
+      let mut dbs: &[Basics] = self.basics_dbs.as_slice();
+
+      for _ in 0..self.basics_dbs.len() {
+        let res = Arc::clone(&res);
+
+        let (db, rem) = match dbs.split_first() {
+          Some(res) => res,
+          None => break,
+        };
+
+        dbs = rem;
+
+        scope.spawn(move |_| query_fn(title_id, db, &self.ratings_db, &res));
+      }
+    });
+
+    let res = if let Ok(res) = Arc::try_unwrap(res) {
+      res.into_inner()
+    } else {
+      return Err::basics_db_query();
+    };
+
+    Ok(res)
+  }
+
+  fn movie_by_titleid(&self, title_id: &TitleId) -> Res<Vec<Title>> {
+    fn query_fn<'a, 'b>(
+      title_id: &TitleId,
+      basics: &'a Basics,
+      ratings: &'b Ratings,
+      res: &TitleResults<'a, 'b>,
+    ) {
+      if let Some(b) = basics.movie_by_titleid(title_id) {
+        let local_res = Title::new(b, ratings.get(&b.title_id));
+        let mut res = res.lock();
+        res.push(local_res);
+      }
+    }
+
+    self.query_by_titleid(title_id, query_fn)
+  }
+
+  fn series_by_titleid(&self, title_id: &TitleId) -> Res<Vec<Title>> {
+    fn query_fn<'a, 'b>(
+      title_id: &TitleId,
+      basics: &'a Basics,
+      ratings: &'b Ratings,
+      res: &TitleResults<'a, 'b>,
+    ) {
+      if let Some(b) = basics.series_by_titleid(title_id) {
+        let local_res = Title::new(b, ratings.get(&b.title_id));
+        let mut res = res.lock();
+        res.push(local_res);
+      }
+    }
+
+    self.query_by_titleid(title_id, query_fn)
+  }
+
+  pub fn by_titleid(&self, query_type: QueryType, title_id: &TitleId) -> Res<Vec<Title>> {
+    match query_type {
+      QueryType::Movies => self.movie_by_titleid(title_id),
+      QueryType::Series => self.series_by_titleid(title_id),
     }
   }
 
