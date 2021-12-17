@@ -309,9 +309,9 @@ impl Basics {
     Some(escaped)
   }
 
-  fn insert_title<T>(db: &mut ByTitle<T>, cookie: T, title: String, year: Option<u16>)
+  fn insert_title<C>(db: &mut ByTitle<C>, cookie: C, title: String, year: Option<u16>)
   where
-    T: From<usize> + Copy,
+    C: From<usize> + Copy,
   {
     db.entry(title)
       .and_modify(|by_year| {

@@ -105,7 +105,7 @@ struct Opt {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-  /// Lookup a single title using "TITLE" or "TITLE (YYYY)"
+  /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
   Title {
     #[structopt(name = "TITLE")]
     title: String,
@@ -545,7 +545,7 @@ fn titles_dir<'a>(
   Ok(())
 }
 
-fn run(opt: &Opt) -> Res<()> {
+fn run(opt: Opt) -> Res<()> {
   let project = create_project()?;
   let app_cache_dir = project.cache_dir();
   info!("Cache directory: {}", app_cache_dir.display());
@@ -565,13 +565,13 @@ fn run(opt: &Opt) -> Res<()> {
 
   let start_time = Instant::now();
 
-  match &opt.command {
-    Command::Title { title } => single_title(title, &imdb, &imdb_url, opt.sort_by_year)?,
+  match opt.command {
+    Command::Title { title } => single_title(&title, &imdb, &imdb_url, opt.sort_by_year)?,
     Command::MoviesDir { dir } => {
-      titles_dir(dir, &imdb, ImdbQueryType::Movies, &imdb_url, false, opt.sort_by_year)?
+      titles_dir(&dir, &imdb, ImdbQueryType::Movies, &imdb_url, false, opt.sort_by_year)?
     }
     Command::SeriesDir { dir } => {
-      titles_dir(dir, &imdb, ImdbQueryType::Series, &imdb_url, true, opt.sort_by_year)?
+      titles_dir(&dir, &imdb, ImdbQueryType::Series, &imdb_url, true, opt.sort_by_year)?
     }
   }
 
@@ -609,7 +609,7 @@ fn main() {
   debug!("Debug output enabled.");
   trace!("Trace output enabled.");
 
-  if let Err(e) = run(&opt) {
+  if let Err(e) = run(opt) {
     if have_logger {
       error!("Error: {}", e);
     } else {
