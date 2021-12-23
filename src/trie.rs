@@ -1,22 +1,22 @@
 #![warn(clippy::all)]
 
 use fnv::FnvHashMap;
-use std::{hash::Hash, iter::Peekable};
+use std::iter::Peekable;
 
 #[derive(Default)]
-pub struct Trie<K, V> {
+pub struct Trie<V> {
   values: Vec<V>,
-  next: FnvHashMap<K, Self>,
+  next: FnvHashMap<char, Self>,
 }
 
-impl<K, V> Trie<K, V> {
+impl<V> Trie<V> {
   fn add_value(&mut self, value: V) {
     self.values.push(value);
   }
 }
 
-impl<K: Eq + Hash + Default, V: Default> Trie<K, V> {
-  pub fn insert(&mut self, key: &mut impl Iterator<Item = K>, value: V) {
+impl<V: Default> Trie<V> {
+  pub fn insert(&mut self, key: &mut impl Iterator<Item = char>, value: V) {
     match key.next() {
       Some(c) => self.next.entry(c).or_insert_with(Trie::default).insert(key, value),
       None => self.add_value(value),
@@ -24,11 +24,11 @@ impl<K: Eq + Hash + Default, V: Default> Trie<K, V> {
   }
 }
 
-impl<K: Eq + Hash, V> Trie<K, V> {
-  pub fn lookup_exact(&self, keyword: &mut impl Iterator<Item = K>) -> Option<impl Iterator<Item = &V>> {
-    fn helper<'a, K: Eq + Hash, V>(
-      trie: &'a Trie<K, V>,
-      keyword: &mut impl Iterator<Item = K>,
+impl<V> Trie<V> {
+  pub fn lookup_exact(&self, keyword: &mut impl Iterator<Item = char>) -> Option<impl Iterator<Item = &V>> {
+    fn helper<'a, V>(
+      trie: &'a Trie<V>,
+      keyword: &mut impl Iterator<Item = char>,
     ) -> Option<std::slice::Iter<'a, V>> {
       if let Some(c) = keyword.next() {
         let next_trie = trie.next.get(&c)?;
@@ -45,11 +45,11 @@ impl<K: Eq + Hash, V> Trie<K, V> {
     helper(self, keyword)
   }
 
-  pub fn lookup_keyword(&self, keyword: &mut (impl Iterator<Item = K> + Clone)) -> Vec<&V> {
-    fn helper<'a, K: Eq + Hash, V>(
-      trie: &'a Trie<K, V>,
-      original_keyword: impl Iterator<Item = K> + Clone,
-      keyword: &mut Peekable<impl Iterator<Item = K>>,
+  pub fn lookup_keyword(&self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<&V> {
+    fn helper<'a, V>(
+      trie: &'a Trie<V>,
+      original_keyword: impl Iterator<Item = char> + Clone,
+      keyword: &mut Peekable<impl Iterator<Item = char>>,
       res: &mut Vec<&'a V>,
     ) {
       if keyword.peek().is_none() {
@@ -75,9 +75,9 @@ impl<K: Eq + Hash, V> Trie<K, V> {
   }
 }
 
-impl<K, V> Trie<K, V> {
+impl<V> Trie<V> {
   fn all_values(&self) -> Vec<&V> {
-    fn helper<'a, K, V>(trie: &'a Trie<K, V>, res: &mut Vec<&'a V>) {
+    fn helper<'a, V>(trie: &'a Trie<V>, res: &mut Vec<&'a V>) {
       res.extend(&trie.values);
 
       for next in trie.next.values() {
@@ -92,15 +92,15 @@ impl<K, V> Trie<K, V> {
 }
 
 #[cfg(test)]
-impl<K: Eq + Hash, V: Copy> Trie<K, V> {
-  pub fn lookup_exact_as_vec(&self, keyword: &mut impl Iterator<Item = K>) -> Option<Vec<V>> {
+impl<V: Copy> Trie<V> {
+  pub fn lookup_exact_as_vec(&self, keyword: &mut impl Iterator<Item = char>) -> Option<Vec<V>> {
     self.lookup_exact(keyword).map(|i| i.copied().collect())
   }
 }
 
 #[cfg(test)]
-impl<K: Eq + Hash, V: Copy + Ord> Trie<K, V> {
-  pub fn lookup_keyword_nonref(&self, keyword: &mut (impl Iterator<Item = K> + Clone)) -> Vec<V> {
+impl<V: Copy + Ord> Trie<V> {
+  pub fn lookup_keyword_nonref(&self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<V> {
     let mut res: Vec<_> = self.lookup_keyword(keyword).into_iter().copied().collect();
     res.sort_unstable();
     res
@@ -108,7 +108,7 @@ impl<K: Eq + Hash, V: Copy + Ord> Trie<K, V> {
 }
 
 #[cfg(test)]
-impl<K, V: Copy + Ord> Trie<K, V> {
+impl<V: Copy + Ord> Trie<V> {
   pub fn all_values_nonref(&self) -> Vec<V> {
     let mut res: Vec<_> = self.all_values().into_iter().copied().collect();
     res.sort_unstable();
@@ -120,7 +120,7 @@ impl<K, V: Copy + Ord> Trie<K, V> {
 mod tests {
   use super::*;
 
-  fn make_trie() -> Trie<char, usize> {
+  fn make_trie() -> Trie<usize> {
     let mut trie = Trie::default();
     trie.insert(&mut "hello world".chars(), 1);
     trie.insert(&mut "hello tvrank".chars(), 2);
