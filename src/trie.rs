@@ -1,16 +1,17 @@
 #![warn(clippy::all)]
 
 use fnv::FnvHashMap;
+use std::hash::Hash;
 use std::iter::Peekable;
 
 #[derive(Default)]
-pub struct Trie<V> {
+pub struct Trie<K, V> {
   value: Option<V>,
-  next: FnvHashMap<char, Self>,
+  next: FnvHashMap<K, Self>,
 }
 
-impl<V: Default> Trie<V> {
-  pub fn insert(&mut self, key: &mut impl Iterator<Item = char>) -> &mut V {
+impl<K: Eq + Hash + Default, V: Default> Trie<K, V> {
+  pub fn insert(&mut self, key: &mut impl Iterator<Item = K>) -> &mut V {
     match key.next() {
       Some(c) => self.next.entry(c).or_insert_with(Trie::default).insert(key),
       None => self.value.get_or_insert_with(Default::default),
@@ -18,8 +19,8 @@ impl<V: Default> Trie<V> {
   }
 }
 
-impl<V> Trie<V> {
-  pub fn lookup_exact(&self, key: &mut impl Iterator<Item = char>) -> Option<&V> {
+impl<K: Eq + Hash, V> Trie<K, V> {
+  pub fn lookup_exact(&self, key: &mut impl Iterator<Item = K>) -> Option<&V> {
     let mut trie = self;
     for c in key {
       trie = trie.next.get(&c)?;
@@ -27,11 +28,11 @@ impl<V> Trie<V> {
     trie.value.as_ref()
   }
 
-  pub fn lookup_keyword<'a>(&'a self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<&V> {
-    fn helper<'a, V>(
-      trie: &'a Trie<V>,
-      original_keyword: impl Iterator<Item = char> + Clone,
-      keyword: &mut Peekable<impl Iterator<Item = char>>,
+  pub fn lookup_keyword<'a>(&'a self, keyword: &mut (impl Iterator<Item = K> + Clone)) -> Vec<&V> {
+    fn helper<'a, K: Eq + Hash, V>(
+      trie: &'a Trie<K, V>,
+      original_keyword: impl Iterator<Item = K> + Clone,
+      keyword: &mut Peekable<impl Iterator<Item = K>>,
       res: &mut Vec<&'a V>,
     ) {
       if keyword.peek().is_none() {
@@ -56,23 +57,23 @@ impl<V> Trie<V> {
     res
   }
 
-  pub fn values(&self) -> Values<V> {
+  pub fn values(&self) -> Values<K, V> {
     Values::new(self)
   }
 }
 
 
-pub struct Values<'a, V> {
-  stack: Vec<&'a Trie<V>>,
+pub struct Values<'a, K, V> {
+  stack: Vec<&'a Trie<K, V>>,
 }
 
-impl<'a, V> Values<'a, V> {
-  fn new(node: &'a Trie<V>) -> Self {
+impl<'a, K, V> Values<'a, K, V> {
+  fn new(node: &'a Trie<K, V>) -> Self {
     Self { stack: vec![node] }
   }
 }
 
-impl<'a, V> Iterator for Values<'a, V> {
+impl<'a, K, V> Iterator for Values<'a, K, V> {
   type Item = &'a V;
 
   fn next(&mut self) -> Option<Self::Item> {
@@ -90,8 +91,8 @@ impl<'a, V> Iterator for Values<'a, V> {
 mod tests {
   use super::*;
 
-  fn make_trie() -> Trie<Vec<usize>> {
-    let mut trie: Trie<Vec<_>> = Trie::default();
+  fn make_trie() -> Trie<char, Vec<usize>> {
+    let mut trie: Trie<_, Vec<_>> = Trie::default();
     trie.insert(&mut "hello world".chars()).push(1);
     trie.insert(&mut "hello tvrank".chars()).push(2);
     trie.insert(&mut "hello tvrank".chars()).push(3);
