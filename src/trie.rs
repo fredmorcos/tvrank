@@ -1,88 +1,146 @@
 #![warn(clippy::all)]
 
 use fnv::FnvHashMap;
-use std::hash::Hash;
-use std::iter::Peekable;
+use iter::Children;
+use iter::Values;
 
 #[derive(Default)]
-pub struct Trie<K, V> {
+pub struct Trie<V> {
   value: Option<V>,
-  next: FnvHashMap<K, Self>,
+  next: FnvHashMap<char, Self>,
 }
 
-impl<K: Eq + Hash + Default, V: Default> Trie<K, V> {
-  pub fn insert(&mut self, key: &mut impl Iterator<Item = K>) -> &mut V {
-    match key.next() {
-      Some(c) => self.next.entry(c).or_insert_with(Trie::default).insert(key),
-      None => self.value.get_or_insert_with(Default::default),
-    }
+impl<V> Trie<V> {
+  fn child(&self, k: &char) -> Option<&Trie<V>> {
+    self.next.get(k)
+  }
+
+  fn children(&self) -> Children<V> {
+    Children::new(self)
   }
 }
 
-impl<K: Eq + Hash, V> Trie<K, V> {
-  pub fn lookup_exact(&self, key: &mut impl Iterator<Item = K>) -> Option<&V> {
+impl<V: Default> Trie<V> {
+  fn child_or_default(&mut self, k: char) -> &mut Trie<V> {
+    self.next.entry(k).or_insert_with(Default::default)
+  }
+
+  pub fn insert(&mut self, key: &str) -> &mut V {
+    self.insert_iter(key.chars())
+  }
+
+  fn insert_iter(&mut self, key: impl Iterator<Item = char>) -> &mut V {
     let mut trie = self;
     for c in key {
-      trie = trie.next.get(&c)?;
+      trie = trie.child_or_default(c);
+    }
+    trie.value.get_or_insert_with(Default::default)
+  }
+}
+
+impl<V> Trie<V> {
+  pub fn lookup_exact(&self, key: &str) -> Option<&V> {
+    self.lookup_exact_iter(key.chars())
+  }
+
+  fn lookup_exact_iter(&self, key: impl Iterator<Item = char>) -> Option<&V> {
+    let mut trie = self;
+    for c in key {
+      trie = trie.child(&c)?;
     }
     trie.value.as_ref()
   }
 
-  pub fn lookup_keyword<'a>(&'a self, keyword: &mut (impl Iterator<Item = K> + Clone)) -> Vec<&V> {
-    fn helper<'a, K: Eq + Hash, V>(
-      trie: &'a Trie<K, V>,
-      original_keyword: impl Iterator<Item = K> + Clone,
-      keyword: &mut Peekable<impl Iterator<Item = K>>,
+  pub fn lookup_keyword(&self, keyword: &str) -> Vec<&V> {
+    fn helper<'a, V>(
+      trie: &'a Trie<V>,
+      original_keyword: &str,
+      mut keyword: impl Iterator<Item = char>,
       res: &mut Vec<&'a V>,
     ) {
-      if keyword.peek().is_none() {
-        res.extend(trie.values());
-        return;
-      }
-
-      let c = keyword.next().unwrap();
-
-      match trie.next.get(&c) {
-        Some(next_trie) => helper(next_trie, original_keyword, keyword, res),
-        None => {
-          for next_trie in trie.next.values() {
-            helper(next_trie, original_keyword.clone(), &mut original_keyword.clone().peekable(), res);
+      if let Some(c) = keyword.next() {
+        if let Some(next_trie) = trie.child(&c) {
+          helper(next_trie, original_keyword, keyword, res);
+        } else {
+          for next_trie in trie.children() {
+            helper(next_trie, original_keyword, original_keyword.chars(), res);
           }
         }
+      } else {
+        res.extend(trie.values());
       }
     }
 
     let mut res = vec![];
-    helper(self, keyword.clone(), &mut keyword.peekable(), &mut res);
+    helper(self, keyword, keyword.chars(), &mut res);
     res
   }
 
-  pub fn values(&self) -> Values<K, V> {
+  pub fn values(&self) -> Values<V> {
     Values::new(self)
   }
 }
 
+mod iter {
+  use super::Trie;
 
-pub struct Values<'a, K, V> {
-  stack: Vec<&'a Trie<K, V>>,
-}
+  pub struct Values<'a, V> {
+    stack: Vec<&'a Trie<V>>,
+  }
 
-impl<'a, K, V> Values<'a, K, V> {
-  fn new(node: &'a Trie<K, V>) -> Self {
-    Self { stack: vec![node] }
+  impl<'a, V> Values<'a, V> {
+    pub(crate) fn new(node: &'a Trie<V>) -> Self {
+      Self { stack: vec![node] }
+    }
+
+    pub(crate) fn new_empty() -> Self {
+      Self { stack: vec![] }
+    }
+  }
+
+  impl<'a, V> Iterator for Values<'a, V> {
+    type Item = &'a V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+      loop {
+        let trie = self.stack.pop()?;
+        self.stack.extend(trie.children());
+        if trie.value.is_some() {
+          return trie.value.as_ref();
+        }
+      }
+    }
+  }
+
+  use std::collections::hash_map::Values as HashMapValues;
+
+  pub struct Children<'a, V> {
+    iter: HashMapValues<'a, char, Trie<V>>,
+  }
+
+  impl<'a, V> Children<'a, V> {
+    pub(crate) fn new(node: &'a Trie<V>) -> Self {
+      Self { iter: node.next.values() }
+    }
+  }
+
+  impl<'a, V> Iterator for Children<'a, V> {
+    type Item = &'a Trie<V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+      self.iter.next()
+    }
   }
 }
 
-impl<'a, K, V> Iterator for Values<'a, K, V> {
-  type Item = &'a V;
+mod exts {
+  pub trait CharExt {
+    fn is_skippable(&self) -> bool;
+  }
 
-  fn next(&mut self) -> Option<Self::Item> {
-    loop {
-      let trie = self.stack.pop()?;
-      self.stack.extend(trie.next.values());
-      if trie.value.is_some() {
-        return trie.value.as_ref();
-      }
+  impl CharExt for char {
+    fn is_skippable(&self) -> bool {
+      *self == '-' || *self == ':' || *self == '\'' || self.is_whitespace()
     }
   }
 }
@@ -91,28 +149,28 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
 mod tests {
   use super::*;
 
-  fn make_trie() -> Trie<char, Vec<usize>> {
-    let mut trie: Trie<_, Vec<_>> = Trie::default();
-    trie.insert(&mut "hello world".chars()).push(1);
-    trie.insert(&mut "hello tvrank".chars()).push(2);
-    trie.insert(&mut "hello tvrank".chars()).push(3);
-    trie.insert(&mut "bye bye".chars()).push(4);
-    trie.insert(&mut "bye tvrank bye".chars()).push(5);
+  fn make_trie() -> Trie<Vec<usize>> {
+    let mut trie: Trie<Vec<_>> = Trie::default();
+    trie.insert("hello world").push(1);
+    trie.insert("hello tvrank").push(2);
+    trie.insert("hello tvrank").push(3);
+    trie.insert("bye bye").push(4);
+    trie.insert("bye tvrank bye").push(5);
     trie
   }
 
   #[test]
   fn lookup_exact() {
     let trie = make_trie();
-    assert_eq!(trie.lookup_exact(&mut "hello".chars()), None);
-    assert_eq!(trie.lookup_exact(&mut "world".chars()), None);
-    assert_eq!(trie.lookup_exact(&mut "hello world".chars()), Some(&vec![1]));
-    assert_eq!(trie.lookup_exact(&mut "hello tvrank".chars()), Some(&vec![2, 3]));
-    assert_eq!(trie.lookup_exact(&mut "tvrank".chars()), None);
-    assert_eq!(trie.lookup_exact(&mut "bye".chars()), None);
-    assert_eq!(trie.lookup_exact(&mut "bye bye".chars()), Some(&vec![4]));
-    assert_eq!(trie.lookup_exact(&mut "bye tvrank bye".chars()), Some(&vec![5]));
-    assert_eq!(trie.lookup_exact(&mut "notexist".chars()), None);
+    assert_eq!(trie.lookup_exact("hello"), None);
+    assert_eq!(trie.lookup_exact("world"), None);
+    assert_eq!(trie.lookup_exact("hello world"), Some(&vec![1]));
+    assert_eq!(trie.lookup_exact("hello tvrank"), Some(&vec![2, 3]));
+    assert_eq!(trie.lookup_exact("tvrank"), None);
+    assert_eq!(trie.lookup_exact("bye"), None);
+    assert_eq!(trie.lookup_exact("bye bye"), Some(&vec![4]));
+    assert_eq!(trie.lookup_exact("bye tvrank bye"), Some(&vec![5]));
+    assert_eq!(trie.lookup_exact("notexist"), None);
   }
 
   macro_rules! sort_results {
@@ -132,10 +190,12 @@ mod tests {
   #[test]
   fn lookup_keyword() {
     let trie = make_trie();
-    assert_eq!(sort_results!(trie.lookup_keyword(&mut "hello".chars()).into_iter()), vec![1, 2, 3]);
-    assert_eq!(sort_results!(trie.lookup_keyword(&mut "world".chars()).into_iter()), vec![1]);
-    assert_eq!(sort_results!(trie.lookup_keyword(&mut "bye".chars()).into_iter()), vec![4, 5]);
-    assert_eq!(sort_results!(trie.lookup_keyword(&mut "tvrank".chars()).into_iter()), vec![2, 3, 5]);
-    assert_eq!(sort_results!(trie.lookup_keyword(&mut "notexist".chars()).into_iter()), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("hello").into_iter()), vec![1, 2, 3]);
+    assert_eq!(sort_results!(trie.lookup_keyword("world").into_iter()), vec![1]);
+    assert_eq!(sort_results!(trie.lookup_keyword("bye").into_iter()), vec![4, 5]);
+    assert_eq!(sort_results!(trie.lookup_keyword("tvrank").into_iter()), vec![2, 3, 5]);
+    assert_eq!(sort_results!(trie.lookup_keyword("notexist").into_iter()), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("hellofoo").into_iter()), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("byefoo").into_iter()), vec![]);
   }
 }
