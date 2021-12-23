@@ -5,47 +5,29 @@ use std::iter::Peekable;
 
 #[derive(Default)]
 pub struct Trie<V> {
-  values: Vec<V>,
+  value: Option<V>,
   next: FnvHashMap<char, Self>,
 }
 
-impl<V> Trie<V> {
-  fn add_value(&mut self, value: V) {
-    self.values.push(value);
-  }
-}
-
 impl<V: Default> Trie<V> {
-  pub fn insert(&mut self, key: &mut impl Iterator<Item = char>, value: V) {
+  pub fn insert(&mut self, key: &mut impl Iterator<Item = char>) -> &mut V {
     match key.next() {
-      Some(c) => self.next.entry(c).or_insert_with(Trie::default).insert(key, value),
-      None => self.add_value(value),
+      Some(c) => self.next.entry(c).or_insert_with(Trie::default).insert(key),
+      None => self.value.get_or_insert_with(Default::default),
     }
   }
 }
 
 impl<V> Trie<V> {
-  pub fn lookup_exact(&self, key: &mut impl Iterator<Item = char>) -> Option<impl Iterator<Item = &V>> {
-    fn helper<'a, V>(
-      trie: &'a Trie<V>,
-      key: &mut impl Iterator<Item = char>,
-    ) -> Option<std::slice::Iter<'a, V>> {
-      if let Some(c) = key.next() {
-        let next_trie = trie.next.get(&c)?;
-        return helper(next_trie, key);
-      }
-
-      if trie.values.is_empty() {
-        None
-      } else {
-        Some(trie.values.iter())
-      }
+  pub fn lookup_exact(&self, key: &mut impl Iterator<Item = char>) -> Option<&V> {
+    let mut trie = self;
+    for c in key {
+      trie = trie.next.get(&c)?;
     }
-
-    helper(self, key)
+    trie.value.as_ref()
   }
 
-  pub fn lookup_keyword(&self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<&V> {
+  pub fn lookup_keyword<'a>(&'a self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<&V> {
     fn helper<'a, V>(
       trie: &'a Trie<V>,
       original_keyword: impl Iterator<Item = char> + Clone,
@@ -53,7 +35,7 @@ impl<V> Trie<V> {
       res: &mut Vec<&'a V>,
     ) {
       if keyword.peek().is_none() {
-        res.extend(trie.all_values());
+        res.extend(trie.values());
         return;
       }
 
@@ -73,46 +55,34 @@ impl<V> Trie<V> {
     helper(self, keyword.clone(), &mut keyword.peekable(), &mut res);
     res
   }
+
+  pub fn values(&self) -> Values<V> {
+    Values::new(self)
+  }
 }
 
-impl<V> Trie<V> {
-  fn all_values(&self) -> Vec<&V> {
-    fn helper<'a, V>(trie: &'a Trie<V>, res: &mut Vec<&'a V>) {
-      res.extend(&trie.values);
 
-      for next in trie.next.values() {
-        helper(next, res);
+pub struct Values<'a, V> {
+  stack: Vec<&'a Trie<V>>,
+}
+
+impl<'a, V> Values<'a, V> {
+  fn new(node: &'a Trie<V>) -> Self {
+    Self { stack: vec![node] }
+  }
+}
+
+impl<'a, V> Iterator for Values<'a, V> {
+  type Item = &'a V;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    loop {
+      let trie = self.stack.pop()?;
+      self.stack.extend(trie.next.values());
+      if trie.value.is_some() {
+        return trie.value.as_ref();
       }
     }
-
-    let mut res = vec![];
-    helper(self, &mut res);
-    res
-  }
-}
-
-#[cfg(test)]
-impl<V: Copy> Trie<V> {
-  pub fn lookup_exact_as_vec(&self, keyword: &mut impl Iterator<Item = char>) -> Option<Vec<V>> {
-    self.lookup_exact(keyword).map(|i| i.copied().collect())
-  }
-}
-
-#[cfg(test)]
-impl<V: Copy + Ord> Trie<V> {
-  pub fn lookup_keyword_nonref(&self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<V> {
-    let mut res: Vec<_> = self.lookup_keyword(keyword).into_iter().copied().collect();
-    res.sort_unstable();
-    res
-  }
-}
-
-#[cfg(test)]
-impl<V: Copy + Ord> Trie<V> {
-  pub fn all_values_nonref(&self) -> Vec<V> {
-    let mut res: Vec<_> = self.all_values().into_iter().copied().collect();
-    res.sort_unstable();
-    res
   }
 }
 
@@ -120,42 +90,51 @@ impl<V: Copy + Ord> Trie<V> {
 mod tests {
   use super::*;
 
-  fn make_trie() -> Trie<usize> {
-    let mut trie = Trie::default();
-    trie.insert(&mut "hello world".chars(), 1);
-    trie.insert(&mut "hello tvrank".chars(), 2);
-    trie.insert(&mut "hello tvrank".chars(), 3);
-    trie.insert(&mut "bye bye".chars(), 4);
-    trie.insert(&mut "bye tvrank bye".chars(), 5);
+  fn make_trie() -> Trie<Vec<usize>> {
+    let mut trie: Trie<Vec<_>> = Trie::default();
+    trie.insert(&mut "hello world".chars()).push(1);
+    trie.insert(&mut "hello tvrank".chars()).push(2);
+    trie.insert(&mut "hello tvrank".chars()).push(3);
+    trie.insert(&mut "bye bye".chars()).push(4);
+    trie.insert(&mut "bye tvrank bye".chars()).push(5);
     trie
   }
 
   #[test]
   fn lookup_exact() {
     let trie = make_trie();
-    assert_eq!(trie.lookup_exact_as_vec(&mut "hello".chars()), None);
-    assert_eq!(trie.lookup_exact_as_vec(&mut "world".chars()), None);
-    assert_eq!(trie.lookup_exact_as_vec(&mut "hello world".chars()), Some(vec![1]));
-    assert_eq!(trie.lookup_exact_as_vec(&mut "hello tvrank".chars()), Some(vec![2, 3]));
-    assert_eq!(trie.lookup_exact_as_vec(&mut "tvrank".chars()), None);
-    assert_eq!(trie.lookup_exact_as_vec(&mut "bye".chars()), None);
-    assert_eq!(trie.lookup_exact_as_vec(&mut "bye bye".chars()), Some(vec![4]));
-    assert_eq!(trie.lookup_exact_as_vec(&mut "bye tvrank bye".chars()), Some(vec![5]));
+    assert_eq!(trie.lookup_exact(&mut "hello".chars()), None);
+    assert_eq!(trie.lookup_exact(&mut "world".chars()), None);
+    assert_eq!(trie.lookup_exact(&mut "hello world".chars()), Some(&vec![1]));
+    assert_eq!(trie.lookup_exact(&mut "hello tvrank".chars()), Some(&vec![2, 3]));
+    assert_eq!(trie.lookup_exact(&mut "tvrank".chars()), None);
+    assert_eq!(trie.lookup_exact(&mut "bye".chars()), None);
+    assert_eq!(trie.lookup_exact(&mut "bye bye".chars()), Some(&vec![4]));
+    assert_eq!(trie.lookup_exact(&mut "bye tvrank bye".chars()), Some(&vec![5]));
+    assert_eq!(trie.lookup_exact(&mut "notexist".chars()), None);
+  }
+
+  macro_rules! sort_results {
+    ($iter:expr) => {{
+      let mut res = $iter.flatten().copied().collect::<Vec<usize>>();
+      res.sort_unstable();
+      res
+    }};
   }
 
   #[test]
   fn all_values() {
     let trie = make_trie();
-    assert_eq!(trie.all_values_nonref(), vec![1, 2, 3, 4, 5]);
+    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5]);
   }
 
   #[test]
   fn lookup_keyword() {
     let trie = make_trie();
-    assert_eq!(trie.lookup_keyword_nonref(&mut "hello".chars()), vec![1, 2, 3]);
-    assert_eq!(trie.lookup_keyword_nonref(&mut "world".chars()), vec![1]);
-    assert_eq!(trie.lookup_keyword_nonref(&mut "bye".chars()), vec![4, 5]);
-    assert_eq!(trie.lookup_keyword_nonref(&mut "tvrank".chars()), vec![2, 3, 5]);
-    assert_eq!(trie.lookup_keyword_nonref(&mut "notexist".chars()), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword(&mut "hello".chars()).into_iter()), vec![1, 2, 3]);
+    assert_eq!(sort_results!(trie.lookup_keyword(&mut "world".chars()).into_iter()), vec![1]);
+    assert_eq!(sort_results!(trie.lookup_keyword(&mut "bye".chars()).into_iter()), vec![4, 5]);
+    assert_eq!(sort_results!(trie.lookup_keyword(&mut "tvrank".chars()).into_iter()), vec![2, 3, 5]);
+    assert_eq!(sort_results!(trie.lookup_keyword(&mut "notexist".chars()).into_iter()), vec![]);
   }
 }
