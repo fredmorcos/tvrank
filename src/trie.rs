@@ -25,14 +25,14 @@ impl<V: Default> Trie<V> {
 }
 
 impl<V> Trie<V> {
-  pub fn lookup_exact(&self, keyword: &mut impl Iterator<Item = char>) -> Option<impl Iterator<Item = &V>> {
+  pub fn lookup_exact(&self, key: &mut impl Iterator<Item = char>) -> Option<impl Iterator<Item = &V>> {
     fn helper<'a, V>(
       trie: &'a Trie<V>,
-      keyword: &mut impl Iterator<Item = char>,
+      key: &mut impl Iterator<Item = char>,
     ) -> Option<std::slice::Iter<'a, V>> {
-      if let Some(c) = keyword.next() {
+      if let Some(c) = key.next() {
         let next_trie = trie.next.get(&c)?;
-        return helper(next_trie, keyword);
+        return helper(next_trie, key);
       }
 
       if trie.values.is_empty() {
@@ -42,7 +42,7 @@ impl<V> Trie<V> {
       }
     }
 
-    helper(self, keyword)
+    helper(self, key)
   }
 
   pub fn lookup_keyword(&self, keyword: &mut (impl Iterator<Item = char> + Clone)) -> Vec<&V> {
