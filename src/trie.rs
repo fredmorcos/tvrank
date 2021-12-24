@@ -1,10 +1,11 @@
 #![warn(clippy::all)]
 
+use self::iter::KeywordValues;
 use fnv::FnvHashMap;
 use iter::Children;
 use iter::Values;
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq)]
 pub struct Trie<V> {
   value: Option<V>,
   next: FnvHashMap<char, Self>,
@@ -17,6 +18,17 @@ impl<V> Trie<V> {
 
   fn children(&self) -> Children<V> {
     Children::new(self)
+  }
+
+  fn matches(&self, keyword: &str) -> Option<(&Trie<V>, &Trie<V>)> {
+    let mut tries = (self, self);
+    for (index, c) in keyword.chars().enumerate() {
+      tries.1 = tries.1.child(&c)?;
+      if index == 0 {
+        tries.0 = tries.1;
+      }
+    }
+    Some(tries)
   }
 }
 
@@ -51,29 +63,8 @@ impl<V> Trie<V> {
     trie.value.as_ref()
   }
 
-  pub fn lookup_keyword(&self, keyword: &str) -> Vec<&V> {
-    fn helper<'a, V>(
-      trie: &'a Trie<V>,
-      original_keyword: &str,
-      mut keyword: impl Iterator<Item = char>,
-      res: &mut Vec<&'a V>,
-    ) {
-      if let Some(c) = keyword.next() {
-        if let Some(next_trie) = trie.child(&c) {
-          helper(next_trie, original_keyword, keyword, res);
-        } else {
-          for next_trie in trie.children() {
-            helper(next_trie, original_keyword, original_keyword.chars(), res);
-          }
-        }
-      } else {
-        res.extend(trie.values());
-      }
-    }
-
-    let mut res = vec![];
-    helper(self, keyword, keyword.chars(), &mut res);
-    res
+  pub fn lookup_keyword<'k>(&self, keyword: &'k str) -> KeywordValues<'_, 'k, V> {
+    KeywordValues::new(self, keyword)
   }
 
   pub fn values(&self) -> Values<V> {
@@ -131,6 +122,39 @@ mod iter {
       self.iter.next()
     }
   }
+
+  pub struct KeywordValues<'a, 'k, V> {
+    stack: Vec<&'a Trie<V>>,
+    keyword: &'k str,
+    values: Values<'a, V>,
+  }
+
+  impl<'a, 'k, V> KeywordValues<'a, 'k, V> {
+    pub fn new(node: &'a Trie<V>, keyword: &'k str) -> Self {
+      Self { stack: vec![node], keyword, values: Values::new_empty() }
+    }
+  }
+
+  impl<'a, 'k, V: PartialEq> Iterator for KeywordValues<'a, 'k, V> {
+    type Item = &'a V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+      if let Some(value) = self.values.next() {
+        return Some(value);
+      }
+
+      loop {
+        let anchor = self.stack.pop()?;
+        if let Some((start, end)) = anchor.matches(self.keyword) {
+          self.stack.extend(anchor.children().filter(|&t| t != start));
+          self.values = end.values();
+          return self.next();
+        } else {
+          self.stack.extend(anchor.children());
+        };
+      }
+    }
+  }
 }
 
 mod exts {
@@ -156,6 +180,7 @@ mod tests {
     trie.insert("hello tvrank").push(3);
     trie.insert("bye bye").push(4);
     trie.insert("bye tvrank bye").push(5);
+    trie.insert("hello tvrank bye").push(6);
     trie
   }
 
@@ -170,6 +195,7 @@ mod tests {
     assert_eq!(trie.lookup_exact("bye"), None);
     assert_eq!(trie.lookup_exact("bye bye"), Some(&vec![4]));
     assert_eq!(trie.lookup_exact("bye tvrank bye"), Some(&vec![5]));
+    assert_eq!(trie.lookup_exact("hello tvrank bye"), Some(&vec![6]));
     assert_eq!(trie.lookup_exact("notexist"), None);
   }
 
@@ -184,18 +210,18 @@ mod tests {
   #[test]
   fn all_values() {
     let trie = make_trie();
-    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5]);
+    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5, 6]);
   }
 
   #[test]
   fn lookup_keyword() {
     let trie = make_trie();
-    assert_eq!(sort_results!(trie.lookup_keyword("hello").into_iter()), vec![1, 2, 3]);
-    assert_eq!(sort_results!(trie.lookup_keyword("world").into_iter()), vec![1]);
-    assert_eq!(sort_results!(trie.lookup_keyword("bye").into_iter()), vec![4, 5]);
-    assert_eq!(sort_results!(trie.lookup_keyword("tvrank").into_iter()), vec![2, 3, 5]);
-    assert_eq!(sort_results!(trie.lookup_keyword("notexist").into_iter()), vec![]);
-    assert_eq!(sort_results!(trie.lookup_keyword("hellofoo").into_iter()), vec![]);
-    assert_eq!(sort_results!(trie.lookup_keyword("byefoo").into_iter()), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("hello")), vec![1, 2, 3, 6]);
+    assert_eq!(sort_results!(trie.lookup_keyword("world")), vec![1]);
+    assert_eq!(sort_results!(trie.lookup_keyword("bye")), vec![4, 5, 6]);
+    assert_eq!(sort_results!(trie.lookup_keyword("tvrank")), vec![2, 3, 5, 6]);
+    assert_eq!(sort_results!(trie.lookup_keyword("notexist")), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("hellofoo")), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("byefoo")), vec![]);
   }
 }
