@@ -21,49 +21,7 @@ impl<V> Trie<V> {
     Children::new(self)
   }
 
-  fn matches(&self, keyword: &str) -> Vec<(&Trie<V>, &Trie<V>)> {
-    fn helper<'a, V>(
-      start: bool,
-      mut start_trie: &'a Trie<V>,
-      current_trie: &'a Trie<V>,
-      mut keyword: impl Iterator<Item = char> + Clone,
-      res: &mut Vec<(&'a Trie<V>, &'a Trie<V>)>,
-    ) {
-      let current_keyword = keyword.clone();
-
-      let c = match keyword.next() {
-        Some(c) => c,
-        None => {
-          res.push((start_trie, current_trie));
-          return;
-        }
-      };
-
-      if let Some(next_trie) = current_trie.child(&c) {
-        if start {
-          start_trie = next_trie;
-        }
-
-        helper(false, start_trie, next_trie, keyword, res);
-      }
-
-      for c in &['-', ':', '\''] {
-        if let Some(next_trie) = current_trie.child(c) {
-          if start {
-            start_trie = next_trie;
-          }
-
-          helper(false, start_trie, next_trie, current_keyword.clone(), res);
-        }
-      }
-    }
-
-    let mut res = vec![];
-    helper(true, self, self, keyword.chars(), &mut res);
-    res
-  }
-
-  fn matches_iter<'a, 'k>(&'a self, keyword: &'k str) -> Matches<'a, 'k, V> {
+  fn matches<'a, 'k>(&'a self, keyword: &'k str) -> Matches<'a, 'k, V> {
     Matches::new(self, keyword)
   }
 }
@@ -191,7 +149,7 @@ mod iter {
 
       loop {
         let anchor = self.stack.pop()?;
-        let matches = anchor.matches(self.keyword);
+        let matches = anchor.matches(self.keyword).collect::<Vec<_>>();
         if matches.is_empty() {
           self.stack.extend(anchor.children());
         } else {
@@ -236,14 +194,6 @@ mod iter {
   impl<'a, 'k, V> Matches<'a, 'k, V> {
     pub(crate) fn new(node: &'a Trie<V>, keyword: &'k str) -> Self {
       Self { stack: vec![MatchState::new(true, node, node, keyword.chars())] }
-    }
-
-    pub(crate) fn empty() -> Self {
-      Self { stack: vec![] }
-    }
-
-    pub(crate) fn placeholder() -> Self {
-      Self::empty()
     }
   }
 
@@ -351,14 +301,7 @@ mod tests {
   #[test]
   fn matches() {
     let trie = make_trie();
-    assert_eq!(trie.matches("spider-man").len(), 1);
-    assert_eq!(trie.matches("spiderman").len(), 2);
-  }
-
-  #[test]
-  fn matches_iter() {
-    let trie = make_trie();
-    assert_eq!(trie.matches_iter("spider-man").count(), 1);
-    assert_eq!(trie.matches_iter("spiderman").count(), 2);
+    assert_eq!(trie.matches("spider-man").count(), 1);
+    assert_eq!(trie.matches("spiderman").count(), 2);
   }
 }
