@@ -149,12 +149,12 @@ mod iter {
 
       loop {
         let anchor = self.stack.pop()?;
-        let matches = anchor.matches(self.keyword).collect::<Vec<_>>();
-        if matches.is_empty() {
+        self.matches.extend(anchor.matches(self.keyword));
+        if self.matches.is_empty() {
           self.stack.extend(anchor.children());
         } else {
           self.stack.extend(anchor.children().filter(|&t| {
-            for (start, _) in &matches {
+            for (start, _) in &self.matches {
               if t == *start {
                 return false;
               }
@@ -162,7 +162,6 @@ mod iter {
 
             true
           }));
-          self.matches = matches;
           return self.next();
         };
       }
