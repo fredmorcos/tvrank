@@ -1,9 +1,11 @@
 #![warn(clippy::all)]
 
+use self::exts::Letter;
+use self::iter::Children;
 use self::iter::KeywordValues;
+use self::iter::Matches;
+use self::iter::Values;
 use fnv::FnvHashMap;
-use iter::Children;
-use iter::Values;
 
 mod exts {
   pub trait Letter: 'static + Sized {
@@ -37,15 +39,47 @@ impl<V> Trie<V> {
     Children::new(self)
   }
 
-  fn matches(&self, keyword: &str) -> Option<(&Trie<V>, &Trie<V>)> {
-    let mut tries = (self, self);
-    for (index, c) in keyword.chars().enumerate() {
-      tries.1 = tries.1.child(&c)?;
-      if index == 0 {
-        tries.0 = tries.1;
+  fn matches(&self, keyword: &str) -> Vec<(&Trie<V>, &Trie<V>)> {
+    fn helper<'a, V>(
+      start: bool,
+      mut start_trie: &'a Trie<V>,
+      current_trie: &'a Trie<V>,
+      mut keyword: impl Iterator<Item = char> + Clone,
+      res: &mut Vec<(&'a Trie<V>, &'a Trie<V>)>,
+    ) {
+      let current_keyword = keyword.clone();
+
+      let c = match keyword.next() {
+        Some(c) => c,
+        None => {
+          res.push((start_trie, current_trie));
+          return;
+        }
+      };
+
+      if let Some(next_trie) = current_trie.child(&c) {
+        if start {
+          start_trie = next_trie;
+        }
+
+        helper(false, start_trie, next_trie, keyword, res);
+      }
+
+      for c in char::SKIPPABLES {
+        if let Some(next_trie) = current_trie.child(c) {
+          if start {
+            start_trie = next_trie;
+          }
+
+          helper(false, start_trie, next_trie, current_keyword.clone(), res);
+        }
       }
     }
-    Some(tries)
+
+    let mut res = vec![];
+    helper(true, self, self, keyword.chars(), &mut res);
+    res
+  }
   }
 }
 
@@ -144,11 +178,12 @@ mod iter {
     stack: Vec<&'a Trie<V>>,
     keyword: &'k str,
     values: Values<'a, V>,
+    matches: Vec<(&'a Trie<V>, &'a Trie<V>)>,
   }
 
   impl<'a, 'k, V> KeywordValues<'a, 'k, V> {
     pub fn new(node: &'a Trie<V>, keyword: &'k str) -> Self {
-      Self { stack: vec![node], keyword, values: Values::new_empty() }
+      Self { stack: vec![node], keyword, values: Values::new_empty(), matches: vec![] }
     }
   }
 
@@ -160,19 +195,32 @@ mod iter {
         return Some(value);
       }
 
+      if let Some((_, end)) = self.matches.pop() {
+        self.values = end.values();
+        return self.next();
+      };
+
       loop {
         let anchor = self.stack.pop()?;
-        if let Some((start, end)) = anchor.matches(self.keyword) {
-          self.stack.extend(anchor.children().filter(|&t| t != start));
-          self.values = end.values();
-          return self.next();
-        } else {
+        let matches = anchor.matches(self.keyword);
+        if matches.is_empty() {
           self.stack.extend(anchor.children());
+        } else {
+          self.stack.extend(anchor.children().filter(|&t| {
+            for (start, _) in &matches {
+              if t == *start {
+                return false;
+              }
+            }
+
+            true
+          }));
+          self.matches = matches;
+          return self.next();
         };
       }
     }
   }
-}
 
   }
 
@@ -192,6 +240,8 @@ mod tests {
     trie.insert("bye bye").push(4);
     trie.insert("bye tvrank bye").push(5);
     trie.insert("hello tvrank bye").push(6);
+    trie.insert("spider-man").push(7);
+    trie.insert("spiderman").push(8);
     trie
   }
 
@@ -221,7 +271,7 @@ mod tests {
   #[test]
   fn all_values() {
     let trie = make_trie();
-    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5, 6]);
+    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5, 6, 7, 8]);
   }
 
   #[test]
@@ -234,5 +284,12 @@ mod tests {
     assert_eq!(sort_results!(trie.lookup_keyword("notexist")), vec![]);
     assert_eq!(sort_results!(trie.lookup_keyword("hellofoo")), vec![]);
     assert_eq!(sort_results!(trie.lookup_keyword("byefoo")), vec![]);
+  }
+
+  #[test]
+  fn matches() {
+    let trie = make_trie();
+    assert_eq!(trie.matches("spider-man").len(), 1);
+    assert_eq!(trie.matches("spiderman").len(), 2);
   }
 }
