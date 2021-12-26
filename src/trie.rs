@@ -1,28 +1,10 @@
 #![warn(clippy::all)]
 
-use self::exts::Letter;
 use self::iter::Children;
 use self::iter::KeywordValues;
 use self::iter::Matches;
 use self::iter::Values;
 use fnv::FnvHashMap;
-
-mod exts {
-  pub trait Letter: 'static + Sized {
-    type Composition: ?Sized;
-    const SKIPPABLES: &'static [Self];
-  }
-
-  impl Letter for char {
-    type Composition = str;
-    const SKIPPABLES: &'static [Self] = &['-', ':', '\''];
-  }
-
-  impl Letter for u8 {
-    type Composition = [u8];
-    const SKIPPABLES: &'static [Self] = &[b'-', b':', b'\''];
-  }
-}
 
 #[derive(Default, PartialEq, Eq)]
 pub struct Trie<V> {
@@ -65,7 +47,7 @@ impl<V> Trie<V> {
         helper(false, start_trie, next_trie, keyword, res);
       }
 
-      for c in char::SKIPPABLES {
+      for c in &['-', ':', '\''] {
         if let Some(next_trie) = current_trie.child(c) {
           if start {
             start_trie = next_trie;
