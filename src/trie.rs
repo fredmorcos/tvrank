@@ -5,6 +5,23 @@ use fnv::FnvHashMap;
 use iter::Children;
 use iter::Values;
 
+mod exts {
+  pub trait Letter: 'static + Sized {
+    type Composition: ?Sized;
+    const SKIPPABLES: &'static [Self];
+  }
+
+  impl Letter for char {
+    type Composition = str;
+    const SKIPPABLES: &'static [Self] = &['-', ':', '\''];
+  }
+
+  impl Letter for u8 {
+    type Composition = [u8];
+    const SKIPPABLES: &'static [Self] = &[b'-', b':', b'\''];
+  }
+}
+
 #[derive(Default, PartialEq, Eq)]
 pub struct Trie<V> {
   value: Option<V>,
@@ -157,14 +174,8 @@ mod iter {
   }
 }
 
-mod exts {
-  pub trait CharExt {
-    fn is_skippable(&self) -> bool;
   }
 
-  impl CharExt for char {
-    fn is_skippable(&self) -> bool {
-      *self == '-' || *self == ':' || *self == '\'' || self.is_whitespace()
     }
   }
 }
