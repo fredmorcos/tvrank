@@ -135,8 +135,12 @@ mod iter {
       Self { stack: vec![node] }
     }
 
-    pub(crate) fn new_empty() -> Self {
+    pub(crate) fn empty() -> Self {
       Self { stack: vec![] }
+    }
+
+    pub(crate) fn placeholder() -> Self {
+      Self::empty()
     }
   }
 
@@ -183,7 +187,7 @@ mod iter {
 
   impl<'a, 'k, V> KeywordValues<'a, 'k, V> {
     pub fn new(node: &'a Trie<V>, keyword: &'k str) -> Self {
-      Self { stack: vec![node], keyword, values: Values::new_empty(), matches: vec![] }
+      Self { stack: vec![node], keyword, values: Values::placeholder(), matches: vec![] }
     }
   }
 
