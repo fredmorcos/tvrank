@@ -283,7 +283,7 @@ mod iter {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use super::Trie;
 
   fn make_trie() -> Trie<Vec<usize>> {
     let mut trie: Trie<Vec<_>> = Trie::default();
@@ -295,6 +295,7 @@ mod tests {
     trie.insert("hello tvrank bye").push(6);
     trie.insert("spider-man").push(7);
     trie.insert("spiderman").push(8);
+    trie.insert("él spidér-man").push(9);
     trie
   }
 
@@ -324,7 +325,7 @@ mod tests {
   #[test]
   fn all_values() {
     let trie = make_trie();
-    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(sort_results!(trie.values()), vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
   }
 
   #[test]
@@ -337,6 +338,10 @@ mod tests {
     assert_eq!(sort_results!(trie.lookup_keyword("notexist")), vec![]);
     assert_eq!(sort_results!(trie.lookup_keyword("hellofoo")), vec![]);
     assert_eq!(sort_results!(trie.lookup_keyword("byefoo")), vec![]);
+    assert_eq!(sort_results!(trie.lookup_keyword("spider-man")), vec![7]);
+    assert_eq!(sort_results!(trie.lookup_keyword("spiderman")), vec![7, 8]);
+    assert_eq!(sort_results!(trie.lookup_keyword("spidér-man")), vec![9]);
+    assert_eq!(sort_results!(trie.lookup_keyword("spidérman")), vec![9]);
   }
 
   #[test]
@@ -344,5 +349,7 @@ mod tests {
     let trie = make_trie();
     assert_eq!(trie.matches("spider-man").count(), 1);
     assert_eq!(trie.matches("spiderman").count(), 2);
+    assert_eq!(trie.matches("él spidér-man").count(), 1);
+    assert_eq!(trie.matches("él spidérman").count(), 1);
   }
 }
