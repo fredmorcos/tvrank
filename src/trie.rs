@@ -4,6 +4,8 @@ use self::iter::Children;
 use self::iter::KeywordValues;
 use self::iter::Matches;
 use self::iter::Values;
+use deepsize::Context;
+use deepsize::DeepSizeOf;
 use nohash::IntMap;
 
 #[derive(PartialEq, Eq)]
@@ -11,6 +13,19 @@ pub struct Trie<V> {
   value: Option<V>,
   next_ascii: Box<[Option<Self>; 95]>,
   next: IntMap<u32, Self>,
+}
+
+impl<V: DeepSizeOf> DeepSizeOf for Trie<V> {
+  fn deep_size_of_children(&self, context: &mut Context) -> usize {
+    let value_size = match &self.value {
+      Some(v) => v.deep_size_of_children(context),
+      None => 0,
+    };
+
+    let next_sizes = self.children().fold(0, |sum, child| sum + child.deep_size_of_children(context));
+
+    value_size + next_sizes
+  }
 }
 
 impl<V> Default for Trie<V> {
