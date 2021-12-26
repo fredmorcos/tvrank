@@ -4,13 +4,13 @@ use self::iter::Children;
 use self::iter::KeywordValues;
 use self::iter::Matches;
 use self::iter::Values;
-use fnv::FnvHashMap;
+use nohash::IntMap;
 
 #[derive(PartialEq, Eq)]
 pub struct Trie<V> {
   value: Option<V>,
   next_ascii: Box<[Option<Self>; 95]>,
-  next: FnvHashMap<char, Self>,
+  next: IntMap<u32, Self>,
 }
 
 impl<V> Default for Trie<V> {
@@ -43,7 +43,7 @@ impl<V> Trie<V> {
     if Self::char_is_ascii(k) {
       unsafe { self.next_ascii.get_unchecked(Self::index_from_char(k)) }.as_ref()
     } else {
-      self.next.get(&k)
+      self.next.get(&(k as u32))
     }
   }
 
@@ -62,7 +62,7 @@ impl<V: Default> Trie<V> {
       let cell = unsafe { self.next_ascii.get_unchecked_mut(Self::index_from_char(k)) };
       cell.get_or_insert_with(Default::default)
     } else {
-      self.next.entry(k).or_insert_with(Default::default)
+      self.next.entry(k as u32).or_insert_with(Default::default)
     }
   }
 
@@ -140,7 +140,7 @@ mod iter {
 
   pub(crate) struct Children<'a, V> {
     iter_ascii: std::slice::Iter<'a, Option<Trie<V>>>,
-    iter: HashMapValues<'a, char, Trie<V>>,
+    iter: HashMapValues<'a, u32, Trie<V>>,
   }
 
   impl<'a, V> Children<'a, V> {
