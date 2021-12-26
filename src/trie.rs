@@ -62,6 +62,9 @@ impl<V> Trie<V> {
     helper(true, self, self, keyword.chars(), &mut res);
     res
   }
+
+  fn matches_iter<'a, 'k>(&'a self, keyword: &'k str) -> Matches<'a, 'k, V> {
+    Matches::new(self, keyword)
   }
 }
 
@@ -208,8 +211,81 @@ mod iter {
     }
   }
 
+  struct MatchState<'a, 'k, V> {
+    start: bool,
+    start_trie: &'a Trie<V>,
+    current_trie: &'a Trie<V>,
+    keyword: std::str::Chars<'k>,
   }
 
+  impl<'a, 'k, V> MatchState<'a, 'k, V> {
+    fn new(
+      start: bool,
+      start_trie: &'a Trie<V>,
+      current_trie: &'a Trie<V>,
+      keyword: std::str::Chars<'k>,
+    ) -> Self {
+      Self { start, start_trie, current_trie, keyword }
+    }
+  }
+
+  pub(crate) struct Matches<'a, 'k, V> {
+    stack: Vec<MatchState<'a, 'k, V>>,
+  }
+
+  impl<'a, 'k, V> Matches<'a, 'k, V> {
+    pub(crate) fn new(node: &'a Trie<V>, keyword: &'k str) -> Self {
+      Self { stack: vec![MatchState::new(true, node, node, keyword.chars())] }
+    }
+
+    pub(crate) fn empty() -> Self {
+      Self { stack: vec![] }
+    }
+
+    pub(crate) fn placeholder() -> Self {
+      Self::empty()
+    }
+  }
+
+  impl<'a, 'k, V> Iterator for Matches<'a, 'k, V> {
+    type Item = (&'a Trie<V>, &'a Trie<V>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+      let mut state = self.stack.pop()?;
+
+      while let Some(c) = state.keyword.next() {
+        let found = if let Some(next_trie) = state.current_trie.child(&c) {
+          if state.start {
+            state.start_trie = next_trie;
+          }
+
+          state.current_trie = next_trie;
+          state.start = false;
+          true
+        } else {
+          false
+        };
+
+        for skippable in &['-', ':', '\''] {
+          if let Some(next_trie) = state.current_trie.child(skippable) {
+            let start = state.start_trie;
+            let keyword = state.keyword.clone();
+            let mut new_state = MatchState::new(false, start, next_trie, keyword);
+
+            if state.start {
+              new_state.start_trie = next_trie;
+            }
+
+            self.stack.push(new_state);
+          }
+        }
+
+        if !found {
+          return self.next();
+        }
+      }
+
+      Some((state.start_trie, state.current_trie))
     }
   }
 }
@@ -277,5 +353,12 @@ mod tests {
     let trie = make_trie();
     assert_eq!(trie.matches("spider-man").len(), 1);
     assert_eq!(trie.matches("spiderman").len(), 2);
+  }
+
+  #[test]
+  fn matches_iter() {
+    let trie = make_trie();
+    assert_eq!(trie.matches_iter("spider-man").count(), 1);
+    assert_eq!(trie.matches_iter("spiderman").count(), 2);
   }
 }
