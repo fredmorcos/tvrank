@@ -95,6 +95,12 @@ impl TitleType {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Into, DeepSizeOf)]
 pub struct TitleId<'a>(&'a [u8]);
 
+impl<'a> TitleId<'a> {
+  pub fn as_str(&self) -> &str {
+    unsafe { std::str::from_utf8_unchecked(self.0) }
+  }
+}
+
 impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
   type Error = Box<dyn Error>;
 
