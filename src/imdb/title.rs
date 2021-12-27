@@ -135,7 +135,7 @@ impl Ord for TitleId<'_> {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DeepSizeOf)]
+#[derive(Debug, Clone, DeepSizeOf)]
 pub(crate) struct TitleBasics {
   pub(crate) title_id: TitleId<'static>,
   pub(crate) title_type: TitleType,
@@ -148,11 +148,27 @@ pub(crate) struct TitleBasics {
   pub(crate) genres: Genres,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DeepSizeOf)]
+impl PartialEq for TitleBasics {
+  fn eq(&self, other: &Self) -> bool {
+    self.title_id == other.title_id
+  }
+}
+
+impl Eq for TitleBasics {}
+
+#[derive(Debug, Clone, DeepSizeOf)]
 pub struct Title<'basics, 'ratings> {
   basics: &'basics TitleBasics,
   rating: Option<&'ratings (u8, u64)>,
 }
+
+impl PartialEq for Title<'_, '_> {
+  fn eq(&self, other: &Self) -> bool {
+    self.basics == other.basics
+  }
+}
+
+impl Eq for Title<'_, '_> {}
 
 impl<'basics, 'ratings> Title<'basics, 'ratings> {
   pub(crate) fn new(basics: &'basics TitleBasics, rating: Option<&'ratings (u8, u64)>) -> Self {
