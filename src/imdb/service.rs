@@ -2,7 +2,6 @@
 
 use super::basics::Basics;
 use super::error::Err;
-use super::keywords::KeywordSet;
 use super::ratings::Ratings;
 use super::storage::Storage;
 use super::title::{Title, TitleId};
@@ -288,10 +287,10 @@ impl Service {
     }
   }
 
-  fn query_by_keywords(
-    &self,
-    keywords: KeywordSet,
-    query_fn: for<'a, 'b> fn(KeywordSet, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
+  fn query_by_keywords<'a>(
+    &'a self,
+    keywords: &'a [&str],
+    query_fn: fn(&'a [&str], &'a Basics, &'a Ratings, &TitleResults<'a, 'a>),
   ) -> Res<Vec<Title>> {
     let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
 
@@ -308,7 +307,6 @@ impl Service {
 
         dbs = rem;
 
-        let keywords = keywords.clone();
         scope.spawn(move |_| query_fn(keywords, db, &self.ratings_db, &res));
       }
     });
@@ -322,12 +320,12 @@ impl Service {
     Ok(res)
   }
 
-  fn movies_by_keywords(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      keywords: KeywordSet,
+  fn movies_by_keywords<'a>(&'a self, keywords: &'a [&str]) -> Res<Vec<Title<'a, 'a>>> {
+    fn query_fn<'a>(
+      keywords: &'a [&str],
       basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
+      ratings: &'a Ratings,
+      res: &TitleResults<'a, 'a>,
     ) {
       let local_res = basics
         .movies_by_keyword(keywords)
@@ -339,12 +337,12 @@ impl Service {
     self.query_by_keywords(keywords, query_fn)
   }
 
-  fn series_by_keywords(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      keywords: KeywordSet,
+  fn series_by_keywords<'a>(&'a self, keywords: &'a [&str]) -> Res<Vec<Title<'a, 'a>>> {
+    fn query_fn<'a>(
+      keywords: &'a [&str],
       basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
+      ratings: &'a Ratings,
+      res: &TitleResults<'a, 'a>,
     ) {
       let local_res = basics
         .series_by_keyword(keywords)
@@ -356,7 +354,7 @@ impl Service {
     self.query_by_keywords(keywords, query_fn)
   }
 
-  pub fn by_keywords(&self, query_type: QueryType, keywords: KeywordSet) -> Res<Vec<Title>> {
+  pub fn by_keywords<'a>(&'a self, query_type: QueryType, keywords: &'a [&str]) -> Res<Vec<Title<'a, 'a>>> {
     match query_type {
       QueryType::Movies => self.movies_by_keywords(keywords),
       QueryType::Series => self.series_by_keywords(keywords),

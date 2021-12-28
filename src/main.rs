@@ -19,7 +19,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbKeywordSet, ImdbQueryType, ImdbStorage, ImdbTitle, ImdbTitleId};
+use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage, ImdbTitle, ImdbTitleId};
 use tvrank::Res;
 use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
@@ -29,8 +29,6 @@ use walkdir::WalkDir;
 enum TvRankErr {
   #[display(fmt = "Could not find cache directory")]
   CacheDir,
-  #[display(fmt = "Short, invalid or empty keywords")]
-  BadKeywords,
 }
 
 impl TvRankErr {
@@ -293,7 +291,7 @@ fn imdb_lookup_by_title_year<'a>(
 }
 
 fn imdb_lookup_by_keywords<'a>(
-  keywords: ImdbKeywordSet,
+  keywords: &'a [&str],
   imdb: &'a Imdb,
   query_type: ImdbQueryType,
   results: &mut Vec<ImdbTitle<'a, 'a>>,
@@ -331,16 +329,20 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
     (name, Some(year))
   } else {
     warn!("Going to use `{}` as keywords for search query", title);
-    let keywords_map = ImdbKeywordSet::try_from(title).map_err(|_| TvRankErr::BadKeywords)?;
-    info!("Keywords: {}", keywords_map);
-    keywords = Some(keywords_map);
+    keywords = Some(
+      title
+        .split_whitespace()
+        .filter(|&keyword| keyword.len() > 2)
+        .collect::<Vec<_>>(),
+    );
+    info!("Keywords: {:?}", keywords);
     (title, None)
   };
 
   let mut movies_results = vec![];
 
   if let Some(keywords) = &keywords {
-    imdb_lookup_by_keywords(keywords.clone(), imdb, ImdbQueryType::Movies, &mut movies_results)?;
+    imdb_lookup_by_keywords(keywords, imdb, ImdbQueryType::Movies, &mut movies_results)?;
   } else {
     imdb_lookup_by_title_year(name, year, imdb, ImdbQueryType::Movies, &mut movies_results)?;
   }
@@ -373,7 +375,7 @@ fn single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_year: b
 
   let mut series_results = vec![];
   if let Some(keywords) = &keywords {
-    imdb_lookup_by_keywords(keywords.clone(), imdb, ImdbQueryType::Series, &mut series_results)?;
+    imdb_lookup_by_keywords(keywords, imdb, ImdbQueryType::Series, &mut series_results)?;
   } else {
     imdb_lookup_by_title_year(name, year, imdb, ImdbQueryType::Series, &mut series_results)?;
   }
