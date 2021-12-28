@@ -71,7 +71,7 @@ impl<V> Trie<V> {
   }
 }
 
-impl<V: Default> Trie<V> {
+impl<V> Trie<V> {
   fn child_or_default(&mut self, k: char) -> &mut Trie<V> {
     if Self::char_is_ascii(k) {
       let cell = unsafe { self.next_ascii.get_unchecked_mut(Self::index_from_char(k)) };
@@ -81,16 +81,16 @@ impl<V: Default> Trie<V> {
     }
   }
 
-  pub fn insert(&mut self, key: &str) -> &mut V {
-    self.insert_iter(key.chars())
+  pub fn insert(&mut self, key: &str, value: V) -> &mut V {
+    self.insert_iter(key.chars(), value)
   }
 
-  fn insert_iter(&mut self, key: impl Iterator<Item = char>) -> &mut V {
+  fn insert_iter(&mut self, key: impl Iterator<Item = char>, value: V) -> &mut V {
     let mut trie = self;
     for c in key {
       trie = trie.child_or_default(c);
     }
-    trie.value.get_or_insert_with(Default::default)
+    trie.value.get_or_insert(value)
   }
 }
 
@@ -302,15 +302,15 @@ mod tests {
 
   fn make_trie() -> Trie<Vec<usize>> {
     let mut trie: Trie<Vec<_>> = Trie::default();
-    trie.insert("hello world").push(1);
-    trie.insert("hello tvrank").push(2);
-    trie.insert("hello tvrank").push(3);
-    trie.insert("bye bye").push(4);
-    trie.insert("bye tvrank bye").push(5);
-    trie.insert("hello tvrank bye").push(6);
-    trie.insert("spider-man").push(7);
-    trie.insert("spiderman").push(8);
-    trie.insert("él spidér-man").push(9);
+    trie.insert("hello world", vec![]).push(1);
+    trie.insert("hello tvrank", vec![]).push(2);
+    trie.insert("hello tvrank", vec![]).push(3);
+    trie.insert("bye bye", vec![]).push(4);
+    trie.insert("bye tvrank bye", vec![]).push(5);
+    trie.insert("hello tvrank bye", vec![]).push(6);
+    trie.insert("spider-man", vec![]).push(7);
+    trie.insert("spiderman", vec![]).push(8);
+    trie.insert("él spidér-man", vec![]).push(9);
     trie
   }
 
