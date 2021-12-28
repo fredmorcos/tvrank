@@ -32,12 +32,12 @@ fn main() -> tvrank::Res<()> {
   )?;
   let imdb = Imdb::new(8, &storage)?;
 
-  let name = "city of god";
-  let year = Some(2002);
+  let title = "city of god";
+  let year = 2002;
 
-  println!("Matches for {} and {:?}:", name, year);
+  println!("Matches for {} and {:?}:", title, year);
 
-  for title in imdb.by_title(ImdbQueryType::Movies, name, year)? {
+  for title in imdb.by_title_and_year(title, year, ImdbQueryType::Movies)? {
     let id = title.title_id();
 
     println!("ID: {}", id);

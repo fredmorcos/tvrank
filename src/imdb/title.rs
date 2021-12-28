@@ -1,11 +1,17 @@
 #![warn(clippy::all)]
 
 use super::error::Err;
-use crate::imdb::genre::Genres;
+use super::genre::{Genre, Genres};
+use atoi::atoi;
 use deepsize::DeepSizeOf;
-use derive_more::{Display, Into};
+use derive_more::Display;
 use enum_utils::FromStr;
-use std::{cmp::Ordering, error::Error, fmt, time::Duration};
+use std::borrow::Cow;
+use std::error::Error;
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, DeepSizeOf)]
 #[enumeration(rename_all = "camelCase")]
@@ -92,51 +98,47 @@ impl TitleType {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Into, DeepSizeOf)]
-pub struct TitleId<'a>(&'a [u8]);
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct TitleId<'a> {
+  string: Cow<'a, str>,
+  num: usize,
+}
 
-impl<'a> TitleId<'a> {
-  pub fn as_str(&self) -> &str {
-    unsafe { std::str::from_utf8_unchecked(self.0) }
+impl AsRef<usize> for TitleId<'_> {
+  fn as_ref(&self) -> &usize {
+    &self.num
   }
 }
 
-impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
+impl AsRef<str> for TitleId<'_> {
+  fn as_ref(&self) -> &str {
+    &self.string
+  }
+}
+
+impl<'a> TryFrom<Cow<'a, str>> for TitleId<'a> {
   type Error = Box<dyn Error>;
 
-  fn try_from(id: &'a [u8]) -> Result<Self, Self::Error> {
-    if &id[0..=1] != super::parsing::TT {
-      return Err::id(id);
+  fn try_from(string: Cow<'a, str>) -> Result<Self, Self::Error> {
+    if &string[0..=1] != super::parsing::TT {
+      return Err::id(string.into_owned());
     }
 
-    Ok(TitleId(id))
+    let num = string[2..].parse::<usize>()?;
+
+    Ok(TitleId { string, num })
   }
 }
 
 impl fmt::Display for TitleId<'_> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    for &d in self.0.iter() {
-      write!(f, "{}", char::from(d))?;
-    }
-
-    Ok(())
+    write!(f, "{}", self.string)
   }
 }
 
-impl PartialOrd for TitleId<'_> {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    self.0.partial_cmp(other.0)
-  }
-}
-
-impl Ord for TitleId<'_> {
-  fn cmp(&self, other: &Self) -> Ordering {
-    self.0.cmp(other.0)
-  }
-}
-
-#[derive(Debug, Clone, DeepSizeOf)]
+#[derive(Debug, Clone)]
 pub(crate) struct TitleBasics {
+  pub(crate) unique_id: usize,
   pub(crate) title_id: TitleId<'static>,
   pub(crate) title_type: TitleType,
   pub(crate) primary_title: &'static str,
@@ -148,15 +150,113 @@ pub(crate) struct TitleBasics {
   pub(crate) genres: Genres,
 }
 
+impl TryFrom<&'static [u8]> for TitleBasics {
+  type Error = Box<dyn Error>;
+
+  fn try_from(line: &'static [u8]) -> Result<Self, Self::Error> {
+    let mut iter = line.split(|&b| b == super::parsing::TAB);
+
+    macro_rules! next {
+      () => {{
+        iter.next().ok_or(Err::Eof)?
+      }};
+    }
+
+    let title_id = Cow::from(unsafe { std::str::from_utf8_unchecked(next!()) });
+    let title_id = TitleId::try_from(title_id)?;
+
+    let title_type = {
+      let title_type = next!();
+      let title_type = unsafe { std::str::from_utf8_unchecked(title_type) };
+      TitleType::from_str(title_type).map_err(|_| Err::TitleType)?
+    };
+
+    if !title_type.is_movie() && !title_type.is_series() {
+      return Err(Box::new(Err::UnsupportedTitleType));
+    }
+
+    let primary_title = unsafe { std::str::from_utf8_unchecked(next!()) };
+    let original_title = unsafe { std::str::from_utf8_unchecked(next!()) };
+
+    let is_adult = {
+      let is_adult = next!();
+      match is_adult {
+        super::parsing::ZERO => false,
+        super::parsing::ONE => true,
+        _ => return Err::adult(),
+      }
+    };
+
+    let start_year = {
+      let start_year = next!();
+      match start_year {
+        super::parsing::NOT_AVAIL => None,
+        start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
+      }
+    };
+
+    let end_year = {
+      let end_year = next!();
+      match end_year {
+        super::parsing::NOT_AVAIL => None,
+        end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
+      }
+    };
+
+    let runtime_minutes = {
+      let runtime_minutes = next!();
+      match runtime_minutes {
+        super::parsing::NOT_AVAIL => None,
+        runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
+      }
+    };
+
+    let genres = {
+      let genres = next!();
+      let mut result = Genres::default();
+
+      if genres != super::parsing::NOT_AVAIL {
+        let genres = genres.split(|&b| b == super::parsing::COMMA);
+        for genre in genres {
+          let genre = unsafe { std::str::from_utf8_unchecked(genre) };
+          let genre = Genre::from_str(genre).map_err(|_| Err::Genre)?;
+          result.add_genre(genre);
+        }
+      }
+
+      result
+    };
+
+    Ok(TitleBasics {
+      unique_id: 0,
+      title_id,
+      title_type,
+      primary_title,
+      original_title,
+      is_adult,
+      start_year,
+      end_year,
+      runtime_minutes,
+      genres,
+    })
+  }
+}
+
 impl PartialEq for TitleBasics {
   fn eq(&self, other: &Self) -> bool {
-    self.title_id == other.title_id
+    self.unique_id == other.unique_id
   }
 }
 
 impl Eq for TitleBasics {}
 
-#[derive(Debug, Clone, DeepSizeOf)]
+impl Hash for TitleBasics {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.unique_id.hash(state);
+  }
+}
+
+#[derive(Debug, Clone)]
 pub struct Title<'basics, 'ratings> {
   basics: &'basics TitleBasics,
   rating: Option<&'ratings (u8, u64)>,
@@ -175,8 +275,8 @@ impl<'basics, 'ratings> Title<'basics, 'ratings> {
     Self { basics, rating }
   }
 
-  pub fn title_id(&self) -> TitleId {
-    self.basics.title_id
+  pub fn title_id(&self) -> &TitleId {
+    &self.basics.title_id
   }
 
   pub fn title_type(&self) -> TitleType {
