@@ -11,7 +11,6 @@ use nohash::IntMap;
 #[derive(PartialEq, Eq)]
 pub struct Trie<V> {
   value: Option<V>,
-  next_ascii: Box<[Option<Self>; 95]>,
   next: IntMap<u32, Self>,
 }
 
@@ -30,36 +29,13 @@ impl<V: DeepSizeOf> DeepSizeOf for Trie<V> {
 
 impl<V> Default for Trie<V> {
   fn default() -> Self {
-    Self {
-      value: Default::default(),
-      next_ascii: Box::new([
-        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-        None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-        None, None, None, None, None, None, None, None, None, None,
-      ]),
-      next: Default::default(),
-    }
+    Self { value: Default::default(), next: Default::default() }
   }
 }
 
 impl<V> Trie<V> {
-  fn char_is_ascii(c: char) -> bool {
-    c.is_ascii_graphic() || c == ' '
-  }
-
-  fn index_from_char(c: char) -> usize {
-    (c as usize) - 32
-  }
-
   fn child(&self, k: char) -> Option<&Trie<V>> {
-    if Self::char_is_ascii(k) {
-      unsafe { self.next_ascii.get_unchecked(Self::index_from_char(k)) }.as_ref()
-    } else {
-      self.next.get(&(k as u32))
-    }
+    self.next.get(&(k as u32))
   }
 
   fn children(&self) -> Children<V> {
@@ -73,12 +49,7 @@ impl<V> Trie<V> {
 
 impl<V> Trie<V> {
   fn child_or_default(&mut self, k: char) -> &mut Trie<V> {
-    if Self::char_is_ascii(k) {
-      let cell = unsafe { self.next_ascii.get_unchecked_mut(Self::index_from_char(k)) };
-      cell.get_or_insert_with(Default::default)
-    } else {
-      self.next.entry(k as u32).or_insert_with(Default::default)
-    }
+    self.next.entry(k as u32).or_insert_with(Default::default)
   }
 
   pub fn insert(&mut self, key: &str, value: V) -> &mut V {
@@ -154,13 +125,12 @@ mod iter {
   use std::collections::hash_map::Values as HashMapValues;
 
   pub(crate) struct Children<'a, V> {
-    iter_ascii: std::slice::Iter<'a, Option<Trie<V>>>,
     iter: HashMapValues<'a, u32, Trie<V>>,
   }
 
   impl<'a, V> Children<'a, V> {
     pub(crate) fn new(node: &'a Trie<V>) -> Self {
-      Self { iter_ascii: node.next_ascii.iter(), iter: node.next.values() }
+      Self { iter: node.next.values() }
     }
   }
 
@@ -168,13 +138,7 @@ mod iter {
     type Item = &'a Trie<V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-      'LOOP: loop {
-        match self.iter_ascii.next() {
-          Some(Some(next_trie)) => return Some(next_trie),
-          Some(None) => continue 'LOOP,
-          None => return self.iter.next(),
-        }
-      }
+      self.iter.next()
     }
   }
 
