@@ -5,13 +5,13 @@ use super::title::TitleId;
 use crate::Res;
 use atoi::atoi;
 use deepsize::DeepSizeOf;
-use nohash::IntMap;
+use fnv::FnvHashMap;
 use std::borrow::Cow;
 use std::str::FromStr;
 
 #[derive(Default, DeepSizeOf)]
 pub(crate) struct Ratings {
-  ratings: IntMap<usize, (u8, u64)>,
+  ratings: FnvHashMap<usize, (u8, u64)>,
 }
 
 impl Ratings {

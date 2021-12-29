@@ -52,7 +52,6 @@ deepsize = "0.2"
 rayon = "1.5"
 tokio = { version = "1.14", features = ["rt-multi-thread", "macros"] }
 aho-corasick = "0.7"
-nohash = "0.2"
 deunicode = "1.3"
 
 [profile.release]

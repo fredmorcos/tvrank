@@ -6,7 +6,6 @@ use crate::Res;
 use derive_more::{Display, From, Into};
 use deunicode::deunicode;
 use fnv::FnvHashMap;
-use nohash::IntMap;
 use std::fmt;
 use std::ops::Index;
 
@@ -31,8 +30,8 @@ struct MoviesCookie(usize);
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 struct SeriesCookie(usize);
 
-type ById<C> = IntMap<usize, C>;
-type ByYear<C> = IntMap<u16, Vec<C>>;
+type ById<C> = FnvHashMap<usize, C>;
+type ByYear<C> = FnvHashMap<u16, Vec<C>>;
 type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
 
 #[derive(Default)]
