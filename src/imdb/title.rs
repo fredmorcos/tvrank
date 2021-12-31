@@ -6,7 +6,6 @@ use atoi::atoi;
 use deepsize::DeepSizeOf;
 use derive_more::Display;
 use enum_utils::FromStr;
-use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -98,47 +97,59 @@ impl TitleType {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct TitleId<'a> {
-  string: Cow<'a, str>,
+  bytes: &'a [u8],
   num: usize,
 }
 
-impl AsRef<usize> for TitleId<'_> {
-  fn as_ref(&self) -> &usize {
-    &self.num
+impl PartialEq for TitleId<'_> {
+  fn eq(&self, other: &Self) -> bool {
+    self.num == other.num
   }
 }
 
-impl AsRef<str> for TitleId<'_> {
-  fn as_ref(&self) -> &str {
-    &self.string
+impl Eq for TitleId<'_> {}
+
+impl Hash for TitleId<'_> {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.num.hash(state);
   }
 }
 
-impl<'a> TryFrom<Cow<'a, str>> for TitleId<'a> {
+impl<'a> TitleId<'a> {
+  pub(crate) fn as_str(&self) -> &'a str {
+    unsafe { std::str::from_utf8_unchecked(self.bytes) }
+  }
+
+  pub(crate) fn as_usize(&self) -> usize {
+    self.num
+  }
+}
+
+impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
   type Error = Box<dyn Error>;
 
-  fn try_from(string: Cow<'a, str>) -> Result<Self, Self::Error> {
-    if &string[0..=1] != super::parsing::TT {
-      return Err::id(string.into_owned());
+  fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+    if &bytes[0..=1] != super::parsing::TT {
+      return Err::id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned());
     }
 
-    let num = string[2..].parse::<usize>()?;
+    let num = atoi::<usize>(&bytes[2..])
+      .ok_or_else(|| Err::IdNumber(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned()))?;
 
-    Ok(TitleId { string, num })
+    Ok(TitleId { bytes, num })
   }
 }
 
 impl fmt::Display for TitleId<'_> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}", self.string)
+    write!(f, "{}", self.as_str())
   }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct TitleBasics {
-  pub(crate) unique_id: usize,
   pub(crate) title_id: TitleId<'static>,
   pub(crate) title_type: TitleType,
   pub(crate) primary_title: &'static str,
@@ -162,8 +173,7 @@ impl TryFrom<&'static [u8]> for TitleBasics {
       }};
     }
 
-    let title_id = Cow::from(unsafe { std::str::from_utf8_unchecked(next!()) });
-    let title_id = TitleId::try_from(title_id)?;
+    let title_id = TitleId::try_from(next!())?;
 
     let title_type = {
       let title_type = next!();
@@ -228,7 +238,6 @@ impl TryFrom<&'static [u8]> for TitleBasics {
     };
 
     Ok(TitleBasics {
-      unique_id: 0,
       title_id,
       title_type,
       primary_title,
@@ -244,7 +253,7 @@ impl TryFrom<&'static [u8]> for TitleBasics {
 
 impl PartialEq for TitleBasics {
   fn eq(&self, other: &Self) -> bool {
-    self.unique_id == other.unique_id
+    self.title_id == other.title_id
   }
 }
 
@@ -252,7 +261,7 @@ impl Eq for TitleBasics {}
 
 impl Hash for TitleBasics {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    self.unique_id.hash(state);
+    self.title_id.hash(state);
   }
 }
 

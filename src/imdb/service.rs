@@ -2,6 +2,7 @@
 
 use super::basics::{Basics, QueryType};
 use super::error::Err;
+use super::parsing::LINES_PER_THREAD;
 use super::ratings::Ratings;
 use super::storage::Storage;
 use super::title::{Title, TitleId};
@@ -69,7 +70,7 @@ impl Service {
           let mut lines = vec![];
 
           loop {
-            lines.extend(basics_source.lock().deref_mut().take(200_000));
+            lines.extend(basics_source.lock().deref_mut().take(LINES_PER_THREAD));
 
             if lines.is_empty() {
               break;

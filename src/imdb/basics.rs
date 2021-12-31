@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 
 use super::error::Err;
+use super::parsing::LINES_PER_THREAD;
 use super::title::{TitleBasics, TitleId};
 use crate::Res;
 use derive_more::{Display, From, Into};
@@ -113,7 +114,11 @@ struct BasicsImpl<C> {
 
 impl<C> Default for BasicsImpl<C> {
   fn default() -> Self {
-    Self { titles: Default::default(), by_id: Default::default(), by_title: Default::default() }
+    Self {
+      titles: Vec::with_capacity(LINES_PER_THREAD),
+      by_id: Default::default(),
+      by_title: Default::default(),
+    }
   }
 }
 
@@ -136,9 +141,8 @@ impl<C: From<usize>> BasicsImpl<C> {
 }
 
 impl<C: From<usize> + Into<usize> + Copy> BasicsImpl<C> {
-  fn store_title(&mut self, mut title: TitleBasics) {
+  fn store_title(&mut self, title: TitleBasics) {
     let cookie = self.next_cookie();
-    title.unique_id = cookie.into();
 
     self.insert_by_id(&title.title_id, cookie);
 
@@ -172,7 +176,7 @@ impl<C> BasicsImpl<C> {
   }
 
   fn cookie_by_id(&self, id: &TitleId) -> Option<&C> {
-    self.by_id.get(AsRef::<usize>::as_ref(&id))
+    self.by_id.get(&id.as_usize())
   }
 
   fn cookies_by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &C> {
@@ -186,7 +190,7 @@ impl<C> BasicsImpl<C> {
   }
 
   fn insert_by_id(&mut self, id: &TitleId, cookie: C) -> bool {
-    self.by_id.insert(*AsRef::<usize>::as_ref(id), cookie).is_none()
+    self.by_id.insert(id.as_usize(), cookie).is_none()
   }
 
   fn insert_by_title_and_year(&mut self, title: String, year: Option<u16>, cookie: C) {

@@ -8,10 +8,10 @@ use std::error::Error;
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
 pub enum Err {
-  #[display(fmt = "ID does not start with `tt` (e.g. ttXXXXXXX)")]
+  #[display(fmt = "ID `{}` does not start with `tt` (e.g. ttXXXXXXX)", _0)]
   Id(String),
-  #[display(fmt = "ID does not contain a number (e.g. ttXXXXXXX)")]
-  IdNumber,
+  #[display(fmt = "ID `{}` does not contain a valid number (e.g. ttXXXXXXX)", _0)]
+  IdNumber(String),
   #[display(fmt = "Duplicate IMDB ID `{}` found", _0)]
   DuplicateId(TitleId<'static>),
   #[display(fmt = "Unknown title type")]

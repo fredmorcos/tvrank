@@ -436,8 +436,8 @@ fn deserialize_titleid<'de, D>(deserializer: D) -> Result<ImdbTitleId<'static>, 
 where
   D: Deserializer<'de>,
 {
-  let s = Cow::from(String::deserialize(deserializer)?);
-  let title_id = ImdbTitleId::try_from(s).map_err(serde::de::Error::custom)?;
+  let s = Box::leak(String::deserialize(deserializer)?.into_boxed_str());
+  let title_id = ImdbTitleId::try_from(s.as_bytes()).map_err(serde::de::Error::custom)?;
   Ok(title_id)
 }
 
