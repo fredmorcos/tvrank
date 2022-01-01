@@ -1,35 +1,24 @@
 #![warn(clippy::all)]
 
-use super::basics::Basics;
+use super::basics::{Basics, QueryType};
 use super::error::Err;
-use super::keywords::KeywordSet;
+use super::parsing::LINES_PER_THREAD;
 use super::ratings::Ratings;
 use super::storage::Storage;
 use super::title::{Title, TitleId};
 use crate::Res;
-use deepsize::DeepSizeOf;
+use fnv::FnvHashSet;
 use humantime::format_duration;
-use indicatif::HumanBytes;
-use log::{debug, info};
-use parking_lot::{const_mutex, Mutex};
-use std::convert::TryInto;
+use log::{debug, error, info};
+use parking_lot::const_mutex;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::Instant;
 
-#[derive(DeepSizeOf)]
 pub struct Service {
   basics_dbs: Vec<Basics>,
   ratings_db: Ratings,
 }
-
-#[derive(Clone, Copy)]
-pub enum QueryType {
-  Movies,
-  Series,
-}
-
-type TitleResults<'a, 'b> = Mutex<Vec<Title<'a, 'b>>>;
 
 impl Service {
   pub fn new(ncpus: usize, storage: &Storage) -> Res<Self> {
@@ -47,32 +36,21 @@ impl Service {
 
     let mut total_movies = 0;
     let mut total_series = 0;
-    let mut total_size = 0;
+    let mut total_titles = 0;
 
     for (i, db) in basics_dbs.iter().enumerate() {
       let n_movies = db.n_movies();
       let n_series = db.n_series();
+      let n_titles = db.n_titles();
+
       total_movies += n_movies;
       total_series += n_series;
+      total_titles += n_titles;
 
-      let size = db.deep_size_of();
-      total_size += size;
-
-      debug!(
-        "DB {} has {} movies and {} series (Mem: {})",
-        i,
-        n_movies,
-        n_series,
-        HumanBytes(size.try_into()?)
-      );
+      debug!("DB {} has {} movies and {} series ({} titles)", i, n_movies, n_series, n_titles,);
     }
 
-    debug!(
-      "DB has a total of {} movies and {} series (Mem: {})",
-      total_movies,
-      total_series,
-      HumanBytes(total_size.try_into()?)
-    );
+    debug!("DB has a total of {} movies and {} series ({} titles)", total_movies, total_series, total_titles,);
 
     Ok(Self { basics_dbs, ratings_db })
   }
@@ -93,7 +71,7 @@ impl Service {
           let mut lines = vec![];
 
           loop {
-            lines.extend(basics_source.lock().deref_mut().take(200_000));
+            lines.extend(basics_source.lock().deref_mut().take(LINES_PER_THREAD));
 
             if lines.is_empty() {
               break;
@@ -101,7 +79,7 @@ impl Service {
 
             for &line in &lines {
               if !line.is_empty() {
-                if let Err(e) = basics_db.add_basics_from_line(line) {
+                if let Err(e) = basics_db.add(line) {
                   panic!("On DB Thread {}: Cannot parse DB: {}", thread_idx, e)
                 }
               }
@@ -125,241 +103,100 @@ impl Service {
     Ok(basics_dbs)
   }
 
-  fn query_by_title(
-    &self,
-    name: &str,
-    year: Option<u16>,
-    query_fn: for<'a, 'b> fn(&str, Option<u16>, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
-  ) -> Res<Vec<Title>> {
-    let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
+  pub fn by_id(&self, id: &TitleId, query_type: QueryType) -> Res<Vec<Title>> {
+    let res = Arc::new(const_mutex(vec![]));
 
     rayon::scope(|scope| {
-      let mut dbs: &[Basics] = self.basics_dbs.as_slice();
-
-      for _ in 0..self.basics_dbs.len() {
-        let res = Arc::clone(&res);
-
-        let (db, rem) = match dbs.split_first() {
-          Some(res) => res,
-          None => break,
-        };
-
-        dbs = rem;
-
-        scope.spawn(move |_| query_fn(name, year, db, &self.ratings_db, &res));
+      for db in self.basics_dbs.as_slice() {
+        scope.spawn(|_| {
+          let titles = db
+            .by_id(id, query_type)
+            .map(|basics| Title::new(basics, self.ratings_db.get(&basics.title_id)));
+          let mut res = res.lock();
+          res.extend(titles);
+        })
       }
     });
 
-    let res = if let Ok(res) = Arc::try_unwrap(res) {
-      res.into_inner()
-    } else {
-      return Err::basics_db_query();
-    };
-
-    Ok(res)
-  }
-
-  fn movies_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      name: &str,
-      year: Option<u16>,
-      basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
-    ) {
-      if let Some(year) = year {
-        let local_res = basics
-          .movies_by_title_year(name, year)
-          .map(|b| Title::new(b, ratings.get(&b.title_id)));
-        let mut res = res.lock();
-        res.extend(local_res);
-      } else {
-        let local_res = basics.movies_by_title(name).map(|b| Title::new(b, ratings.get(&b.title_id)));
-        let mut res = res.lock();
-        res.extend(local_res);
+    match Arc::try_unwrap(res) {
+      Ok(res) => Ok(res.into_inner()),
+      Err(_) => {
+        error!("Failed to unwrap an Arc containing the search results, this should not happen");
+        Err::basics_db_query()
       }
     }
-
-    self.query_by_title(name, year, query_fn)
   }
 
-  fn series_by_title(&self, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      name: &str,
-      year: Option<u16>,
-      basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
-    ) {
-      if let Some(year) = year {
-        let local_res = basics
-          .series_by_title_year(name, year)
-          .map(|b| Title::new(b, ratings.get(&b.title_id)));
-        let mut res = res.lock();
-        res.extend(local_res);
-      } else {
-        let local_res = basics.series_by_title(name).map(|b| Title::new(b, ratings.get(&b.title_id)));
-        let mut res = res.lock();
-        res.extend(local_res);
-      }
-    }
-
-    self.query_by_title(name, year, query_fn)
-  }
-
-  pub fn by_title(&self, query_type: QueryType, name: &str, year: Option<u16>) -> Res<Vec<Title>> {
-    match query_type {
-      QueryType::Movies => self.movies_by_title(name, year),
-      QueryType::Series => self.series_by_title(name, year),
-    }
-  }
-
-  fn query_by_titleid(
-    &self,
-    title_id: &TitleId,
-    query_fn: for<'a, 'b> fn(&TitleId, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
-  ) -> Res<Vec<Title>> {
-    let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
+  pub fn by_title(&self, title: &str, query_type: QueryType) -> Res<Vec<Title>> {
+    let res = Arc::new(const_mutex(vec![]));
 
     rayon::scope(|scope| {
-      let mut dbs: &[Basics] = self.basics_dbs.as_slice();
-
-      for _ in 0..self.basics_dbs.len() {
-        let res = Arc::clone(&res);
-
-        let (db, rem) = match dbs.split_first() {
-          Some(res) => res,
-          None => break,
-        };
-
-        dbs = rem;
-
-        scope.spawn(move |_| query_fn(title_id, db, &self.ratings_db, &res));
+      for db in self.basics_dbs.as_slice() {
+        scope.spawn(|_| {
+          let titles = db
+            .by_title(title, query_type)
+            .map(|basics| Title::new(basics, self.ratings_db.get(&basics.title_id)));
+          let mut res = res.lock();
+          res.extend(titles);
+        })
       }
     });
 
-    let res = if let Ok(res) = Arc::try_unwrap(res) {
-      res.into_inner()
-    } else {
-      return Err::basics_db_query();
-    };
-
-    Ok(res)
-  }
-
-  fn movie_by_titleid(&self, title_id: &TitleId) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      title_id: &TitleId,
-      basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
-    ) {
-      if let Some(b) = basics.movie_by_titleid(title_id) {
-        let local_res = Title::new(b, ratings.get(&b.title_id));
-        let mut res = res.lock();
-        res.push(local_res);
+    match Arc::try_unwrap(res) {
+      Ok(res) => Ok(res.into_inner()),
+      Err(_) => {
+        error!("Failed to unwrap an Arc containing the search results, this should not happen");
+        Err::basics_db_query()
       }
     }
-
-    self.query_by_titleid(title_id, query_fn)
   }
 
-  fn series_by_titleid(&self, title_id: &TitleId) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      title_id: &TitleId,
-      basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
-    ) {
-      if let Some(b) = basics.series_by_titleid(title_id) {
-        let local_res = Title::new(b, ratings.get(&b.title_id));
-        let mut res = res.lock();
-        res.push(local_res);
-      }
-    }
-
-    self.query_by_titleid(title_id, query_fn)
-  }
-
-  pub fn by_titleid(&self, query_type: QueryType, title_id: &TitleId) -> Res<Vec<Title>> {
-    match query_type {
-      QueryType::Movies => self.movie_by_titleid(title_id),
-      QueryType::Series => self.series_by_titleid(title_id),
-    }
-  }
-
-  fn query_by_keywords(
-    &self,
-    keywords: KeywordSet,
-    query_fn: for<'a, 'b> fn(KeywordSet, &'a Basics, &'b Ratings, &TitleResults<'a, 'b>),
-  ) -> Res<Vec<Title>> {
-    let res = Arc::new(const_mutex(Vec::with_capacity(self.basics_dbs.len())));
+  pub fn by_title_and_year(&self, title: &str, year: u16, query_type: QueryType) -> Res<Vec<Title>> {
+    let res = Arc::new(const_mutex(vec![]));
 
     rayon::scope(|scope| {
-      let mut dbs: &[Basics] = self.basics_dbs.as_slice();
-
-      for _ in 0..self.basics_dbs.len() {
-        let res = Arc::clone(&res);
-
-        let (db, rem) = match dbs.split_first() {
-          Some(res) => res,
-          None => break,
-        };
-
-        dbs = rem;
-
-        let keywords = keywords.clone();
-        scope.spawn(move |_| query_fn(keywords, db, &self.ratings_db, &res));
+      for db in self.basics_dbs.as_slice() {
+        scope.spawn(|_| {
+          let titles = db
+            .by_title_and_year(title, year, query_type)
+            .map(|basics| Title::new(basics, self.ratings_db.get(&basics.title_id)));
+          let mut res = res.lock();
+          res.extend(titles);
+        })
       }
     });
 
-    let res = if let Ok(res) = Arc::try_unwrap(res) {
-      res.into_inner()
-    } else {
-      return Err::basics_db_query();
-    };
-
-    Ok(res)
-  }
-
-  fn movies_by_keywords(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      keywords: KeywordSet,
-      basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
-    ) {
-      let local_res = basics
-        .movies_by_keyword(keywords)
-        .map(|b| Title::new(b, ratings.get(&b.title_id)));
-      let mut res = res.lock();
-      res.extend(local_res)
+    match Arc::try_unwrap(res) {
+      Ok(res) => Ok(res.into_inner()),
+      Err(_) => {
+        error!("Failed to unwrap an Arc containing the search results, this should not happen");
+        Err::basics_db_query()
+      }
     }
-
-    self.query_by_keywords(keywords, query_fn)
   }
 
-  fn series_by_keywords(&self, keywords: KeywordSet) -> Res<Vec<Title>> {
-    fn query_fn<'a, 'b>(
-      keywords: KeywordSet,
-      basics: &'a Basics,
-      ratings: &'b Ratings,
-      res: &TitleResults<'a, 'b>,
-    ) {
-      let local_res = basics
-        .series_by_keyword(keywords)
-        .map(|b| Title::new(b, ratings.get(&b.title_id)));
-      let mut res = res.lock();
-      res.extend(local_res)
-    }
+  pub fn by_keywords<'a>(&'a self, keywords: &'a [&str], query_type: QueryType) -> Res<Vec<Title<'a, 'a>>> {
+    let res = Arc::new(const_mutex(vec![]));
 
-    self.query_by_keywords(keywords, query_fn)
-  }
+    rayon::scope(|scope| {
+      for db in self.basics_dbs.as_slice() {
+        scope.spawn(|_| {
+          let title_basics: FnvHashSet<_> = db.by_keywords(keywords, query_type).collect();
+          let titles = title_basics
+            .iter()
+            .map(|basics| Title::new(basics, self.ratings_db.get(&basics.title_id)));
+          let mut res = res.lock();
+          res.extend(titles);
+        })
+      }
+    });
 
-  pub fn by_keywords(&self, query_type: QueryType, keywords: KeywordSet) -> Res<Vec<Title>> {
-    match query_type {
-      QueryType::Movies => self.movies_by_keywords(keywords),
-      QueryType::Series => self.series_by_keywords(keywords),
+    match Arc::try_unwrap(res) {
+      Ok(res) => Ok(res.into_inner()),
+      Err(_) => {
+        error!("Failed to unwrap an Arc containing the search results, this should not happen");
+        Err::basics_db_query()
+      }
     }
   }
 }

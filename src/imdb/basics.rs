@@ -1,329 +1,251 @@
 #![warn(clippy::all)]
 
 use super::error::Err;
-use super::genre::{Genre, Genres};
-use super::keywords::KeywordSet;
-use super::title::{TitleId, TitleType};
-use crate::imdb::title::TitleBasics;
+use super::parsing::LINES_PER_THREAD;
+use super::title::{TitleBasics, TitleId};
 use crate::Res;
-use atoi::atoi;
-use deepsize::DeepSizeOf;
-use derive_more::{Display, From};
-use fnv::FnvHashMap;
+use aho_corasick::AhoCorasickBuilder;
+use derive_more::{Display, From, Into};
+use deunicode::deunicode;
+use fnv::{FnvHashMap, FnvHashSet};
+use std::fmt;
 use std::ops::Index;
-use std::str::FromStr;
 
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
+#[derive(Clone, Copy)]
+pub enum QueryType {
+  Movies,
+  Series,
+}
+
+impl fmt::Display for QueryType {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      QueryType::Movies => write!(f, "movie"),
+      QueryType::Series => write!(f, "series"),
+    }
+  }
+}
+
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 struct MoviesCookie(usize);
 
-#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, DeepSizeOf)]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 struct SeriesCookie(usize);
 
-type ById<C> = FnvHashMap<TitleId<'static>, C>;
-type ByYear<C> = FnvHashMap<Option<u16>, Vec<C>>;
+type ById<C> = FnvHashMap<usize, C>;
+type ByYear<C> = FnvHashMap<u16, Vec<C>>;
 type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
 
-#[derive(Default, DeepSizeOf)]
-pub(crate) struct Basics {
-  /// Movies information.
-  movies: Vec<TitleBasics>,
-  /// Map from title ID to movie.
-  movies_id: ById<MoviesCookie>,
-  /// Map from movies names to years to movies.
-  movies_titles: ByTitle<MoviesCookie>,
-
-  /// Series information.
-  series: Vec<TitleBasics>,
-  /// Map from title ID to series.
-  series_id: ById<SeriesCookie>,
-  /// Map from series names to years to series.
-  series_titles: ByTitle<SeriesCookie>,
-}
-
-impl Index<&MoviesCookie> for Basics {
-  type Output = TitleBasics;
-
-  fn index(&self, index: &MoviesCookie) -> &Self::Output {
-    unsafe { self.movies.get_unchecked(index.0) }
-  }
-}
-
-impl Index<&SeriesCookie> for Basics {
-  type Output = TitleBasics;
-
-  fn index(&self, index: &SeriesCookie) -> &Self::Output {
-    unsafe { self.series.get_unchecked(index.0) }
-  }
+#[derive(Default)]
+pub struct Basics {
+  movies: BasicsImpl<MoviesCookie>,
+  series: BasicsImpl<SeriesCookie>,
 }
 
 impl Basics {
-  pub(crate) fn n_movies(&self) -> usize {
-    self.movies.len()
+  pub fn n_movies(&self) -> usize {
+    self.movies.n_titles()
   }
 
-  pub(crate) fn n_series(&self) -> usize {
-    self.series.len()
+  pub fn n_series(&self) -> usize {
+    self.series.n_titles()
   }
 
-  fn add_movie(&mut self, title: TitleBasics) -> MoviesCookie {
-    let cookie = MoviesCookie::from(self.movies.len());
-    self.movies.push(title);
-    cookie
+  pub fn n_titles(&self) -> usize {
+    self.n_movies() + self.n_series()
   }
 
-  fn add_series(&mut self, title: TitleBasics) -> SeriesCookie {
-    let cookie = SeriesCookie::from(self.series.len());
-    self.series.push(title);
-    cookie
-  }
-
-  pub(crate) fn movie_by_titleid(&self, title_id: &TitleId) -> Option<&TitleBasics> {
-    self.movies_id.get(title_id).map(|cookie| &self[cookie])
-  }
-
-  pub(crate) fn movies_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
-    self
-      .movies_titles
-      .iter()
-      .filter(move |(title, _)| keywords.matches(title))
-      .map(|(_, by_year)| by_year.values().flatten().map(|cookie| &self[cookie]))
-      .flatten()
-  }
-
-  pub(crate) fn movies_by_title_year<'a>(
-    &'a self,
-    name: &str,
-    year: u16,
-  ) -> impl Iterator<Item = &TitleBasics> + 'a {
-    let by_year = self.movies_titles.get(name);
-    let cookies = by_year.map(|by_year| by_year.get(&Some(year)));
-    let cookies = cookies.flatten();
-    cookies
-      .into_iter()
-      .map(|cookies| cookies.iter())
-      .flatten()
-      .map(|cookie| &self[cookie])
-  }
-
-  pub(crate) fn movies_by_title<'a>(&'a self, name: &str) -> impl Iterator<Item = &TitleBasics> + 'a {
-    let by_year = self.movies_titles.get(name);
-    let cookies = by_year.map(|by_year| by_year.values());
-    cookies.into_iter().flatten().flatten().map(|cookie| &self[cookie])
-  }
-
-  pub(crate) fn series_by_titleid(&self, title_id: &TitleId) -> Option<&TitleBasics> {
-    self.series_id.get(title_id).map(|cookie| &self[cookie])
-  }
-
-  pub(crate) fn series_by_keyword(&self, keywords: KeywordSet) -> impl Iterator<Item = &TitleBasics> {
-    self
-      .series_titles
-      .iter()
-      .filter(move |(title, _)| keywords.matches(title))
-      .map(|(_, by_year)| by_year.values().flatten().map(|cookie| &self[cookie]))
-      .flatten()
-  }
-
-  pub(crate) fn series_by_title_year<'a>(
-    &'a self,
-    name: &str,
-    year: u16,
-  ) -> impl Iterator<Item = &TitleBasics> + 'a {
-    let by_year = self.series_titles.get(name);
-    let cookies = by_year.map(|by_year| by_year.get(&Some(year)));
-    let cookies = cookies.flatten();
-    cookies
-      .into_iter()
-      .map(|cookies| cookies.iter())
-      .flatten()
-      .map(|cookie| &self[cookie])
-  }
-
-  pub(crate) fn series_by_title<'a>(&'a self, name: &str) -> impl Iterator<Item = &TitleBasics> + 'a {
-    let by_year = self.series_titles.get(name);
-    let cookies = by_year.map(|by_year| by_year.values());
-    cookies.into_iter().flatten().flatten().map(|cookie| &self[cookie])
-  }
-
-  pub(crate) fn add_basics_from_line(&mut self, line: &'static [u8]) -> Res<()> {
-    let mut iter = line.split(|&b| b == super::parsing::TAB);
-
-    macro_rules! next {
-      () => {{
-        iter.next().ok_or(Err::Eof)?
-      }};
-    }
-
-    let title_id = TitleId::try_from(next!())?;
-
-    let title_type = {
-      let title_type = next!();
-      let title_type = unsafe { std::str::from_utf8_unchecked(title_type) };
-      TitleType::from_str(title_type).map_err(|_| Err::TitleType)?
+  pub(crate) fn add(&mut self, line: &'static [u8]) -> Res<()> {
+    let title = match TitleBasics::try_from(line) {
+      Ok(title) => title,
+      Err(err) => match *err.downcast::<Err>()? {
+        Err::UnsupportedTitleType => return Ok(()),
+        err => return Err(Box::new(err)),
+      },
     };
 
-    if !title_type.is_movie() && !title_type.is_series() {
-      return Ok(());
-    }
-
-    let primary_title = unsafe { std::str::from_utf8_unchecked(next!()) };
-    let original_title = unsafe { std::str::from_utf8_unchecked(next!()) };
-
-    let is_adult = {
-      let is_adult = next!();
-      match is_adult {
-        super::parsing::ZERO => false,
-        super::parsing::ONE => true,
-        _ => return Err::adult(),
-      }
-    };
-
-    let start_year = {
-      let start_year = next!();
-      match start_year {
-        super::parsing::NOT_AVAIL => None,
-        start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
-      }
-    };
-
-    let end_year = {
-      let end_year = next!();
-      match end_year {
-        super::parsing::NOT_AVAIL => None,
-        end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
-      }
-    };
-
-    let runtime_minutes = {
-      let runtime_minutes = next!();
-      match runtime_minutes {
-        super::parsing::NOT_AVAIL => None,
-        runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
-      }
-    };
-
-    let genres = {
-      let genres = next!();
-      let mut result = Genres::default();
-
-      if genres != super::parsing::NOT_AVAIL {
-        let genres = genres.split(|&b| b == super::parsing::COMMA);
-        for genre in genres {
-          let genre = unsafe { std::str::from_utf8_unchecked(genre) };
-          let genre = Genre::from_str(genre).map_err(|_| Err::Genre)?;
-          result.add_genre(genre);
-        }
-      }
-
-      result
-    };
-
-    let title = TitleBasics {
-      title_id,
-      title_type,
-      primary_title,
-      original_title,
-      is_adult,
-      start_year,
-      end_year,
-      runtime_minutes,
-      genres,
-    };
-
-    if title_type.is_movie() {
-      let cookie = self.add_movie(title);
-
-      if self.movies_id.insert(title_id, cookie).is_some() {
-        return Err::duplicate_id(title_id);
-      }
-
-      let lc_primary_title = primary_title.to_lowercase();
-      let lc_original_title = original_title.to_lowercase();
-      let same_title = lc_primary_title == lc_original_title;
-
-      if let Some(escaped_primary_title) = Self::escape_title(&lc_primary_title) {
-        Self::insert_title(&mut self.movies_titles, cookie, escaped_primary_title, start_year);
-      }
-
-      Self::insert_title(&mut self.movies_titles, cookie, lc_primary_title, start_year);
-
-      if !same_title {
-        if let Some(escaped_original_title) = Self::escape_title(&lc_original_title) {
-          Self::insert_title(&mut self.movies_titles, cookie, escaped_original_title, start_year);
-        }
-
-        Self::insert_title(&mut self.movies_titles, cookie, lc_original_title, start_year);
-      }
-    } else if title_type.is_series() {
-      let cookie = self.add_series(title);
-
-      if self.series_id.insert(title_id, cookie).is_some() {
-        return Err::duplicate_id(title_id);
-      }
-
-      let lc_primary_title = primary_title.to_lowercase();
-      let lc_original_title = original_title.to_lowercase();
-      let same_title = lc_primary_title == lc_original_title;
-
-      if let Some(escaped_primary_title) = Self::escape_title(&lc_primary_title) {
-        Self::insert_title(&mut self.series_titles, cookie, escaped_primary_title, start_year);
-      }
-
-      Self::insert_title(&mut self.series_titles, cookie, lc_primary_title, start_year);
-
-      if !same_title {
-        if let Some(escaped_original_title) = Self::escape_title(&lc_original_title) {
-          Self::insert_title(&mut self.series_titles, cookie, escaped_original_title, start_year);
-        }
-
-        Self::insert_title(&mut self.series_titles, cookie, lc_original_title, start_year);
-      }
+    if title.title_type.is_movie() {
+      self.movies.store_title(title);
+    } else if title.title_type.is_series() {
+      self.series.store_title(title);
     }
 
     Ok(())
   }
 
-  fn escape_title(title: &str) -> Option<String> {
-    const ES: &[char] = &['é', 'è', 'ê'];
-
-    let mut needs_escape = false;
-    for c in title.chars() {
-      if ES.contains(&c) {
-        needs_escape = true;
-      }
+  pub(crate) fn by_id(&self, id: &TitleId, query_type: QueryType) -> Option<&TitleBasics> {
+    match query_type {
+      QueryType::Movies => self.movies.by_id(id),
+      QueryType::Series => self.series.by_id(id),
     }
-
-    if !needs_escape {
-      return None;
-    }
-
-    let mut escaped = String::with_capacity(title.len());
-    for c in title.chars() {
-      if ES.contains(&c) {
-        escaped.push('e');
-      } else {
-        escaped.push(c);
-      }
-    }
-
-    Some(escaped)
   }
 
-  fn insert_title<C>(db: &mut ByTitle<C>, cookie: C, title: String, year: Option<u16>)
-  where
-    C: From<usize> + Copy,
-  {
-    db.entry(title)
-      .and_modify(|by_year| {
-        by_year
-          .entry(year)
-          .and_modify(|titles| titles.push(cookie))
-          .or_insert_with(|| vec![cookie]);
+  pub(crate) fn by_title<'a>(
+    &'a self,
+    title: &str,
+    query_type: QueryType,
+  ) -> Box<dyn Iterator<Item = &'a TitleBasics> + 'a> {
+    match query_type {
+      QueryType::Movies => self.movies.by_title(title),
+      QueryType::Series => self.series.by_title(title),
+    }
+  }
+
+  pub(crate) fn by_title_and_year<'a>(
+    &'a self,
+    title: &str,
+    year: u16,
+    query_type: QueryType,
+  ) -> Box<dyn Iterator<Item = &'a TitleBasics> + 'a> {
+    match query_type {
+      QueryType::Movies => Box::new(self.movies.by_title_and_year(title, year)),
+      QueryType::Series => Box::new(self.series.by_title_and_year(title, year)),
+    }
+  }
+
+  pub(crate) fn by_keywords<'a>(
+    &'a self,
+    keywords: &'a [&'a str],
+    query_type: QueryType,
+  ) -> Box<dyn Iterator<Item = &'a TitleBasics> + 'a> {
+    match query_type {
+      QueryType::Movies => Box::new(self.movies.by_keywords(keywords)),
+      QueryType::Series => Box::new(self.series.by_keywords(keywords)),
+    }
+  }
+}
+
+struct BasicsImpl<C> {
+  /// Titles information.
+  titles: Vec<TitleBasics>,
+  /// Map from title ID to Title.
+  by_id: ById<C>,
+  /// Map from years to title names to Titles.
+  by_title: ByTitle<C>,
+}
+
+impl<C> Default for BasicsImpl<C> {
+  fn default() -> Self {
+    Self {
+      titles: Vec::with_capacity(LINES_PER_THREAD),
+      by_id: Default::default(),
+      by_title: Default::default(),
+    }
+  }
+}
+
+impl<C: Into<usize>> Index<C> for BasicsImpl<C> {
+  type Output = TitleBasics;
+
+  fn index(&self, index: C) -> &Self::Output {
+    unsafe { self.titles.get_unchecked(index.into()) }
+  }
+}
+
+impl<C: From<usize>> BasicsImpl<C> {
+  fn next_cookie(&self) -> C {
+    C::from(self.n_titles())
+  }
+}
+
+impl<C: From<usize> + Into<usize> + Copy> BasicsImpl<C> {
+  fn store_title(&mut self, title: TitleBasics) {
+    let cookie = self.next_cookie();
+
+    self.insert_by_id(&title.title_id, cookie);
+
+    let lc_primary_title = title.primary_title.to_lowercase();
+    let lc_original_title = title.original_title.to_lowercase();
+    let lc_same_title = lc_primary_title == lc_original_title;
+
+    let deunicoded_primary_title = deunicode(&lc_primary_title);
+    if deunicoded_primary_title != lc_primary_title {
+      self.insert_by_title_and_year(deunicoded_primary_title, title.start_year, cookie);
+    }
+
+    self.insert_by_title_and_year(lc_primary_title, title.start_year, cookie);
+
+    if !lc_same_title {
+      let deunicoded_original_title = deunicode(&lc_original_title);
+      if deunicoded_original_title != lc_original_title {
+        self.insert_by_title_and_year(deunicoded_original_title, title.start_year, cookie);
+      }
+
+      self.insert_by_title_and_year(lc_original_title, title.start_year, cookie);
+    }
+
+    self.store(title);
+  }
+}
+
+impl<C> BasicsImpl<C> {
+  fn store(&mut self, title: TitleBasics) {
+    self.titles.push(title);
+  }
+
+  fn n_titles(&self) -> usize {
+    self.titles.len()
+  }
+
+  fn cookie_by_id(&self, id: &TitleId) -> Option<&C> {
+    self.by_id.get(&id.as_usize())
+  }
+
+  fn cookies_by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &C> {
+    if let Some(by_year) = self.by_title.get(title) {
+      if let Some(cookies) = by_year.get(&year) {
+        return cookies.iter();
+      }
+    }
+
+    [].iter()
+  }
+
+  fn cookies_by_keywords<'a>(&'a self, keywords: &'a [&'a str]) -> impl Iterator<Item = &'a C> {
+    let searcher = AhoCorasickBuilder::new().build(keywords);
+    self
+      .by_title
+      .iter()
+      .filter(move |&(title, _)| {
+        let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
+        matches.len() == keywords.len()
       })
-      .or_insert_with(|| {
-        let mut by_year = ByYear::default();
-        by_year.insert(year, vec![cookie]);
-        by_year
-      });
+      .map(|(_, by_year)| by_year.values())
+      .flatten()
+      .flatten()
+  }
+
+  fn insert_by_id(&mut self, id: &TitleId, cookie: C) -> bool {
+    self.by_id.insert(id.as_usize(), cookie).is_none()
+  }
+
+  fn insert_by_title_and_year(&mut self, title: String, year: Option<u16>, cookie: C) {
+    if let Some(year) = year {
+      self.by_title.entry(title).or_default().entry(year).or_default().push(cookie);
+    } else {
+      self.by_title.entry(title).or_default().entry(0).or_default().push(cookie);
+    }
+  }
+}
+
+impl<C: Into<usize> + Copy> BasicsImpl<C> {
+  pub(crate) fn by_id(&self, id: &TitleId) -> Option<&TitleBasics> {
+    self.cookie_by_id(id).map(|&cookie| &self[cookie])
+  }
+
+  pub(crate) fn by_title<'a>(&'a self, title: &str) -> Box<dyn Iterator<Item = &TitleBasics> + 'a> {
+    if let Some(by_year) = self.by_title.get(title) {
+      return Box::new(by_year.values().flatten().map(|&cookie| &self[cookie]));
+    }
+
+    Box::new(std::iter::empty())
+  }
+
+  pub(crate) fn by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &TitleBasics> {
+    self.cookies_by_title_and_year(title, year).map(|&cookie| &self[cookie])
+  }
+
+  pub(crate) fn by_keywords<'a>(&'a self, keywords: &'a [&'a str]) -> impl Iterator<Item = &'a TitleBasics> {
+    self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 }

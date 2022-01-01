@@ -8,10 +8,10 @@ use std::error::Error;
 #[derive(Debug, Display)]
 #[display(fmt = "{}")]
 pub enum Err {
-  #[display(fmt = "ID does not start with `tt` (e.g. ttXXXXXXX)")]
-  Id(Vec<u8>),
-  #[display(fmt = "ID does not contain a number (e.g. ttXXXXXXX)")]
-  IdNumber,
+  #[display(fmt = "ID `{}` does not start with `tt` (e.g. ttXXXXXXX)", _0)]
+  Id(String),
+  #[display(fmt = "ID `{}` does not contain a valid number (e.g. ttXXXXXXX)", _0)]
+  IdNumber(String),
   #[display(fmt = "Duplicate IMDB ID `{}` found", _0)]
   DuplicateId(TitleId<'static>),
   #[display(fmt = "Unknown title type")]
@@ -34,11 +34,13 @@ pub enum Err {
   BasicsDbBuild,
   #[display(fmt = "Error querying the IMDB basics DB")]
   BasicsDbQuery,
+  #[display(fmt = "Unsupported title type")]
+  UnsupportedTitleType,
 }
 
 impl Err {
-  pub(crate) fn id<T>(id: &[u8]) -> Res<T> {
-    Err(Box::new(Err::Id(id.into())))
+  pub(crate) fn id<T>(id: String) -> Res<T> {
+    Err(Box::new(Err::Id(id)))
   }
 
   pub(crate) fn duplicate_id<T>(id: TitleId<'static>) -> Res<T> {
