@@ -333,14 +333,13 @@ fn imdb_by_title_and_year<'a>(
 }
 
 fn imdb_by_keywords<'a>(
-  _keywords: &'a [&str],
-  _imdb: &'a Imdb,
-  _query_type: ImdbQueryType,
-  _results: &mut Vec<ImdbTitle<'a, 'a>>,
+  keywords: &'a [&str],
+  imdb: &'a Imdb,
+  query_type: ImdbQueryType,
+  results: &mut Vec<ImdbTitle<'a, 'a>>,
 ) -> Res<()> {
-  unimplemented!("Keyword-based search is not yet implemented");
-  // results.extend(imdb.by_keywords(query_type, keywords)?);
-  // Ok(())
+  results.extend(imdb.by_keywords(keywords, query_type)?);
+  Ok(())
 }
 
 fn display_title_and_year(title: &str, year: u16) -> String {
@@ -403,10 +402,12 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
     )?;
   } else {
     warn!("Going to use `{}` as keywords for search query", title);
-    let keywords = title
+    let mut keywords = title
       .split_whitespace()
       .filter(|&keyword| keyword.len() > 2)
       .collect::<Vec<_>>();
+    keywords.sort_unstable();
+    keywords.dedup();
     info!("Keywords: {:?}", keywords);
 
     imdb_by_keywords(&keywords, imdb, ImdbQueryType::Movies, &mut movies_results)?;

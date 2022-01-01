@@ -7,6 +7,7 @@ use super::ratings::Ratings;
 use super::storage::Storage;
 use super::title::{Title, TitleId};
 use crate::Res;
+use fnv::FnvHashSet;
 use humantime::format_duration;
 use log::{debug, error, info};
 use parking_lot::const_mutex;
@@ -158,6 +159,31 @@ impl Service {
         scope.spawn(|_| {
           let titles = db
             .by_title_and_year(title, year, query_type)
+            .map(|basics| Title::new(basics, self.ratings_db.get(&basics.title_id)));
+          let mut res = res.lock();
+          res.extend(titles);
+        })
+      }
+    });
+
+    match Arc::try_unwrap(res) {
+      Ok(res) => Ok(res.into_inner()),
+      Err(_) => {
+        error!("Failed to unwrap an Arc containing the search results, this should not happen");
+        Err::basics_db_query()
+      }
+    }
+  }
+
+  pub fn by_keywords<'a>(&'a self, keywords: &'a [&str], query_type: QueryType) -> Res<Vec<Title<'a, 'a>>> {
+    let res = Arc::new(const_mutex(vec![]));
+
+    rayon::scope(|scope| {
+      for db in self.basics_dbs.as_slice() {
+        scope.spawn(|_| {
+          let title_basics: FnvHashSet<_> = db.by_keywords(keywords, query_type).collect();
+          let titles = title_basics
+            .iter()
             .map(|basics| Title::new(basics, self.ratings_db.get(&basics.title_id)));
           let mut res = res.lock();
           res.extend(titles);

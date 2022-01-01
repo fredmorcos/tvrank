@@ -4,9 +4,10 @@ use super::error::Err;
 use super::parsing::LINES_PER_THREAD;
 use super::title::{TitleBasics, TitleId};
 use crate::Res;
+use aho_corasick::AhoCorasickBuilder;
 use derive_more::{Display, From, Into};
 use deunicode::deunicode;
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use std::fmt;
 use std::ops::Index;
 
@@ -101,6 +102,17 @@ impl Basics {
       QueryType::Series => Box::new(self.series.by_title_and_year(title, year)),
     }
   }
+
+  pub(crate) fn by_keywords<'a>(
+    &'a self,
+    keywords: &'a [&'a str],
+    query_type: QueryType,
+  ) -> Box<dyn Iterator<Item = &'a TitleBasics> + 'a> {
+    match query_type {
+      QueryType::Movies => Box::new(self.movies.by_keywords(keywords)),
+      QueryType::Series => Box::new(self.series.by_keywords(keywords)),
+    }
+  }
 }
 
 struct BasicsImpl<C> {
@@ -133,10 +145,6 @@ impl<C: Into<usize>> Index<C> for BasicsImpl<C> {
 impl<C: From<usize>> BasicsImpl<C> {
   fn next_cookie(&self) -> C {
     C::from(self.n_titles())
-  }
-
-  fn store(&mut self, title: TitleBasics) {
-    self.titles.push(title);
   }
 }
 
@@ -171,6 +179,10 @@ impl<C: From<usize> + Into<usize> + Copy> BasicsImpl<C> {
 }
 
 impl<C> BasicsImpl<C> {
+  fn store(&mut self, title: TitleBasics) {
+    self.titles.push(title);
+  }
+
   fn n_titles(&self) -> usize {
     self.titles.len()
   }
@@ -187,6 +199,20 @@ impl<C> BasicsImpl<C> {
     }
 
     [].iter()
+  }
+
+  fn cookies_by_keywords<'a>(&'a self, keywords: &'a [&'a str]) -> impl Iterator<Item = &'a C> {
+    let searcher = AhoCorasickBuilder::new().build(keywords);
+    self
+      .by_title
+      .iter()
+      .filter(move |&(title, _)| {
+        let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
+        matches.len() == keywords.len()
+      })
+      .map(|(_, by_year)| by_year.values())
+      .flatten()
+      .flatten()
   }
 
   fn insert_by_id(&mut self, id: &TitleId, cookie: C) -> bool {
@@ -217,5 +243,9 @@ impl<C: Into<usize> + Copy> BasicsImpl<C> {
 
   pub(crate) fn by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &TitleBasics> {
     self.cookies_by_title_and_year(title, year).map(|&cookie| &self[cookie])
+  }
+
+  pub(crate) fn by_keywords<'a>(&'a self, keywords: &'a [&'a str]) -> impl Iterator<Item = &'a TitleBasics> {
+    self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 }
