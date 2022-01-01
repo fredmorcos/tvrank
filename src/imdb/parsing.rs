@@ -9,4 +9,4 @@ pub(crate) const ONE: &[u8] = b"1";
 
 pub(crate) const NOT_AVAIL: &[u8] = b"\\N";
 
-pub(crate) const LINES_PER_THREAD: usize = 200_000;
+pub(crate) const LINES_PER_THREAD: usize = 100_000;
