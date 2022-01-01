@@ -3,6 +3,8 @@
 use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage};
 
 fn main() -> tvrank::Res<()> {
+  let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
+
   fn download_init(name: &str, content_len: Option<u64>) {
     println!("Starting download of {} (size = {:?})", name, content_len);
   }
@@ -23,7 +25,6 @@ fn main() -> tvrank::Res<()> {
     println!("Finished extracting");
   }
 
-  let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
   let storage = ImdbStorage::new(
     cache_dir.path(),
     false,
