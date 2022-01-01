@@ -206,10 +206,10 @@ fn create_output_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
 
   row.add_cell(Cell::new(title.primary_title()));
 
-  if title.primary_title() == title.original_title() {
-    row.add_cell(Cell::new(""));
+  if let Some(original_title) = title.original_title() {
+    row.add_cell(Cell::new(original_title));
   } else {
-    row.add_cell(Cell::new(title.original_title()));
+    row.add_cell(Cell::new(""));
   }
 
   if let Some(year) = title.start_year() {

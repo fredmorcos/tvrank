@@ -42,7 +42,11 @@ fn main() -> tvrank::Res<()> {
 
     println!("ID: {}", id);
     println!("Primary name: {}", title.primary_title());
-    println!("Original name: {}", title.original_title());
+    if let Some(original_title) = title.original_title() {
+      println!("Original name: {}", original_title);
+    } else {
+      println!("Original name: N/A");
+    }
 
     if let Some((rating, votes)) = title.rating() {
       println!("Rating: {}/100 ({} votes)", rating, votes);

@@ -296,8 +296,12 @@ impl<'basics, 'ratings> Title<'basics, 'ratings> {
     self.basics.primary_title
   }
 
-  pub fn original_title(&self) -> &str {
-    self.basics.original_title
+  pub fn original_title(&self) -> Option<&str> {
+    if self.basics.original_title.to_lowercase() == self.basics.primary_title.to_lowercase() {
+      None
+    } else {
+      Some(self.basics.original_title)
+    }
   }
 
   pub fn is_adult(&self) -> bool {
