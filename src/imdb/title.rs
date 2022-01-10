@@ -3,7 +3,6 @@
 use super::error::Err;
 use super::genre::{Genre, Genres};
 use atoi::atoi;
-use deepsize::DeepSizeOf;
 use derive_more::Display;
 use enum_utils::FromStr;
 use std::error::Error;
@@ -12,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use std::time::Duration;
 
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, DeepSizeOf)]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
 pub enum TitleType {

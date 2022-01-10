@@ -47,7 +47,7 @@ prettytable-rs = "0.8"
 indicatif = "0.16"
 walkdir = "2.3"
 tempfile = "3.2"
-deepsize = "0.2"
+# deepsize = "0.2"
 # bitvec = "0.22"
 rayon = "1.5"
 tokio = { version = "1.14", features = ["rt-multi-thread", "macros"] }

@@ -1,11 +1,10 @@
 #![warn(clippy::all)]
 
-use deepsize::DeepSizeOf;
 use derive_more::Display;
 use enum_utils::FromStr;
 use std::fmt;
 
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, DeepSizeOf)]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
 pub enum Genre {
   Drama = 0,
@@ -48,7 +47,7 @@ pub enum Genre {
   GameShow,
 }
 
-#[derive(PartialEq, Eq, Default, Clone, Copy, DeepSizeOf)]
+#[derive(PartialEq, Eq, Default, Clone, Copy)]
 pub struct Genres(u64);
 
 impl Genres {
