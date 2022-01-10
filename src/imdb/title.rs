@@ -229,7 +229,7 @@ impl TryFrom<&'static [u8]> for TitleBasics {
         for genre in genres {
           let genre = unsafe { std::str::from_utf8_unchecked(genre) };
           let genre = Genre::from_str(genre).map_err(|_| Err::Genre)?;
-          result.add_genre(genre);
+          result.add(genre);
         }
       }
 
