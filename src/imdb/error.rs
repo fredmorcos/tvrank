@@ -1,6 +1,5 @@
 #![warn(clippy::all)]
 
-use super::title::TitleId;
 use crate::Res;
 use derive_more::Display;
 use std::error::Error;
@@ -13,7 +12,7 @@ pub enum Err {
   #[display(fmt = "ID `{}` does not contain a valid number (e.g. ttXXXXXXX)", _0)]
   IdNumber(String),
   #[display(fmt = "Duplicate IMDB ID `{}` found", _0)]
-  DuplicateId(TitleId<'static>),
+  DuplicateId(String),
   #[display(fmt = "Unknown title type")]
   TitleType,
   #[display(fmt = "Invalid adult marker")]
@@ -43,7 +42,7 @@ impl Err {
     Err(Box::new(Err::Id(id)))
   }
 
-  pub(crate) fn duplicate_id<T>(id: TitleId<'static>) -> Res<T> {
+  pub(crate) fn duplicate_id<T>(id: String) -> Res<T> {
     Err(Box::new(Err::DuplicateId(id)))
   }
 
