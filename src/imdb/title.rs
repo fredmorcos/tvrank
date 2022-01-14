@@ -182,11 +182,15 @@ impl<'a> TitleId<'a> {
   }
 }
 
+mod tokens {
+  pub(crate) const TT: &[u8] = b"tt";
+}
+
 impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
   type Error = Box<dyn Error>;
 
   fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-    if &bytes[0..=1] != super::parsing::TT {
+    if &bytes[0..2] != tokens::TT {
       return Err::id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned());
     }
 
