@@ -169,6 +169,10 @@ impl Hash for TitleId<'_> {
 }
 
 impl<'a> TitleId<'a> {
+  pub(crate) fn as_bytes(&self) -> &'a [u8] {
+    self.bytes
+  }
+
   pub(crate) fn as_str(&self) -> &'a str {
     unsafe { std::str::from_utf8_unchecked(self.bytes) }
   }
