@@ -89,6 +89,12 @@ impl From<Genres> for u32 {
   }
 }
 
+impl From<u32> for Genres {
+  fn from(values: u32) -> Self {
+    Genres(values)
+  }
+}
+
 impl fmt::Debug for Genres {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     <Self as fmt::Display>::fmt(self, f)
