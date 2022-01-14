@@ -343,7 +343,7 @@ fn imdb_by_keywords<'a>(
 }
 
 fn display_title_and_year(title: &str, year: u16) -> String {
-  format!("{}{}", title, format!(" ({})", year))
+  format!("{} ({})", title, year)
 }
 
 fn display_keywords(keywords: &[&str]) -> String {
