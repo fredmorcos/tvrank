@@ -50,6 +50,10 @@ impl Err {
     Err(Box::new(Err::Adult))
   }
 
+  pub(crate) fn eof<T>() -> Res<T> {
+    Err(Box::new(Err::Eof))
+  }
+
   pub(crate) fn basics_db_build<T>() -> Res<T> {
     Err(Box::new(Err::BasicsDbBuild))
   }
