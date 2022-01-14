@@ -32,10 +32,6 @@ struct MoviesCookie(usize);
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 struct SeriesCookie(usize);
 
-type ById<C> = FnvHashMap<usize, C>;
-type ByYear<C> = FnvHashMap<u16, Vec<C>>;
-type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
-
 #[derive(Default)]
 pub struct Basics {
   movies: BasicsImpl<MoviesCookie>,
@@ -114,6 +110,10 @@ impl Basics {
     }
   }
 }
+
+type ById<C> = FnvHashMap<usize, C>;
+type ByYear<C> = FnvHashMap<u16, Vec<C>>;
+type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
 
 struct BasicsImpl<C> {
   /// Titles information.
