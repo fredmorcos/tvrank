@@ -58,7 +58,7 @@ impl Genre {
 }
 
 #[derive(PartialEq, Eq, Default, Clone, Copy)]
-pub struct Genres(u64);
+pub struct Genres(u32);
 
 impl Genres {
   pub(crate) fn add(&mut self, genre: Genre) {
@@ -80,6 +80,12 @@ impl Genres {
     } else {
       None
     }
+  }
+}
+
+impl From<Genres> for u32 {
+  fn from(genres: Genres) -> Self {
+    genres.0
   }
 }
 
