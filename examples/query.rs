@@ -1,37 +1,10 @@
 #![warn(clippy::all)]
 
-use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage};
+use tvrank::imdb::{Imdb, ImdbQueryType};
 
 fn main() -> tvrank::Res<()> {
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
-
-  fn download_init(name: &str, content_len: Option<u64>) {
-    println!("Starting download of {} (size = {:?})", name, content_len);
-  }
-
-  fn download_progress(_userdata: &(), _delta: u64) {}
-
-  fn download_finish(_userdata: &()) {
-    println!("Finished download");
-  }
-
-  fn extract_init(name: &str) {
-    println!("Extracting {}", name);
-  }
-
-  fn extract_progress(_userdata: &(), _delta: u64) {}
-
-  fn extract_finish(_userdata: &()) {
-    println!("Finished extracting");
-  }
-
-  let storage = ImdbStorage::new(
-    cache_dir.path(),
-    false,
-    &(download_init, download_progress, download_finish),
-    &(extract_init, extract_progress, extract_finish),
-  )?;
-  let imdb = Imdb::new(8, &storage)?;
+  let imdb = Imdb::new(cache_dir.path(), false, &mut |_| {})?;
 
   let title = "city of god";
   let year = 2002;
@@ -49,8 +22,8 @@ fn main() -> tvrank::Res<()> {
       println!("Original name: N/A");
     }
 
-    if let Some((rating, votes)) = title.rating() {
-      println!("Rating: {}/100 ({} votes)", rating, votes);
+    if let Some(rating) = title.rating() {
+      println!("Rating: {}/100 ({} votes)", rating.rating(), rating.votes());
     } else {
       println!("Rating: N/A");
     }

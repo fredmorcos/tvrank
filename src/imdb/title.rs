@@ -1,291 +1,136 @@
 #![warn(clippy::all)]
 
-use super::error::Err;
-use super::genre::{Genre, Genres};
+use crate::imdb::error::Err;
+use crate::imdb::genre::{Genre, Genres};
+use crate::imdb::ratings::{Rating, Ratings};
+use crate::imdb::title_header::TitleHeader;
+use crate::imdb::title_id::TitleId;
+use crate::imdb::title_type::TitleType;
+use crate::imdb::utils::tokens;
+use crate::iter_next;
+use crate::Res;
 use atoi::atoi;
-use derive_more::Display;
-use enum_utils::FromStr;
-use std::error::Error;
-use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::str::FromStr;
 use std::time::Duration;
 
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
-#[enumeration(rename_all = "camelCase")]
-#[display(fmt = "{}")]
-pub enum TitleType {
-  // Games
-  VideoGame = 0,
-
-  // Movies
-  #[display(fmt = "Short Movie")]
-  Short = 1,
-  Video = 2,
-  Movie = 3,
-  #[display(fmt = "TV Short")]
-  TvShort = 4,
-  #[display(fmt = "TV Movie")]
-  TvMovie = 5,
-  #[display(fmt = "TV Special")]
-  TvSpecial = 6,
-
-  // Episodes
-  TvEpisode = 7,
-  TvPilot = 8,
-  RadioEpisode = 9,
-
-  // Series
-  #[display(fmt = "TV Series")]
-  TvSeries = 10,
-  #[display(fmt = "TV Mini-Series")]
-  TvMiniSeries = 11,
-
-  // Radio
-  #[display(fmt = "Radio Series")]
-  RadioSeries = 12,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Title<'a> {
+  header: TitleHeader,
+  title_id: TitleId<'a>,
+  primary_title: &'a str,
+  original_title: Option<&'a str>,
 }
 
-impl TitleType {
-  pub(crate) const fn max() -> u8 {
-    Self::RadioSeries as u8
-  }
-
-  pub(crate) const unsafe fn from(value: u8) -> Self {
-    std::mem::transmute(value)
-  }
-
-  pub(crate) fn is_movie(&self) -> bool {
-    match self {
-      // Games
-      TitleType::VideoGame => false,
-
-      // Movies
-      TitleType::Short
-      | TitleType::Video
-      | TitleType::Movie
-      | TitleType::TvShort
-      | TitleType::TvMovie
-      | TitleType::TvSpecial => true,
-
-      // Episodes
-      TitleType::TvEpisode | TitleType::TvPilot | TitleType::RadioEpisode => false,
-
-      // Series
-      TitleType::TvSeries | TitleType::TvMiniSeries => false,
-
-      // Radio
-      TitleType::RadioSeries => false,
-    }
-  }
-
-  pub(crate) fn is_series(&self) -> bool {
-    match self {
-      // Games
-      TitleType::VideoGame => false,
-
-      // Movies
-      TitleType::Short
-      | TitleType::Video
-      | TitleType::Movie
-      | TitleType::TvShort
-      | TitleType::TvMovie
-      | TitleType::TvSpecial => false,
-
-      // Episodes
-      TitleType::TvEpisode | TitleType::TvPilot | TitleType::RadioEpisode => false,
-
-      // Series
-      TitleType::TvSeries | TitleType::TvMiniSeries => true,
-
-      // Radio
-      TitleType::RadioSeries => false,
-    }
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::TitleType;
-
-  #[test]
-  fn test_title_type_value() {
-    assert_eq!(TitleType::VideoGame as u8, 0);
-    assert_eq!(TitleType::Short as u8, 1);
-    assert_eq!(TitleType::Video as u8, 2);
-    assert_eq!(TitleType::Movie as u8, 3);
-    assert_eq!(TitleType::TvShort as u8, 4);
-    assert_eq!(TitleType::TvMovie as u8, 5);
-    assert_eq!(TitleType::TvSpecial as u8, 6);
-    assert_eq!(TitleType::TvEpisode as u8, 7);
-    assert_eq!(TitleType::TvPilot as u8, 8);
-    assert_eq!(TitleType::RadioEpisode as u8, 9);
-    assert_eq!(TitleType::TvSeries as u8, 10);
-    assert_eq!(TitleType::TvMiniSeries as u8, 11);
-    assert_eq!(TitleType::RadioSeries as u8, 12);
-  }
-
-  #[test]
-  fn test_title_type_from_u8() {
-    assert_eq!(TitleType::VideoGame, unsafe { TitleType::from(0) });
-    assert_eq!(TitleType::Short, unsafe { TitleType::from(1) });
-    assert_eq!(TitleType::Video, unsafe { TitleType::from(2) });
-    assert_eq!(TitleType::Movie, unsafe { TitleType::from(3) });
-    assert_eq!(TitleType::TvShort, unsafe { TitleType::from(4) });
-    assert_eq!(TitleType::TvMovie, unsafe { TitleType::from(5) });
-    assert_eq!(TitleType::TvSpecial, unsafe { TitleType::from(6) });
-    assert_eq!(TitleType::TvEpisode, unsafe { TitleType::from(7) });
-    assert_eq!(TitleType::TvPilot, unsafe { TitleType::from(8) });
-    assert_eq!(TitleType::RadioEpisode, unsafe { TitleType::from(9) });
-    assert_eq!(TitleType::TvSeries, unsafe { TitleType::from(10) });
-    assert_eq!(TitleType::TvMiniSeries, unsafe { TitleType::from(11) });
-    assert_eq!(TitleType::RadioSeries, unsafe { TitleType::from(12) });
-  }
-
-  #[test]
-  fn test_title_type_max() {
-    assert_eq!(TitleType::max(), TitleType::RadioSeries as u8);
-  }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct TitleId<'a> {
-  bytes: &'a [u8],
-  num: usize,
-}
-
-impl PartialEq for TitleId<'_> {
-  fn eq(&self, other: &Self) -> bool {
-    self.num == other.num
-  }
-}
-
-impl Eq for TitleId<'_> {}
-
-impl Hash for TitleId<'_> {
+impl Hash for Title<'_> {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    self.num.hash(state);
+    self.title_id.hash(state);
   }
 }
 
-impl<'a> TitleId<'a> {
-  pub(crate) fn as_bytes(&self) -> &'a [u8] {
-    self.bytes
+impl<'a> Title<'a> {
+  pub fn title_id(&self) -> &TitleId {
+    &self.title_id
   }
 
-  pub(crate) fn as_str(&self) -> &'a str {
-    unsafe { std::str::from_utf8_unchecked(self.bytes) }
+  pub fn title_type(&self) -> TitleType {
+    self.header.title_type()
   }
 
-  pub(crate) fn as_usize(&self) -> usize {
-    self.num
+  pub fn primary_title(&self) -> &str {
+    self.primary_title
   }
-}
 
-mod tokens {
-  pub(crate) const TT: &[u8] = b"tt";
-}
-
-impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
-  type Error = Box<dyn Error>;
-
-  fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
-    if &bytes[0..2] != tokens::TT {
-      return Err::id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned());
-    }
-
-    let num = atoi::<usize>(&bytes[2..])
-      .ok_or_else(|| Err::IdNumber(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned()))?;
-
-    Ok(TitleId { bytes, num })
+  pub fn original_title(&self) -> Option<&str> {
+    self.original_title
   }
-}
 
-impl fmt::Display for TitleId<'_> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}", self.as_str())
+  pub fn is_adult(&self) -> bool {
+    self.header.is_adult()
   }
-}
 
-#[derive(Debug, Clone)]
-pub(crate) struct TitleBasics {
-  pub(crate) title_id: TitleId<'static>,
-  pub(crate) title_type: TitleType,
-  pub(crate) primary_title: &'static str,
-  pub(crate) original_title: &'static str,
-  pub(crate) is_adult: bool,
-  pub(crate) start_year: Option<u16>,
-  pub(crate) end_year: Option<u16>,
-  pub(crate) runtime_minutes: Option<u16>,
-  pub(crate) genres: Genres,
-}
+  pub fn start_year(&self) -> Option<u16> {
+    self.header.start_year()
+  }
 
-impl TryFrom<&'static [u8]> for TitleBasics {
-  type Error = Box<dyn Error>;
+  pub fn runtime(&self) -> Option<Duration> {
+    self
+      .header
+      .runtime_minutes()
+      .map(|runtime| Duration::from_secs(u64::from(runtime) * 60))
+  }
 
-  fn try_from(line: &'static [u8]) -> Result<Self, Self::Error> {
-    let mut iter = line.split(|&b| b == super::parsing::TAB);
+  pub fn genres(&self) -> Genres {
+    self.header.genres()
+  }
 
-    macro_rules! next {
-      () => {{
-        iter.next().ok_or(Err::Eof)?
-      }};
-    }
+  pub fn rating(&self) -> Option<Rating> {
+    self.header.rating()
+  }
 
-    let title_id = TitleId::try_from(next!())?;
+  pub(crate) fn from_tsv(line: &'a [u8], ratings: &Ratings) -> Res<Self> {
+    let mut columns = line.split(|&b| b == tokens::TAB);
+
+    let title_id = TitleId::try_from(iter_next!(columns))?;
 
     let title_type = {
-      let title_type = next!();
+      let title_type = iter_next!(columns);
       let title_type = unsafe { std::str::from_utf8_unchecked(title_type) };
       TitleType::from_str(title_type).map_err(|_| Err::TitleType)?
     };
 
     if !title_type.is_movie() && !title_type.is_series() {
-      return Err(Box::new(Err::UnsupportedTitleType));
+      return Err(Box::new(Err::UnsupportedTitleType(title_type)));
     }
 
-    let primary_title = unsafe { std::str::from_utf8_unchecked(next!()) };
-    let original_title = unsafe { std::str::from_utf8_unchecked(next!()) };
+    let primary_title = unsafe { std::str::from_utf8_unchecked(iter_next!(columns)) };
+    let original_title = unsafe { std::str::from_utf8_unchecked(iter_next!(columns)) };
+    let original_title = if original_title.to_lowercase() == primary_title.to_lowercase() {
+      None
+    } else {
+      Some(original_title)
+    };
 
     let is_adult = {
-      let is_adult = next!();
+      let is_adult = iter_next!(columns);
       match is_adult {
-        super::parsing::ZERO => false,
-        super::parsing::ONE => true,
+        tokens::ZERO => false,
+        tokens::ONE => true,
         _ => return Err::adult(),
       }
     };
 
     let start_year = {
-      let start_year = next!();
+      let start_year = iter_next!(columns);
       match start_year {
-        super::parsing::NOT_AVAIL => None,
+        tokens::NOT_AVAIL => None,
         start_year => Some(atoi::<u16>(start_year).ok_or(Err::StartYear)?),
       }
     };
 
-    let end_year = {
-      let end_year = next!();
+    let _end_year = {
+      let end_year = iter_next!(columns);
       match end_year {
-        super::parsing::NOT_AVAIL => None,
+        tokens::NOT_AVAIL => None,
         end_year => Some(atoi::<u16>(end_year).ok_or(Err::EndYear)?),
       }
     };
 
     let runtime_minutes = {
-      let runtime_minutes = next!();
+      let runtime_minutes = iter_next!(columns);
       match runtime_minutes {
-        super::parsing::NOT_AVAIL => None,
+        tokens::NOT_AVAIL => None,
         runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Err::RuntimeMinutes)?),
       }
     };
 
     let genres = {
-      let genres = next!();
+      let genres = iter_next!(columns);
       let mut result = Genres::default();
 
-      if genres != super::parsing::NOT_AVAIL {
-        let genres = genres.split(|&b| b == super::parsing::COMMA);
+      if genres != tokens::NOT_AVAIL {
+        let genres = genres.split(|&b| b == tokens::COMMA);
         for genre in genres {
           let genre = unsafe { std::str::from_utf8_unchecked(genre) };
           let genre = Genre::from_str(genre).map_err(|_| Err::Genre)?;
@@ -296,97 +141,121 @@ impl TryFrom<&'static [u8]> for TitleBasics {
       result
     };
 
-    Ok(TitleBasics {
-      title_id,
-      title_type,
-      primary_title,
-      original_title,
+    let rating = ratings.get(&title_id.as_usize()).copied();
+
+    let header = TitleHeader::new_version_0(
+      original_title.is_some(),
       is_adult,
-      start_year,
-      end_year,
       runtime_minutes,
+      start_year,
+      rating,
+      title_type,
       genres,
-    })
-  }
-}
+    );
 
-impl PartialEq for TitleBasics {
-  fn eq(&self, other: &Self) -> bool {
-    self.title_id == other.title_id
-  }
-}
-
-impl Eq for TitleBasics {}
-
-impl Hash for TitleBasics {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    self.title_id.hash(state);
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct Title<'basics, 'ratings> {
-  basics: &'basics TitleBasics,
-  rating: Option<&'ratings (u8, u64)>,
-}
-
-impl PartialEq for Title<'_, '_> {
-  fn eq(&self, other: &Self) -> bool {
-    self.basics == other.basics
-  }
-}
-
-impl Eq for Title<'_, '_> {}
-
-impl<'basics, 'ratings> Title<'basics, 'ratings> {
-  pub(crate) fn new(basics: &'basics TitleBasics, rating: Option<&'ratings (u8, u64)>) -> Self {
-    Self { basics, rating }
+    Ok(Title { header, title_id, primary_title, original_title })
   }
 
-  pub fn title_id(&self) -> &TitleId {
-    &self.basics.title_id
-  }
+  pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res<()> {
+    let _ = writer.write_all(&self.header.to_le_bytes())?;
 
-  pub fn title_type(&self) -> TitleType {
-    self.basics.title_type
-  }
+    let title_id = self.title_id.as_bytes();
+    let _ = writer.write_all(&(title_id.len() as u8).to_le_bytes());
+    let _ = writer.write_all(title_id)?;
 
-  pub fn primary_title(&self) -> &str {
-    self.basics.primary_title
-  }
+    let primary_title = self.primary_title.as_bytes();
+    let _ = writer.write_all(&(primary_title.len() as u16).to_le_bytes());
+    let _ = writer.write_all(primary_title)?;
 
-  pub fn original_title(&self) -> Option<&str> {
-    if self.basics.original_title.to_lowercase() == self.basics.primary_title.to_lowercase() {
-      None
-    } else {
-      Some(self.basics.original_title)
+    if let Some(original_title) = self.original_title {
+      let original_title = original_title.as_bytes();
+      let _ = writer.write_all(&(original_title.len() as u16).to_le_bytes())?;
+      let _ = writer.write_all(original_title)?;
     }
+
+    Ok(())
   }
 
-  pub fn is_adult(&self) -> bool {
-    self.basics.is_adult
-  }
+  pub(crate) fn from_binary(source: &mut &'a [u8]) -> Res<Self> {
+    if (*source).len() < 23 {
+      // # 23 bytes:
+      //
+      // * 16 bytes for header
+      // * 1 byte for the title_id length
+      // * At least 3 bytes for the title_id (ttX)
+      // * 2 bytes for the primary title length
+      // * At least 1 byte for the primary title
 
-  pub fn start_year(&self) -> Option<u16> {
-    self.basics.start_year
-  }
+      return Err::eof();
+    }
 
-  pub fn end_year(&self) -> Option<u16> {
-    self.basics.end_year
-  }
+    let header: [u8; 16] = source[..16].try_into()?;
+    let header = TitleHeader::from(header);
 
-  pub fn runtime(&self) -> Option<Duration> {
-    self
-      .basics
-      .runtime_minutes
-      .map(|runtime| Duration::from_secs(u64::from(runtime) * 60))
-  }
+    *source = &source[16..];
 
-  pub fn genres(&self) -> Genres {
-    self.basics.genres
-  }
+    let title_id_len: [u8; 1] = source[..1].try_into()?;
+    let title_id_len = u8::from_le_bytes(title_id_len) as usize;
 
-  pub fn rating(&self) -> Option<&(u8, u64)> {
-    self.rating
+    *source = &source[1..];
+
+    let title_id = &source[..title_id_len];
+    let title_id = TitleId::try_from(title_id)?;
+
+    *source = &source[title_id_len..];
+
+    let primary_title_len: [u8; 2] = source[..2].try_into()?;
+    let primary_title_len = u16::from_le_bytes(primary_title_len) as usize;
+
+    *source = &source[2..];
+
+    let primary_title = &source[..primary_title_len];
+    let primary_title = unsafe { std::str::from_utf8_unchecked(primary_title) };
+
+    *source = &source[primary_title_len..];
+
+    let original_title = if header.has_original_title() {
+      let original_title_len: [u8; 2] = source[..2].try_into()?;
+      let original_title_len = u16::from_le_bytes(original_title_len) as usize;
+
+      *source = &source[2..];
+
+      let original_title = &source[..original_title_len];
+      let original_title = unsafe { std::str::from_utf8_unchecked(original_title) };
+
+      *source = &source[original_title_len..];
+
+      Some(original_title)
+    } else {
+      None
+    };
+
+    Ok(Self { header, title_id, primary_title, original_title })
+  }
+}
+
+#[cfg(test)]
+mod test_title {
+  use super::Rating;
+  use super::Ratings;
+  use super::Title;
+
+  #[test]
+  fn test_title() {
+    let mut ratings = Ratings::default();
+    ratings.insert(1, Rating::new(57, 1846));
+
+    let title = Title::from_tsv(
+      b"tt0000001\tshort\tCarmencita\tCarmencita\t0\t1894\t\\N\t1\tDocumentary,Short",
+      &ratings,
+    )
+    .unwrap();
+
+    let mut binary = Vec::new();
+    title.write_binary(&mut binary).unwrap();
+
+    let title_parsed = Title::from_binary(&mut binary.as_ref()).unwrap();
+
+    assert_eq!(title, title_parsed);
   }
 }

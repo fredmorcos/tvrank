@@ -6,8 +6,8 @@ use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
-use indicatif::{HumanBytes, ProgressBar};
-use log::{debug, error, info, trace, warn};
+use indicatif::ProgressBar;
+use log::{debug, error, warn};
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use regex::Regex;
 use reqwest::Url;
@@ -20,9 +20,9 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbQueryType, ImdbStorage, ImdbTitle, ImdbTitleId};
+use tvrank::imdb::{Imdb, ImdbQueryType, ImdbTitle, ImdbTitleId};
 use tvrank::Res;
-use ui::{create_progress_bar, create_progress_spinner};
+use ui::create_progress_spinner;
 use walkdir::WalkDir;
 
 #[derive(Debug, Display)]
@@ -218,17 +218,17 @@ fn create_output_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
     row.add_cell(Cell::new(""));
   }
 
-  if let Some(&(rating, votes)) = title.rating() {
-    let rating_text = &format!("{}/100", rating);
+  if let Some(rating) = title.rating() {
+    let rating_text = &format!("{}/100", rating.rating());
 
     let rating_cell = Cell::new(rating_text).with_style(match rating {
-      rating if rating >= 70 => GREEN,
-      rating if (60..70).contains(&rating) => YELLOW,
+      rating if rating.rating() >= 70 => GREEN,
+      rating if (60..70).contains(&rating.rating()) => YELLOW,
       _ => RED,
     });
 
     row.add_cell(rating_cell);
-    row.add_cell(Cell::new(&format!("{}", votes)));
+    row.add_cell(Cell::new(&format!("{}", rating.votes())));
   } else {
     row.add_cell(Cell::new(""));
     row.add_cell(Cell::new(""));
@@ -252,60 +252,11 @@ fn create_output_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
   Ok(row)
 }
 
-fn setup_imdb_storage(app_cache_dir: &Path, force_update: bool) -> Res<ImdbStorage> {
-  info!("Loading IMDB Databases...");
-
-  // Downloading callbacks.
-  let download_init = |name: &str, content_len: Option<u64>| -> ProgressBar {
-    let msg = format!("Downloading {}", name);
-    let bar = if let Some(file_len) = content_len {
-      info!("{} compressed file size is {}", name, HumanBytes(file_len));
-      create_progress_bar(msg, file_len)
-    } else {
-      info!("{} compressed file size is unknown", name);
-      create_progress_spinner(msg)
-    };
-
-    bar
-  };
-
-  let download_progress = |bar: &ProgressBar, delta: u64| {
-    bar.inc(delta);
-  };
-
-  let download_finish = |bar: &ProgressBar| {
-    bar.finish_and_clear();
-  };
-
-  // Extraction callbacks.
-  let extract_init = |name: &str| -> ProgressBar {
-    let msg = format!("Decompressing {}...", name);
-    create_progress_spinner(msg)
-  };
-
-  let extract_progress = |bar: &ProgressBar, delta: u64| {
-    bar.inc(delta);
-  };
-
-  let extract_finish = |bar: &ProgressBar| {
-    bar.finish_and_clear();
-  };
-
-  let imdb_storage = ImdbStorage::new(
-    app_cache_dir,
-    force_update,
-    &(download_init, download_progress, download_finish),
-    &(extract_init, extract_progress, extract_finish),
-  )?;
-
-  Ok(imdb_storage)
-}
-
 fn imdb_by_id<'a>(
   id: &ImdbTitleId,
   imdb: &'a Imdb,
   query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a, 'a>>,
+  results: &mut Vec<ImdbTitle<'a>>,
 ) -> Res<()> {
   results.extend(imdb.by_id(id, query_type)?);
   Ok(())
@@ -315,7 +266,7 @@ fn imdb_by_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a, 'a>>,
+  results: &mut Vec<ImdbTitle<'a>>,
 ) -> Res<()> {
   results.extend(imdb.by_title(&title.to_lowercase(), query_type)?);
   Ok(())
@@ -326,7 +277,7 @@ fn imdb_by_title_and_year<'a>(
   year: u16,
   imdb: &'a Imdb,
   query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a, 'a>>,
+  results: &mut Vec<ImdbTitle<'a>>,
 ) -> Res<()> {
   results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, query_type)?);
   Ok(())
@@ -336,7 +287,7 @@ fn imdb_by_keywords<'a>(
   keywords: &'a [&str],
   imdb: &'a Imdb,
   query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a, 'a>>,
+  results: &mut Vec<ImdbTitle<'a>>,
 ) -> Res<()> {
   results.extend(imdb.by_keywords(keywords, query_type)?);
   Ok(())
@@ -401,14 +352,14 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
       imdb_url,
     )?;
   } else {
-    warn!("Going to use `{}` as keywords for search query", title);
+    debug!("Going to use `{}` as keywords for search query", title);
     let mut keywords = title
       .split_whitespace()
       .filter(|&keyword| keyword.len() > 2)
       .collect::<Vec<_>>();
     keywords.sort_unstable();
     keywords.dedup();
-    info!("Keywords: {:?}", keywords);
+    debug!("Keywords: {:?}", keywords);
 
     imdb_by_keywords(&keywords, imdb, ImdbQueryType::Movies, &mut movies_results)?;
     sort_results(&mut movies_results, sort_by_year);
@@ -652,7 +603,7 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
 fn run(opt: Opt) -> Res<()> {
   let project = create_project()?;
   let app_cache_dir = project.cache_dir();
-  info!("Cache directory: {}", app_cache_dir.display());
+  debug!("Cache directory: {}", app_cache_dir.display());
 
   fs::create_dir_all(app_cache_dir)?;
   debug!("Created cache directory");
@@ -661,11 +612,23 @@ fn run(opt: Opt) -> Res<()> {
   let imdb_url = Url::parse(IMDB)?;
 
   let start_time = Instant::now();
-  let imdb_storage = setup_imdb_storage(app_cache_dir, opt.force_update)?;
+  let mut progress_bar: Option<ProgressBar> = None;
+  let progress_bar_mut = &mut progress_bar;
+  let imdb = Imdb::new(app_cache_dir, opt.force_update, &mut |delta| {
+    if let Some(bar) = progress_bar_mut {
+      bar.inc(delta);
+      return;
+    }
 
-  let ncpus = rayon::current_num_threads();
-  let imdb = Imdb::new(ncpus / 2, &imdb_storage)?;
-  eprintln!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
+    let bar = create_progress_spinner("Downloading IMDB databases...".to_string());
+    bar.inc(delta);
+    *progress_bar_mut = Some(bar);
+  })?;
+
+  if let Some(bar) = progress_bar {
+    bar.finish_and_clear();
+  }
+  debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
 
   let start_time = Instant::now();
 
@@ -675,7 +638,7 @@ fn run(opt: Opt) -> Res<()> {
     Command::SeriesDir { dir } => imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
   }
 
-  eprintln!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+  debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
 
   std::mem::forget(imdb);
 
@@ -703,11 +666,11 @@ fn main() {
     true
   };
 
-  error!("Error output enabled.");
-  warn!("Warning output enabled.");
-  info!("Info output enabled.");
-  debug!("Debug output enabled.");
-  trace!("Trace output enabled.");
+  // error!("Error output enabled.");
+  // warn!("Warning output enabled.");
+  // info!("Info output enabled.");
+  // debug!("Debug output enabled.");
+  // trace!("Trace output enabled.");
 
   if let Err(e) = run(opt) {
     if have_logger {
