@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+use crate::imdb::title_type::TitleType;
 use crate::Res;
 use derive_more::Display;
 use std::error::Error;
@@ -33,8 +34,8 @@ pub enum Err {
   BasicsDbBuild,
   #[display(fmt = "Error querying the IMDB basics DB")]
   BasicsDbQuery,
-  #[display(fmt = "Unsupported title type")]
-  UnsupportedTitleType,
+  #[display(fmt = "Unsupported title type `{}`", _0)]
+  UnsupportedTitleType(TitleType),
 }
 
 impl Err {
@@ -52,14 +53,6 @@ impl Err {
 
   pub(crate) fn eof<T>() -> Res<T> {
     Err(Box::new(Err::Eof))
-  }
-
-  pub(crate) fn basics_db_build<T>() -> Res<T> {
-    Err(Box::new(Err::BasicsDbBuild))
-  }
-
-  pub(crate) fn basics_db_query<T>() -> Res<T> {
-    Err(Box::new(Err::BasicsDbQuery))
   }
 }
 

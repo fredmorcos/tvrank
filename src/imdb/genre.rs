@@ -150,7 +150,8 @@ impl Iterator for GenresIter {
 
 #[cfg(test)]
 mod tests {
-  use super::{Genre, Genres};
+  use super::Genre;
+  use super::Genres;
 
   #[test]
   fn test_genre_value() {
