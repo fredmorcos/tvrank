@@ -75,12 +75,23 @@ jobs:
       #   with:
       #     file: target/release/tvrank
       #     strip: true
+      - name: Production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --profile production
+      - name: Tests with production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --profile production
       - name: Build tarball
         shell: bash
         run: |
           export NAME=tvrank-${{steps.tag.outputs.tag}}-linux
           mkdir $NAME
-          cp target/release/tvrank $NAME/tvrank
+          cp target/production/tvrank $NAME/tvrank
+          cp target/release/tvrank $NAME/tvrank-fastdebug
           cp target/debug/tvrank $NAME/tvrank-debug
           cp LICENSE $NAME/LICENSE
           cp README.md $NAME/README.md
@@ -159,12 +170,23 @@ jobs:
       #   with:
       #     file: target/release/tvrank
       #     strip: true
+      - name: Production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --profile production
+      - name: Tests with production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --profile production
       - name: Build tarball
         shell: bash
         run: |
           export NAME=tvrank-${{steps.tag.outputs.tag}}-macos
           mkdir $NAME
-          cp target/release/tvrank $NAME/tvrank
+          cp target/production/tvrank $NAME/tvrank
+          cp target/release/tvrank $NAME/tvrank-fastdebug
           cp target/debug/tvrank $NAME/tvrank-debug
           cp LICENSE $NAME/LICENSE
           cp README.md $NAME/README.md
@@ -243,12 +265,23 @@ jobs:
       #   with:
       #     file: target/release/tvrank.exe
       #     strip: false
+      - name: Production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --profile production
+      - name: Tests with production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --profile production
       - name: Build tarball
         shell: bash
         run: |
           export NAME=tvrank-${{steps.tag.outputs.tag}}-windows
           mkdir $NAME
-          cp target/release/tvrank.exe $NAME/tvrank.exe
+          cp target/production/tvrank $NAME/tvrank.exe
+          cp target/release/tvrank $NAME/tvrank-fastdebug.exe
           cp target/debug/tvrank.exe $NAME/tvrank-debug.exe
           cp LICENSE $NAME/LICENSE
           cp README.md $NAME/README.md

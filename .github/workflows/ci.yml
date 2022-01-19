@@ -81,4 +81,14 @@ jobs:
         with:
           command: test
           args: --all-features --release
+      - name: Production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --profile production
+      - name: Tests with production build
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --profile production
 ...
