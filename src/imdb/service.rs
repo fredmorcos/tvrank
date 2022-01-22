@@ -1,21 +1,25 @@
 #![warn(clippy::all)]
 
 use crate::imdb::db::{Db, QueryType};
+use crate::imdb::error::Err;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::Res;
 use flate2::bufread::GzDecoder;
+use fnv::FnvHashSet;
 use humantime::format_duration;
 use log::debug;
+use parking_lot::{const_mutex, Mutex};
 use reqwest::blocking::Client;
 use reqwest::Url;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 pub struct Service {
-  db: Db,
+  dbs: Vec<Db>,
 }
 
 const IMDB: &str = "https://datasets.imdbws.com/";
@@ -37,17 +41,86 @@ impl Service {
     debug!("Read IMDB database file in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
-    let db = Db::from_binary(data, 1_900_000, 270_000)?;
+    let svc = Self::from_binary(data)?;
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
+    let mut total_movies = 0;
+    let mut total_series = 0;
+    let mut total_entries = 0;
+
+    for (i, db) in svc.dbs.iter().enumerate() {
+      let movies = db.n_movies();
+      let series = db.n_series();
+      let entries = db.n_entries();
+
+      total_movies += movies;
+      total_series += series;
+      total_entries += entries;
+
+      debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
+    }
+
     debug!(
-      "IMDB database contains {} movies and {} series ({} entries)",
-      db.n_movies(),
-      db.n_series(),
-      db.n_titles()
+      "IMDB database contains {total_movies} movies and {total_series} series ({total_entries} entries)"
     );
 
-    Ok(Self { db })
+    Ok(svc)
+  }
+
+  fn from_binary(mut data: &'static [u8]) -> Res<Self> {
+    let ncpus = num_cpus::get_physical();
+    let dbs = Arc::new(const_mutex(Vec::with_capacity(ncpus)));
+
+    rayon::scope(|scope| {
+      let cursor: Arc<Mutex<&mut &[u8]>> = Arc::new(const_mutex(&mut data));
+
+      for _ in 0..ncpus {
+        let dbs = Arc::clone(&dbs);
+        let cursor = Arc::clone(&cursor);
+
+        scope.spawn(move |_| {
+          let mut db = Db::with_capacities(1_900_000 / ncpus, 270_000 / ncpus);
+          let mut titles = Vec::with_capacity(100);
+
+          loop {
+            let mut cursor = cursor.lock();
+
+            if (*cursor).is_empty() {
+              break;
+            }
+
+            for _ in 0..100 {
+              if (*cursor).is_empty() {
+                break;
+              }
+
+              let title = match Title::from_binary(&mut cursor) {
+                Ok(title) => title,
+                Err(e) => panic!("Error parsing title: {}", e),
+              };
+
+              titles.push(title);
+            }
+
+            drop(cursor);
+
+            for &title in &titles {
+              db.store_title(title);
+            }
+
+            titles.clear();
+          }
+
+          dbs.lock().push(db);
+        });
+      }
+    });
+
+    if let Ok(dbs) = Arc::try_unwrap(dbs) {
+      Ok(Self { dbs: dbs.into_inner() })
+    } else {
+      Err::arc_unwrap()
+    }
   }
 
   fn file_exists(path: &Path) -> Res<Option<File>> {
@@ -119,31 +192,60 @@ impl Service {
   }
 
   pub fn by_id(&self, id: &TitleId, query_type: QueryType) -> Res<Option<&Title>> {
-    Ok(self.db.by_id(id, query_type))
+    let results: FnvHashSet<Option<&Title>> = self
+      .dbs
+      .iter()
+      .map(|db| db.by_id(id, query_type))
+      .filter(|title| title.is_some())
+      .collect();
+
+    if results.len() > 1 {
+      return Err::duplicate_id(id.as_str().to_owned());
+    }
+
+    for title in results {
+      if title.is_some() {
+        return Ok(title);
+      }
+    }
+
+    Ok(None)
   }
 
-  pub fn by_title<'a>(
-    &'a self,
-    title: &str,
-    query_type: QueryType,
-  ) -> Res<Box<dyn Iterator<Item = &'a Title> + 'a>> {
-    Ok(self.db.by_title(title, query_type))
+  pub fn by_title(&self, title: &str, query_type: QueryType) -> Res<FnvHashSet<&Title>> {
+    Ok(
+      self
+        .dbs
+        .iter()
+        .map(move |db| db.by_title(title, query_type))
+        .flatten()
+        .collect(),
+    )
   }
 
-  pub fn by_title_and_year<'a>(
-    &'a self,
-    title: &str,
-    year: u16,
-    query_type: QueryType,
-  ) -> Res<Box<dyn Iterator<Item = &'a Title> + 'a>> {
-    Ok(self.db.by_title_and_year(title, year, query_type))
+  pub fn by_title_and_year(&self, title: &str, year: u16, query_type: QueryType) -> Res<FnvHashSet<&Title>> {
+    Ok(
+      self
+        .dbs
+        .iter()
+        .map(move |db| db.by_title_and_year(title, year, query_type))
+        .flatten()
+        .collect(),
+    )
   }
 
   pub fn by_keywords<'a>(
     &'a self,
     keywords: &'a [&str],
     query_type: QueryType,
-  ) -> Res<Box<dyn Iterator<Item = &'a Title> + 'a>> {
-    Ok(self.db.by_keywords(keywords, query_type))
+  ) -> Res<FnvHashSet<&'a Title>> {
+    Ok(
+      self
+        .dbs
+        .iter()
+        .map(|db| db.by_keywords(keywords, query_type))
+        .flatten()
+        .collect(),
+    )
   }
 }
