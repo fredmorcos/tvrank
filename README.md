@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/CI?label=Master&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
 [![Crates.io](https://img.shields.io/crates/v/tvrank?style=for-the-badge)](https://crates.io/crates/tvrank)
-[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.3.0/tvrank/)
+[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.4.0/tvrank/)
 
 [Github Repository](https://github.com/fredmorcos/tvrank)
 
@@ -95,7 +95,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tvrank = "0.3"
+tvrank = "0.4"
 ```
 
 Or, using `cargo add`:
@@ -107,53 +107,21 @@ $ cargo add tvrank
 Include the `Imdb` type:
 
 ```rust
-use tvrank::imdb::Imdb;
+use tvrank::imdb::{Imdb, ImdbQueryType};
 ```
 
-Create a directory for the cache using the `tempfile` crate, create some functions that
-will work as callbacks for status updates by the storage backend, and pass all of that to
-the `ImdbStorage` constructor then create the database service:
+Create a directory for the cache using the `tempfile` crate then create the database
+service. The closure passed to the service constructor is a callback for progress updates
+and is a `FnMut` to be able to e.g. mutate a progress bar object.
 
 ```rust
 let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
-
-fn download_init(name: &str, content_len: Option<u64>) {
-  println!("Starting download of {} (size = {:?})", name, content_len);
-}
-
-fn download_progress(_userdata: &(), _delta: u64) {}
-
-fn download_finish(_userdata: &()) {
-  println!("Finished download");
-}
-
-fn extract_init(name: &str) {
-  println!("Extracting {}", name);
-}
-
-fn extract_progress(_userdata: &(), _delta: u64) {}
-
-fn extract_finish(_userdata: &()) {
-  println!("Finished extracting");
-}
-
-let storage = ImdbStorage::new(
-  cache_dir.path(),
-  false,
-  &(download_init, download_progress, download_finish),
-  &(extract_init, extract_progress, extract_finish),
-)?;
-let imdb = Imdb::new(8, &storage)?;
+let imdb = Imdb::new(cache_dir.path(), false, &mut |_| {})?;
 ```
 
-Note that the storage constructor takes 6 closures as callbacks: `download_init`,
-`download_progress`, `download_finish`, `extract_init`, `extract_progress` and
-`extract_finish`. These are meant to print progress, or create a progress bar object and
-pass it around for updates.
-
 Afterwards, one can query the database using either `imdb.by_id(...)`,
-`imdb.by_title_and_year(...)` or `imdb.by_keywords(...)`, and print out some information
-about the results.
+`imdb.by_title(...)`, `imdb.by_title_and_year(...)` or `imdb.by_keywords(...)`, and print
+out some information about the results.
 
 ```rust
 let title = "city of god";
@@ -189,4 +157,5 @@ for title in imdb.by_title_and_year(title, year, ImdbQueryType::Movies)? {
 }
 ```
 
-See the `examples/` directory for a fully-functioning version of the above.
+See the `query` example under the `examples/` directory for a fully-functioning version of
+the above.
