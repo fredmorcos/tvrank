@@ -52,33 +52,17 @@ impl Db {
     self.series.n_titles()
   }
 
-  pub fn n_titles(&self) -> usize {
+  pub fn n_entries(&self) -> usize {
     self.n_movies() + self.n_series()
   }
 
-  pub(crate) fn from_binary(
-    mut data: &'static [u8],
-    movies_capacity: usize,
-    series_capacity: usize,
-  ) -> Res<Self> {
-    let mut res = Self::with_capacities(movies_capacity, series_capacity);
-
-    let cursor: &mut &[u8] = &mut data;
-    loop {
-      if (*cursor).is_empty() {
-        break;
-      }
-
-      let title = Title::from_binary(cursor)?;
-      let title_type = title.title_type();
-      if title_type.is_movie() {
-        res.movies.store_title(title);
-      } else if title_type.is_series() {
-        res.series.store_title(title);
-      }
+  pub(crate) fn store_title(&mut self, title: Title<'static>) {
+    let title_type = title.title_type();
+    if title_type.is_movie() {
+      self.movies.store_title(title);
+    } else if title_type.is_series() {
+      self.series.store_title(title);
     }
-
-    Ok(res)
   }
 
   pub(crate) fn to_binary<R1: BufRead, R2: BufRead, W: Write>(
@@ -161,9 +145,9 @@ impl Db {
     }
   }
 
-  pub(crate) fn by_keywords<'a>(
+  pub(crate) fn by_keywords<'a, 'k: 'a>(
     &'a self,
-    keywords: &'a [&'a str],
+    keywords: &'k [&str],
     query_type: QueryType,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
     match query_type {
@@ -257,7 +241,7 @@ impl<C> DbImpl<C> {
     [].iter()
   }
 
-  fn cookies_by_keywords<'a>(&'a self, keywords: &'a [&'a str]) -> impl Iterator<Item = &'a C> {
+  fn cookies_by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().build(keywords);
     self
       .by_title
@@ -301,7 +285,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
     self.cookies_by_title_and_year(title, year).map(|&cookie| &self[cookie])
   }
 
-  pub(crate) fn by_keywords<'a>(&'a self, keywords: &'a [&'a str]) -> impl Iterator<Item = &'a Title> {
+  pub(crate) fn by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 }

@@ -36,6 +36,10 @@ pub enum Err {
   BasicsDbQuery,
   #[display(fmt = "Unsupported title type `{}`", _0)]
   UnsupportedTitleType(TitleType),
+  #[display(fmt = "Error parsing title: {}", _0)]
+  ParsingTitle(String),
+  #[display(fmt = "Could not extract IMDB database")]
+  ArcUnwrap,
 }
 
 impl Err {
@@ -53,6 +57,10 @@ impl Err {
 
   pub(crate) fn eof<T>() -> Res<T> {
     Err(Box::new(Err::Eof))
+  }
+
+  pub(crate) fn arc_unwrap<T>() -> Res<T> {
+    Err(Box::new(Err::ArcUnwrap))
   }
 }
 
