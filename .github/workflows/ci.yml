@@ -1,5 +1,5 @@
 ---
-name: CI
+name: Lint, documentation, builds and tests
 
 on:
   push:
@@ -12,83 +12,77 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
-  lint:
-    name: CI on ${{matrix.os}} with the ${{matrix.toolchain}} toolchain
+  lint-docs-build-tests:
+    name: >-
+      Lint/Docs/Build/Tests on ${{matrix.os}}
+      with the ${{matrix.toolchain}} Toolchain
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
         os:
-          - ubuntu-18.04
           - ubuntu-20.04
-          - windows-2019
           - windows-2022
-          - macos-10.15
           - macos-11
         toolchain: [stable]
     steps:
       - uses: actions/checkout@v2
-      - name: Install toolchain ${{matrix.toolchain}}
+      - name: Install Toolchain (${{matrix.toolchain}})
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
           components: rustfmt, clippy
-      - name: Lint
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets --all-features
-      - name: Formatting check
+
+      - name: Code Formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check -l
-      - name: Documentation build
+
+      - name: Debug Lint
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-targets --all-features
+      - name: Debug Documentation
         uses: actions-rs/cargo@v1
         env:
           RUSTDOCFLAGS: -Dwarnings
         with:
           command: doc
           args: --all-features --no-deps --document-private-items
-      - name: Debug check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-targets --all-features
-      - name: Debug build
+      - name: Debug Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --all-features
-      - name: Tests with debug build
+      - name: Debug Tests
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all-features
-      - name: Release check
+
+      - name: Release Lint
         uses: actions-rs/cargo@v1
         with:
-          command: check
+          command: clippy
           args: --all-targets --all-features --release
-      - name: Release build
+      - name: Release Documentation
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        with:
+          command: doc
+          args: --all-features --no-deps --document-private-items --release
+      - name: Release Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --all-features --release
-      - name: Tests with release build
+      - name: Release Tests
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --all-features --release
-      - name: Production build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-features --profile production
-      - name: Tests with production build
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --profile production
 ...
