@@ -48,7 +48,19 @@ jobs:
             --document-private-items
             --profile production
 
-      - name: Build
+      - name: Debug Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features
+
+      - name: Release Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --release
+
+      - name: Production Build
         uses: actions-rs/cargo@v1
         with:
           command: build
@@ -125,7 +137,19 @@ jobs:
             --document-private-items
             --profile production
 
-      - name: Build
+      - name: Debug Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features
+
+      - name: Release Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --release
+
+      - name: Production Build
         uses: actions-rs/cargo@v1
         with:
           command: build
@@ -202,7 +226,19 @@ jobs:
             --document-private-items
             --profile production
 
-      - name: Build
+      - name: Debug Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features
+
+      - name: Release Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-features --release
+
+      - name: Production Build
         uses: actions-rs/cargo@v1
         with:
           command: build
