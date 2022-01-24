@@ -8,8 +8,9 @@ use crate::Res;
 use flate2::bufread::GzDecoder;
 use fnv::FnvHashSet;
 use humantime::format_duration;
-use log::debug;
+use log::{debug, log_enabled};
 use parking_lot::{const_mutex, Mutex};
+use rayon::prelude::*;
 use reqwest::blocking::Client;
 use reqwest::Url;
 use std::fs::{self, File};
@@ -44,42 +45,44 @@ impl Service {
     let svc = Self::from_binary(data)?;
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
-    let mut total_movies = 0;
-    let mut total_series = 0;
-    let mut total_entries = 0;
+    if log_enabled!(log::Level::Debug) {
+      let mut total_movies = 0;
+      let mut total_series = 0;
+      let mut total_entries = 0;
 
-    for (i, db) in svc.dbs.iter().enumerate() {
-      let movies = db.n_movies();
-      let series = db.n_series();
-      let entries = db.n_entries();
+      for (i, db) in svc.dbs.iter().enumerate() {
+        let movies = db.n_movies();
+        let series = db.n_series();
+        let entries = db.n_entries();
 
-      total_movies += movies;
-      total_series += series;
-      total_entries += entries;
+        total_movies += movies;
+        total_series += series;
+        total_entries += entries;
 
-      debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
+        debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
+      }
+
+      debug!(
+        "IMDB database contains {total_movies} movies and {total_series} series ({total_entries} entries)"
+      );
     }
-
-    debug!(
-      "IMDB database contains {total_movies} movies and {total_series} series ({total_entries} entries)"
-    );
 
     Ok(svc)
   }
 
   fn from_binary(mut data: &'static [u8]) -> Res<Self> {
-    let ncpus = num_cpus::get_physical();
-    let dbs = Arc::new(const_mutex(Vec::with_capacity(ncpus)));
+    let nthreads = rayon::current_num_threads();
+    let dbs = Arc::new(const_mutex(Vec::with_capacity(nthreads)));
 
     rayon::scope(|scope| {
       let cursor: Arc<Mutex<&mut &[u8]>> = Arc::new(const_mutex(&mut data));
 
-      for _ in 0..ncpus {
+      for _ in 0..nthreads {
         let dbs = Arc::clone(&dbs);
         let cursor = Arc::clone(&cursor);
 
         scope.spawn(move |_| {
-          let mut db = Db::with_capacities(1_900_000 / ncpus, 270_000 / ncpus);
+          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
           let mut titles = Vec::with_capacity(100);
 
           loop {
@@ -191,61 +194,46 @@ impl Service {
     Ok(())
   }
 
-  pub fn by_id(&self, id: &TitleId, query_type: QueryType) -> Res<Option<&Title>> {
-    let results: FnvHashSet<Option<&Title>> = self
+  pub fn by_id(&self, id: &TitleId, query_type: QueryType) -> Option<&Title> {
+    let res = self
       .dbs
-      .iter()
+      .par_iter()
       .map(|db| db.by_id(id, query_type))
-      .filter(|title| title.is_some())
-      .collect();
+      .filter(|res| res.is_some())
+      .flatten()
+      .collect::<Vec<_>>();
 
-    if results.len() > 1 {
-      return Err::duplicate_id(id.as_str().to_owned());
+    if res.is_empty() {
+      None
+    } else {
+      Some(unsafe { res.get_unchecked(0) })
     }
-
-    for title in results {
-      if title.is_some() {
-        return Ok(title);
-      }
-    }
-
-    Ok(None)
   }
 
-  pub fn by_title(&self, title: &str, query_type: QueryType) -> Res<FnvHashSet<&Title>> {
-    Ok(
-      self
-        .dbs
-        .iter()
-        .map(move |db| db.by_title(title, query_type))
-        .flatten()
-        .collect(),
-    )
+  pub fn by_title(&self, title: &str, query_type: QueryType) -> Vec<&Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_title(title, query_type).collect::<Vec<_>>())
+      .flatten()
+      .collect()
   }
 
-  pub fn by_title_and_year(&self, title: &str, year: u16, query_type: QueryType) -> Res<FnvHashSet<&Title>> {
-    Ok(
-      self
-        .dbs
-        .iter()
-        .map(move |db| db.by_title_and_year(title, year, query_type))
-        .flatten()
-        .collect(),
-    )
+  pub fn by_title_and_year(&self, title: &str, year: u16, query_type: QueryType) -> Vec<&Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_title_and_year(title, year, query_type).collect::<Vec<_>>())
+      .flatten()
+      .collect()
   }
 
-  pub fn by_keywords<'a>(
-    &'a self,
-    keywords: &'a [&str],
-    query_type: QueryType,
-  ) -> Res<FnvHashSet<&'a Title>> {
-    Ok(
-      self
-        .dbs
-        .iter()
-        .map(|db| db.by_keywords(keywords, query_type))
-        .flatten()
-        .collect(),
-    )
+  pub fn by_keywords<'a>(&'a self, keywords: &'a [&str], query_type: QueryType) -> FnvHashSet<&'a Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_keywords(keywords, query_type).collect::<Vec<_>>())
+      .flatten()
+      .collect()
   }
 }

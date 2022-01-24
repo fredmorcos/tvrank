@@ -15,13 +15,21 @@ use std::io::Write;
 use std::str::FromStr;
 use std::time::Duration;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Title<'a> {
   header: TitleHeader,
   title_id: TitleId<'a>,
   primary_title: &'a str,
   original_title: Option<&'a str>,
 }
+
+impl PartialEq for Title<'_> {
+  fn eq(&self, other: &Self) -> bool {
+    self.title_id == other.title_id
+  }
+}
+
+impl Eq for Title<'_> {}
 
 impl Hash for Title<'_> {
   fn hash<H: Hasher>(&self, state: &mut H) {

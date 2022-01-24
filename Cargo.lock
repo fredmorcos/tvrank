@@ -1563,7 +1563,6 @@ dependencies = [
  "indicatif",
  "indoc",
  "log",
- "num_cpus",
  "parking_lot",
  "prettytable-rs",
  "rayon",

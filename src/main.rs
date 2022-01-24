@@ -138,7 +138,7 @@ enum Command {
   },
 }
 
-fn sort_results(results: &mut [ImdbTitle], by_year: bool) {
+fn sort_results(results: &mut [&ImdbTitle], by_year: bool) {
   if by_year {
     results.sort_unstable_by(|a, b| {
       match b.start_year().cmp(&a.start_year()) {
@@ -252,47 +252,6 @@ fn create_output_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
   Ok(row)
 }
 
-fn imdb_by_id<'a>(
-  id: &ImdbTitleId,
-  imdb: &'a Imdb,
-  query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a>>,
-) -> Res<()> {
-  results.extend(imdb.by_id(id, query_type)?);
-  Ok(())
-}
-
-fn imdb_by_title<'a>(
-  title: &str,
-  imdb: &'a Imdb,
-  query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a>>,
-) -> Res<()> {
-  results.extend(imdb.by_title(&title.to_lowercase(), query_type)?);
-  Ok(())
-}
-
-fn imdb_by_title_and_year<'a>(
-  title: &str,
-  year: u16,
-  imdb: &'a Imdb,
-  query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a>>,
-) -> Res<()> {
-  results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, query_type)?);
-  Ok(())
-}
-
-fn imdb_by_keywords<'a>(
-  keywords: &'a [&str],
-  imdb: &'a Imdb,
-  query_type: ImdbQueryType,
-  results: &mut Vec<ImdbTitle<'a>>,
-) -> Res<()> {
-  results.extend(imdb.by_keywords(keywords, query_type)?);
-  Ok(())
-}
-
 fn display_title_and_year(title: &str, year: u16) -> String {
   format!("{} ({})", title, year)
 }
@@ -304,7 +263,7 @@ fn display_keywords(keywords: &[&str]) -> String {
 fn print_search_results(
   search_terms: &str,
   query_type: ImdbQueryType,
-  search_results: &[ImdbTitle],
+  search_results: &[&ImdbTitle],
   imdb_url: &Url,
 ) -> Res<()> {
   if search_results.is_empty() {
@@ -334,7 +293,9 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
   let mut series_results = vec![];
 
   if let Some((title, year)) = parse_title_and_year(title) {
-    imdb_by_title_and_year(title, year, imdb, ImdbQueryType::Movies, &mut movies_results)?;
+    let lc_title = title.to_lowercase();
+
+    movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQueryType::Movies));
     sort_results(&mut movies_results, sort_by_year);
     print_search_results(
       &display_title_and_year(title, year),
@@ -343,7 +304,7 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
       imdb_url,
     )?;
 
-    imdb_by_title_and_year(title, year, imdb, ImdbQueryType::Series, &mut series_results)?;
+    series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQueryType::Series));
     sort_results(&mut movies_results, sort_by_year);
     print_search_results(
       &display_title_and_year(title, year),
@@ -361,11 +322,11 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
     keywords.dedup();
     debug!("Keywords: {:?}", keywords);
 
-    imdb_by_keywords(&keywords, imdb, ImdbQueryType::Movies, &mut movies_results)?;
+    movies_results.extend(imdb.by_keywords(&keywords, ImdbQueryType::Movies));
     sort_results(&mut movies_results, sort_by_year);
     print_search_results(&display_keywords(&keywords), ImdbQueryType::Movies, &movies_results, imdb_url)?;
 
-    imdb_by_keywords(&keywords, imdb, ImdbQueryType::Series, &mut series_results)?;
+    series_results.extend(imdb.by_keywords(&keywords, ImdbQueryType::Series));
     sort_results(&mut series_results, sort_by_year);
     print_search_results(&display_keywords(&keywords), ImdbQueryType::Series, &series_results, imdb_url)?;
   }
@@ -423,28 +384,16 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
       let entry_path = entry.path();
 
       if let Ok(title_info) = load_title_info(entry_path) {
-        let mut local_results = vec![];
-        imdb_by_id(&title_info.imdb.id, imdb, ImdbQueryType::Movies, &mut local_results)?;
-
-        if local_results.is_empty() {
+        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQueryType::Movies) {
+          at_least_one_matched = true;
+          results.push(result);
+          continue;
+        } else {
           warn!(
             "Could not find title ID `{}` for `{}`, ignoring `tvrank.json` file",
             title_info.imdb.id,
             entry_path.display()
           );
-        } else if local_results.len() > 1 {
-          warn!(
-            "Found {} matches for title ID `{}` for `{}`:",
-            local_results.len(),
-            title_info.imdb.id,
-            entry_path.display()
-          );
-          warn!("  This should not happen, going to ignore `tvrank.json` file");
-          warn!("  but going to print the results for debugging purposes.");
-        } else {
-          at_least_one_matched = true;
-          results.extend(local_results);
-          continue;
         }
       }
 
@@ -455,7 +404,7 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
           at_least_one = true;
 
           let mut local_results = vec![];
-          imdb_by_title_and_year(title, year, imdb, ImdbQueryType::Movies, &mut local_results)?;
+          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQueryType::Movies));
           sort_results(&mut local_results, sort_by_year);
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -522,28 +471,16 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
       let entry_path = entry.path();
 
       if let Ok(title_info) = load_title_info(entry_path) {
-        let mut local_results = vec![];
-        imdb_by_id(&title_info.imdb.id, imdb, ImdbQueryType::Series, &mut local_results)?;
-
-        if local_results.is_empty() {
+        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQueryType::Series) {
+          at_least_one_matched = true;
+          results.push(result);
+          continue;
+        } else {
           warn!(
             "Could not find title ID `{}` for `{}`, ignoring `tvrank.json` file",
             title_info.imdb.id,
             entry_path.display()
           );
-        } else if local_results.len() > 1 {
-          warn!(
-            "Found {} matches for title ID `{}` for `{}`:",
-            local_results.len(),
-            title_info.imdb.id,
-            entry_path.display()
-          );
-          warn!("  This should not happen, going to ignore `tvrank.json` file");
-          warn!("  but going to print the results for debugging purposes.");
-        } else {
-          at_least_one_matched = true;
-          results.extend(local_results);
-          continue;
         }
       }
 
@@ -554,11 +491,11 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
         let mut local_results = vec![];
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
-          imdb_by_title_and_year(title, year, imdb, ImdbQueryType::Series, &mut local_results)?;
+          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQueryType::Series));
           sort_results(&mut local_results, sort_by_year);
           Cow::from(display_title_and_year(title, year))
         } else {
-          imdb_by_title(&filename, imdb, ImdbQueryType::Series, &mut local_results)?;
+          results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQueryType::Series));
           sort_results(&mut local_results, sort_by_year);
           filename
         };

@@ -11,7 +11,7 @@ fn main() -> tvrank::Res<()> {
 
   println!("Matches for {} and {:?}:", title, year);
 
-  for title in imdb.by_title_and_year(title, year, ImdbQueryType::Movies)? {
+  for title in imdb.by_title_and_year(title, year, ImdbQueryType::Movies) {
     let id = title.title_id();
 
     println!("ID: {}", id);
