@@ -1,8 +1,8 @@
 #![warn(clippy::all)]
 
-use crate::imdb::error::Err;
 use crate::imdb::ratings::Ratings;
 use crate::imdb::title::Title;
+use crate::imdb::title::TsvAction;
 use crate::imdb::title_id::TitleId;
 use crate::Res;
 use aho_corasick::AhoCorasickBuilder;
@@ -56,19 +56,19 @@ impl Db {
     self.n_movies() + self.n_series()
   }
 
-  pub(crate) fn store_title(&mut self, title: Title<'static>) {
-    let title_type = title.title_type();
-    if title_type.is_movie() {
-      self.movies.store_title(title);
-    } else if title_type.is_series() {
-      self.series.store_title(title);
-    }
+  pub(crate) fn store_movie(&mut self, title: Title<'static>) {
+    self.movies.store_title(title)
   }
 
-  pub(crate) fn to_binary<R1: BufRead, R2: BufRead, W: Write>(
+  pub(crate) fn store_series(&mut self, title: Title<'static>) {
+    self.series.store_title(title)
+  }
+
+  pub(crate) fn to_binary<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
     ratings_reader: R1,
     mut basics_reader: R2,
-    mut destination: W,
+    mut movies_db_writer: W1,
+    mut series_db_writer: W2,
     progress_fn: &mut dyn FnMut(u64),
   ) -> Res<()> {
     let ratings = Ratings::from_tsv(ratings_reader, progress_fn)?;
@@ -94,19 +94,13 @@ impl Db {
         continue;
       }
 
-      match Title::from_tsv(trimmed.as_bytes(), &ratings) {
-        Ok(title) => title.write_binary(&mut destination)?,
-        Err(e) => match e.downcast_ref::<Err>() {
-          Some(downcast_e) => {
-            if matches!(*downcast_e, Err::UnsupportedTitleType(_)) {
-              line.clear();
-              continue;
-            } else {
-              return Err(e);
-            }
-          }
-          None => return Err(e),
-        },
+      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
+        TsvAction::Movie(title) => title.write_binary(&mut movies_db_writer)?,
+        TsvAction::Series(title) => title.write_binary(&mut series_db_writer)?,
+        TsvAction::Skip => {
+          line.clear();
+          continue;
+        }
       }
 
       line.clear();
@@ -337,8 +331,10 @@ mod test_db {
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
 
-    let mut storage = Vec::new();
-    Db::to_binary(ratings_reader, basics_reader, &mut storage, &mut |_| {}).unwrap();
+    let mut movies_storage = Vec::new();
+    let mut series_storage = Vec::new();
+    Db::to_binary(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage, &mut |_| {})
+      .unwrap();
 
     let mut basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
@@ -357,11 +353,13 @@ mod test_db {
 
     for line in tsv_lines_iter {
       let title = Title::from_tsv(line.as_bytes(), &ratings).unwrap();
+      let title: Option<Title> = title.into();
+      let title = title.unwrap();
       titles_from_tsv.push(title);
     }
 
     let mut titles_from_binary = Vec::new();
-    let cursor: &mut &[u8] = &mut storage.as_ref();
+    let cursor: &mut &[u8] = &mut movies_storage.as_ref();
     loop {
       if (*cursor).is_empty() {
         break;

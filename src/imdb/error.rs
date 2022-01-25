@@ -38,8 +38,6 @@ pub enum Err {
   UnsupportedTitleType(TitleType),
   #[display(fmt = "Error parsing title: {}", _0)]
   ParsingTitle(String),
-  #[display(fmt = "Could not extract IMDB database")]
-  ArcUnwrap,
 }
 
 impl Err {
@@ -59,8 +57,8 @@ impl Err {
     Err(Box::new(Err::Eof))
   }
 
-  pub(crate) fn arc_unwrap<T>() -> Res<T> {
-    Err(Box::new(Err::ArcUnwrap))
+  pub(crate) fn unsupported_title_type<T>(title_type: TitleType) -> Res<T> {
+    Err(Box::new(Err::UnsupportedTitleType(title_type)))
   }
 }
 

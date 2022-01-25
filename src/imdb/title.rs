@@ -16,6 +16,23 @@ use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy)]
+pub(crate) enum TsvAction<T> {
+  Skip,
+  Movie(T),
+  Series(T),
+}
+
+impl<T> From<TsvAction<T>> for Option<T> {
+  fn from(val: TsvAction<T>) -> Self {
+    match val {
+      TsvAction::Skip => None,
+      TsvAction::Movie(t) => Some(t),
+      TsvAction::Series(t) => Some(t),
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Title<'a> {
   header: TitleHeader,
   title_id: TitleId<'a>,
@@ -77,7 +94,7 @@ impl<'a> Title<'a> {
     self.header.rating()
   }
 
-  pub(crate) fn from_tsv(line: &'a [u8], ratings: &Ratings) -> Res<Self> {
+  pub(crate) fn from_tsv(line: &'a [u8], ratings: &Ratings) -> Res<TsvAction<Self>> {
     let mut columns = line.split(|&b| b == tokens::TAB);
 
     let title_id = TitleId::try_from(iter_next!(columns))?;
@@ -88,8 +105,11 @@ impl<'a> Title<'a> {
       TitleType::from_str(title_type).map_err(|_| Err::TitleType)?
     };
 
-    if !title_type.is_movie() && !title_type.is_series() {
-      return Err(Box::new(Err::UnsupportedTitleType(title_type)));
+    let is_movie = title_type.is_movie();
+    let is_series = title_type.is_series();
+
+    if !is_movie && !is_series {
+      return Ok(TsvAction::Skip);
     }
 
     let primary_title = unsafe { std::str::from_utf8_unchecked(iter_next!(columns)) };
@@ -108,6 +128,10 @@ impl<'a> Title<'a> {
         _ => return Err::adult(),
       }
     };
+
+    if is_adult {
+      return Ok(TsvAction::Skip);
+    }
 
     let start_year = {
       let start_year = iter_next!(columns);
@@ -161,7 +185,14 @@ impl<'a> Title<'a> {
       genres,
     );
 
-    Ok(Title { header, title_id, primary_title, original_title })
+    let title = Title { header, title_id, primary_title, original_title };
+    if is_movie {
+      Ok(TsvAction::Movie(title))
+    } else if is_series {
+      Ok(TsvAction::Series(title))
+    } else {
+      Err::unsupported_title_type(title_type)
+    }
   }
 
   pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res<()> {
@@ -258,6 +289,8 @@ mod test_title {
       &ratings,
     )
     .unwrap();
+    let title: Option<Title> = title.into();
+    let title = title.unwrap();
 
     let mut binary = Vec::new();
     title.write_binary(&mut binary).unwrap();

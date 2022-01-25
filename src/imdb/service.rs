@@ -1,7 +1,6 @@
 #![warn(clippy::all)]
 
 use crate::imdb::db::{Db, QueryType};
-use crate::imdb::error::Err;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::Res;
@@ -16,7 +15,6 @@ use reqwest::Url;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter};
 use std::path::Path;
-use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 pub struct Service {
@@ -33,16 +31,23 @@ impl Service {
     let old_cache_dir = cache_dir.join("imdb");
     let _ = fs::remove_dir_all(old_cache_dir);
 
-    let db_filename = cache_dir.join("imdb.tvrankdb");
-    Self::ensure_db_file(&db_filename, force_db_update, progress_fn)?;
+    // Delete old imdb cache file.
+    let old_cache_file = cache_dir.join("imdb.tvrankdb");
+    let _ = fs::remove_file(old_cache_file);
+
+    let movies_db_filename = cache_dir.join("imdb-movies.tvrankdb");
+    let series_db_filename = cache_dir.join("imdb-series.tvrankdb");
+    Self::ensure_db_files(&movies_db_filename, &series_db_filename, force_db_update, progress_fn)?;
 
     let start = Instant::now();
-    let data = fs::read(db_filename)?;
-    let data = Box::leak(data.into_boxed_slice());
-    debug!("Read IMDB database file in {}", format_duration(Instant::now().duration_since(start)));
+    let movies_data = fs::read(movies_db_filename)?;
+    let series_data = fs::read(series_db_filename)?;
+    let movies_data = Box::leak(movies_data.into_boxed_slice());
+    let series_data = Box::leak(series_data.into_boxed_slice());
+    debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
-    let svc = Self::from_binary(data)?;
+    let service = Self::from_binary(movies_data, series_data);
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     if log_enabled!(log::Level::Debug) {
@@ -50,7 +55,7 @@ impl Service {
       let mut total_series = 0;
       let mut total_entries = 0;
 
-      for (i, db) in svc.dbs.iter().enumerate() {
+      for (i, db) in service.dbs.iter().enumerate() {
         let movies = db.n_movies();
         let series = db.n_series();
         let entries = db.n_entries();
@@ -67,63 +72,71 @@ impl Service {
       );
     }
 
-    Ok(svc)
+    Ok(service)
   }
 
-  fn from_binary(mut data: &'static [u8]) -> Res<Self> {
+  fn titles_from_binary<const IS_MOVIE: bool>(
+    cursor: &Mutex<&mut &'static [u8]>,
+    titles: &mut Vec<Title<'static>>,
+    db: &mut Db,
+  ) {
+    loop {
+      let mut cursor = cursor.lock();
+
+      if (*cursor).is_empty() {
+        break;
+      }
+
+      for _ in 0..100 {
+        if (*cursor).is_empty() {
+          break;
+        }
+
+        let title = match Title::from_binary(&mut cursor) {
+          Ok(title) => title,
+          Err(e) => panic!("Error parsing title: {}", e),
+        };
+
+        titles.push(title);
+      }
+
+      drop(cursor);
+
+      for &title in titles.iter() {
+        if IS_MOVIE {
+          db.store_movie(title);
+        } else {
+          db.store_series(title);
+        }
+      }
+
+      titles.clear();
+    }
+  }
+
+  fn from_binary(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
     let nthreads = rayon::current_num_threads();
-    let dbs = Arc::new(const_mutex(Vec::with_capacity(nthreads)));
+    let dbs = const_mutex(Vec::with_capacity(nthreads));
+    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
+    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
 
     rayon::scope(|scope| {
-      let cursor: Arc<Mutex<&mut &[u8]>> = Arc::new(const_mutex(&mut data));
-
       for _ in 0..nthreads {
-        let dbs = Arc::clone(&dbs);
-        let cursor = Arc::clone(&cursor);
+        let dbs = &dbs;
+        let movies_cursor = &movies_cursor;
+        let series_cursor = &series_cursor;
 
         scope.spawn(move |_| {
           let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
           let mut titles = Vec::with_capacity(100);
-
-          loop {
-            let mut cursor = cursor.lock();
-
-            if (*cursor).is_empty() {
-              break;
-            }
-
-            for _ in 0..100 {
-              if (*cursor).is_empty() {
-                break;
-              }
-
-              let title = match Title::from_binary(&mut cursor) {
-                Ok(title) => title,
-                Err(e) => panic!("Error parsing title: {}", e),
-              };
-
-              titles.push(title);
-            }
-
-            drop(cursor);
-
-            for &title in &titles {
-              db.store_title(title);
-            }
-
-            titles.clear();
-          }
-
+          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
           dbs.lock().push(db);
         });
       }
     });
 
-    if let Ok(dbs) = Arc::try_unwrap(dbs) {
-      Ok(Self { dbs: dbs.into_inner() })
-    } else {
-      Err::arc_unwrap()
-    }
+    Self { dbs: dbs.into_inner() }
   }
 
   fn file_exists(path: &Path) -> Res<Option<File>> {
@@ -136,8 +149,8 @@ impl Service {
     }
   }
 
-  fn file_needs_update(file: &Option<File>, force_update: bool) -> Res<bool> {
-    if force_update {
+  fn file_needs_update(file: &Option<File>, force_db_update: bool) -> Res<bool> {
+    if force_db_update {
       Ok(true)
     } else if let Some(f) = file {
       let md = f.metadata()?;
@@ -155,10 +168,17 @@ impl Service {
     }
   }
 
-  fn ensure_db_file(db_filename: &Path, force_db_update: bool, progress_fn: &mut dyn FnMut(u64)) -> Res<()> {
+  fn ensure_db_files(
+    movies_db_filename: &Path,
+    series_db_filename: &Path,
+    force_db_update: bool,
+    progress_fn: &mut dyn FnMut(u64),
+  ) -> Res<()> {
     let needs_update = {
-      let file = Self::file_exists(db_filename)?;
-      Self::file_needs_update(&file, force_db_update)?
+      let movies_db_file = Self::file_exists(movies_db_filename)?;
+      let series_db_file = Self::file_exists(series_db_filename)?;
+      Self::file_needs_update(&movies_db_file, force_db_update)?
+        || Self::file_needs_update(&series_db_file, force_db_update)?
     };
 
     if needs_update {
@@ -184,9 +204,13 @@ impl Service {
       let ratings_decoder = GzDecoder::new(ratings_reader);
       let ratings_reader = BufReader::new(ratings_decoder);
 
-      let db_file = File::create(db_filename)?;
-      let db_writer = BufWriter::new(db_file);
-      Db::to_binary(ratings_reader, basics_reader, db_writer, progress_fn)?;
+      let movies_db_file = File::create(movies_db_filename)?;
+      let movies_db_writer = BufWriter::new(movies_db_file);
+
+      let series_db_file = File::create(series_db_filename)?;
+      let series_db_writer = BufWriter::new(series_db_file);
+
+      Db::to_binary(ratings_reader, basics_reader, movies_db_writer, series_db_writer, progress_fn)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
