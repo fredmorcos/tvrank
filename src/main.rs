@@ -5,6 +5,7 @@ mod ui;
 use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
+use fnv::FnvHashSet;
 use humantime::format_duration;
 use indicatif::ProgressBar;
 use log::{debug, error, warn};
@@ -32,6 +33,8 @@ enum TvRankErr {
   CacheDir,
   #[display(fmt = "Invalid `tvrank.json` file")]
   InvalidTitleInfo,
+  #[display(fmt = "Empty set of keywords")]
+  NoKeywords,
 }
 
 impl TvRankErr {
@@ -41,6 +44,10 @@ impl TvRankErr {
 
   fn invalid_title_info<T>() -> Res<T> {
     Err(Box::new(TvRankErr::InvalidTitleInfo))
+  }
+
+  fn no_keywords<T>() -> Res<T> {
+    Err(Box::new(TvRankErr::NoKeywords))
   }
 }
 
@@ -314,12 +321,20 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
     )?;
   } else {
     debug!("Going to use `{}` as keywords for search query", title);
-    let mut keywords = title
-      .split_whitespace()
-      .filter(|&keyword| keyword.len() > 2)
-      .collect::<Vec<_>>();
-    keywords.sort_unstable();
-    keywords.dedup();
+    let keywords_set: FnvHashSet<_> = title.split_whitespace().map(|kw| kw.to_lowercase()).collect();
+    let keywords_set = if keywords_set.is_empty() {
+      return TvRankErr::no_keywords();
+    } else if keywords_set.len() > 1 {
+      keywords_set
+        .into_iter()
+        .filter(|keyword| keyword.len() > 1)
+        .collect::<FnvHashSet<_>>()
+    } else {
+      keywords_set
+    };
+
+    let mut keywords = vec![];
+    keywords.extend(keywords_set.iter().map(<String as AsRef<str>>::as_ref));
     debug!("Keywords: {:?}", keywords);
 
     movies_results.extend(imdb.by_keywords(&keywords, ImdbQueryType::Movies));
