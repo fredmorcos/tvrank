@@ -9,6 +9,7 @@ use aho_corasick::AhoCorasickBuilder;
 use derive_more::{Display, From, Into};
 use deunicode::deunicode;
 use fnv::{FnvHashMap, FnvHashSet};
+use std::collections::HashMap;
 use std::fmt;
 use std::io::{BufRead, Write};
 use std::ops::Index;
@@ -153,7 +154,7 @@ impl Db {
 
 type ById<C> = FnvHashMap<usize, C>;
 type ByYear<C> = FnvHashMap<u16, Vec<C>>;
-type ByTitle<C> = FnvHashMap<String, ByYear<C>>;
+type ByTitle<C> = HashMap<String, ByYear<C>>;
 
 struct DbImpl<C> {
   /// Titles information.

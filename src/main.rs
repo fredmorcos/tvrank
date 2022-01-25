@@ -5,7 +5,6 @@ mod ui;
 use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
-use fnv::FnvHashSet;
 use humantime::format_duration;
 use indicatif::ProgressBar;
 use log::{debug, error, warn};
@@ -15,6 +14,7 @@ use reqwest::Url;
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
 use std::io::BufReader;
@@ -322,14 +322,14 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
     )?;
   } else {
     debug!("Going to use `{}` as keywords for search query", title);
-    let keywords_set: FnvHashSet<_> = title.split_whitespace().map(|kw| kw.to_lowercase()).collect();
+    let keywords_set: HashSet<_> = title.split_whitespace().map(|kw| kw.to_lowercase()).collect();
     let keywords_set = if keywords_set.is_empty() {
       return TvRankErr::no_keywords();
     } else if keywords_set.len() > 1 {
       keywords_set
         .into_iter()
         .filter(|keyword| keyword.len() > 1)
-        .collect::<FnvHashSet<_>>()
+        .collect::<HashSet<_>>()
     } else {
       keywords_set
     };
