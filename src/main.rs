@@ -275,7 +275,7 @@ fn print_search_results(
   imdb_url: &Url,
 ) -> Res<()> {
   if search_results.is_empty() {
-    println!("No {query_type} matches found for `{search_terms}`");
+    eprintln!("No {} matches found for `{}`", query_type, search_terms);
   } else {
     let num = search_results.len();
     let matches = if search_results.len() == 1 {
