@@ -511,8 +511,8 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
           sort_results(&mut local_results, sort_by_year);
           Cow::from(display_title_and_year(title, year))
         } else {
-          results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQueryType::Series));
           sort_results(&mut local_results, sort_by_year);
+          local_results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQueryType::Series));
           filename
         };
 
