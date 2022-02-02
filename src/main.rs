@@ -275,15 +275,16 @@ fn print_search_results(
   imdb_url: &Url,
 ) -> Res<()> {
   if search_results.is_empty() {
-    eprintln!("No {} matches found for `{}`", query_type, search_terms);
+    println!("No {query_type} matches found for `{search_terms}`");
   } else {
+    let num = search_results.len();
     let matches = if search_results.len() == 1 {
       "match"
     } else {
       "matches"
     };
 
-    eprintln!("Found {} {} {} for `{}`:", search_results.len(), query_type, matches, search_terms);
+    println!("Found {num} {query_type} {matches} for `{search_terms}`:");
     let mut table = create_output_table();
     for res in search_results {
       let row = create_output_row_for_title(res, imdb_url)?;
@@ -492,11 +493,9 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
           results.push(result);
           continue;
         } else {
-          warn!(
-            "Could not find title ID `{}` for `{}`, ignoring `tvrank.json` file",
-            title_info.imdb.id,
-            entry_path.display()
-          );
+          let id = title_info.imdb.id;
+          let path = entry_path.display();
+          warn!("Could not find title ID `{id}` for `{path}`, ignoring `tvrank.json` file");
         }
       }
 
@@ -508,10 +507,8 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQueryType::Series));
-          sort_results(&mut local_results, sort_by_year);
           Cow::from(display_title_and_year(title, year))
         } else {
-          sort_results(&mut local_results, sort_by_year);
           local_results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQueryType::Series));
           filename
         };
@@ -521,6 +518,7 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
             at_least_one_matched = true;
           }
 
+          sort_results(&mut local_results, sort_by_year);
           print_search_results(&search_terms, ImdbQueryType::Series, &local_results, imdb_url)?;
         } else {
           at_least_one_matched = true;
