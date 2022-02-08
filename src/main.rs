@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
 use truncatable::Truncatable;
-use tvrank::imdb::{Imdb, ImdbQueryType, ImdbTitle, ImdbTitleId};
+use tvrank::imdb::{Imdb, ImdbQuery, ImdbTitle, ImdbTitleId};
 use tvrank::Res;
 use ui::create_progress_spinner;
 use walkdir::WalkDir;
@@ -270,12 +270,12 @@ fn display_keywords(keywords: &[&str]) -> String {
 
 fn print_search_results(
   search_terms: &str,
-  query_type: ImdbQueryType,
+  query: ImdbQuery,
   search_results: &[&ImdbTitle],
   imdb_url: &Url,
 ) -> Res<()> {
   if search_results.is_empty() {
-    eprintln!("No {} matches found for `{}`", query_type, search_terms);
+    eprintln!("No {query} matches found for `{search_terms}`");
   } else {
     let num = search_results.len();
     let matches = if search_results.len() == 1 {
@@ -284,7 +284,7 @@ fn print_search_results(
       "matches"
     };
 
-    println!("Found {num} {query_type} {matches} for `{search_terms}`:");
+    println!("Found {num} {query} {matches} for `{search_terms}`:");
     let mut table = create_output_table();
     for res in search_results {
       let row = create_output_row_for_title(res, imdb_url)?;
@@ -304,23 +304,13 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
   if let Some((title, year)) = parse_title_and_year(title) {
     let lc_title = title.to_lowercase();
 
-    movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQueryType::Movies));
+    movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Movies));
     sort_results(&mut movies_results, sort_by_year);
-    print_search_results(
-      &display_title_and_year(title, year),
-      ImdbQueryType::Movies,
-      &movies_results,
-      imdb_url,
-    )?;
+    print_search_results(&display_title_and_year(title, year), ImdbQuery::Movies, &movies_results, imdb_url)?;
 
-    series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQueryType::Series));
+    series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Series));
     sort_results(&mut movies_results, sort_by_year);
-    print_search_results(
-      &display_title_and_year(title, year),
-      ImdbQueryType::Series,
-      &series_results,
-      imdb_url,
-    )?;
+    print_search_results(&display_title_and_year(title, year), ImdbQuery::Series, &series_results, imdb_url)?;
   } else {
     debug!("Going to use `{}` as keywords for search query", title);
     let keywords_set: HashSet<_> = title.split_whitespace().map(|kw| kw.to_lowercase()).collect();
@@ -339,13 +329,13 @@ fn imdb_single_title<'a>(title: &str, imdb: &'a Imdb, imdb_url: &Url, sort_by_ye
     keywords.extend(keywords_set.iter().map(<String as AsRef<str>>::as_ref));
     debug!("Keywords: {:?}", keywords);
 
-    movies_results.extend(imdb.by_keywords(&keywords, ImdbQueryType::Movies));
+    movies_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Movies));
     sort_results(&mut movies_results, sort_by_year);
-    print_search_results(&display_keywords(&keywords), ImdbQueryType::Movies, &movies_results, imdb_url)?;
+    print_search_results(&display_keywords(&keywords), ImdbQuery::Movies, &movies_results, imdb_url)?;
 
-    series_results.extend(imdb.by_keywords(&keywords, ImdbQueryType::Series));
+    series_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Series));
     sort_results(&mut series_results, sort_by_year);
-    print_search_results(&display_keywords(&keywords), ImdbQueryType::Series, &series_results, imdb_url)?;
+    print_search_results(&display_keywords(&keywords), ImdbQuery::Series, &series_results, imdb_url)?;
   }
 
   Ok(())
@@ -401,7 +391,7 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
       let entry_path = entry.path();
 
       if let Ok(title_info) = load_title_info(entry_path) {
-        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQueryType::Movies) {
+        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQuery::Movies) {
           at_least_one_matched = true;
           results.push(result);
           continue;
@@ -421,7 +411,7 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
           at_least_one = true;
 
           let mut local_results = vec![];
-          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQueryType::Movies));
+          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
           sort_results(&mut local_results, sort_by_year);
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -431,7 +421,7 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
 
             print_search_results(
               &display_title_and_year(title, year),
-              ImdbQueryType::Movies,
+              ImdbQuery::Movies,
               &local_results,
               imdb_url,
             )?;
@@ -488,7 +478,7 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
       let entry_path = entry.path();
 
       if let Ok(title_info) = load_title_info(entry_path) {
-        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQueryType::Series) {
+        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQuery::Series) {
           at_least_one_matched = true;
           results.push(result);
           continue;
@@ -506,10 +496,10 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
         let mut local_results = vec![];
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
-          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQueryType::Series));
+          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
           Cow::from(display_title_and_year(title, year))
         } else {
-          local_results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQueryType::Series));
+          local_results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQuery::Series));
           filename
         };
 
@@ -519,7 +509,7 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
           }
 
           sort_results(&mut local_results, sort_by_year);
-          print_search_results(&search_terms, ImdbQueryType::Series, &local_results, imdb_url)?;
+          print_search_results(&search_terms, ImdbQuery::Series, &local_results, imdb_url)?;
         } else {
           at_least_one_matched = true;
           results.extend(local_results);

@@ -15,16 +15,16 @@ use std::io::{BufRead, Write};
 use std::ops::Index;
 
 #[derive(Clone, Copy)]
-pub enum QueryType {
+pub enum Query {
   Movies,
   Series,
 }
 
-impl fmt::Display for QueryType {
+impl fmt::Display for Query {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      QueryType::Movies => write!(f, "movie"),
-      QueryType::Series => write!(f, "series"),
+      Query::Movies => write!(f, "movie"),
+      Query::Series => write!(f, "series"),
     }
   }
 }
@@ -110,21 +110,21 @@ impl Db {
     Ok(())
   }
 
-  pub(crate) fn by_id(&self, id: &TitleId, query_type: QueryType) -> Option<&Title> {
-    match query_type {
-      QueryType::Movies => self.movies.by_id(id),
-      QueryType::Series => self.series.by_id(id),
+  pub(crate) fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
+    match query {
+      Query::Movies => self.movies.by_id(id),
+      Query::Series => self.series.by_id(id),
     }
   }
 
   pub(crate) fn by_title<'a>(
     &'a self,
     title: &str,
-    query_type: QueryType,
+    query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
-    match query_type {
-      QueryType::Movies => self.movies.by_title(title),
-      QueryType::Series => self.series.by_title(title),
+    match query {
+      Query::Movies => self.movies.by_title(title),
+      Query::Series => self.series.by_title(title),
     }
   }
 
@@ -132,22 +132,22 @@ impl Db {
     &'a self,
     title: &str,
     year: u16,
-    query_type: QueryType,
+    query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
-    match query_type {
-      QueryType::Movies => Box::new(self.movies.by_title_and_year(title, year)),
-      QueryType::Series => Box::new(self.series.by_title_and_year(title, year)),
+    match query {
+      Query::Movies => Box::new(self.movies.by_title_and_year(title, year)),
+      Query::Series => Box::new(self.series.by_title_and_year(title, year)),
     }
   }
 
   pub(crate) fn by_keywords<'a, 'k: 'a>(
     &'a self,
     keywords: &'k [&str],
-    query_type: QueryType,
+    query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
-    match query_type {
-      QueryType::Movies => Box::new(self.movies.by_keywords(keywords)),
-      QueryType::Series => Box::new(self.series.by_keywords(keywords)),
+    match query {
+      Query::Movies => Box::new(self.movies.by_keywords(keywords)),
+      Query::Series => Box::new(self.series.by_keywords(keywords)),
     }
   }
 }

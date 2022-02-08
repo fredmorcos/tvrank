@@ -1,6 +1,6 @@
 #![warn(clippy::all)]
 
-use crate::imdb::db::{Db, QueryType};
+use crate::imdb::db::{Db, Query};
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::Res;
@@ -218,11 +218,11 @@ impl Service {
     Ok(())
   }
 
-  pub fn by_id(&self, id: &TitleId, query_type: QueryType) -> Option<&Title> {
+  pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
     let res = self
       .dbs
       .par_iter()
-      .map(|db| db.by_id(id, query_type))
+      .map(|db| db.by_id(id, query))
       .filter(|res| res.is_some())
       .flatten()
       .collect::<Vec<_>>();
@@ -234,29 +234,29 @@ impl Service {
     }
   }
 
-  pub fn by_title(&self, title: &str, query_type: QueryType) -> Vec<&Title> {
+  pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
     self
       .dbs
       .par_iter()
-      .map(|db| db.by_title(title, query_type).collect::<Vec<_>>())
+      .map(|db| db.by_title(title, query).collect::<Vec<_>>())
       .flatten()
       .collect()
   }
 
-  pub fn by_title_and_year(&self, title: &str, year: u16, query_type: QueryType) -> Vec<&Title> {
+  pub fn by_title_and_year(&self, title: &str, year: u16, query: Query) -> Vec<&Title> {
     self
       .dbs
       .par_iter()
-      .map(|db| db.by_title_and_year(title, year, query_type).collect::<Vec<_>>())
+      .map(|db| db.by_title_and_year(title, year, query).collect::<Vec<_>>())
       .flatten()
       .collect()
   }
 
-  pub fn by_keywords<'a>(&'a self, keywords: &'a [&str], query_type: QueryType) -> FnvHashSet<&'a Title> {
+  pub fn by_keywords<'a>(&'a self, keywords: &'a [&str], query: Query) -> FnvHashSet<&'a Title> {
     self
       .dbs
       .par_iter()
-      .map(|db| db.by_keywords(keywords, query_type).collect::<Vec<_>>())
+      .map(|db| db.by_keywords(keywords, query).collect::<Vec<_>>())
       .flatten()
       .collect()
   }

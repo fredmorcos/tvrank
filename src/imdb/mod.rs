@@ -11,7 +11,7 @@ mod title_id;
 mod title_type;
 mod utils;
 
-pub use db::QueryType as ImdbQueryType;
+pub use db::Query as ImdbQuery;
 pub use error::Err as ImdbErr;
 pub use genre::{Genre as ImdbGenre, Genres as ImdbGenres};
 pub use service::Service as Imdb;
