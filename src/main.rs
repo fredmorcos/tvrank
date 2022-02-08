@@ -212,10 +212,10 @@ fn create_output_row_for_title(title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
 
   let mut row = Row::new(vec![]);
 
-  row.add_cell(Cell::new(&Truncatable::from(title.primary_title()).truncate(60)));
+  row.add_cell(Cell::new(&Truncatable::from(title.primary_title()).truncate(50)));
 
   if let Some(original_title) = title.original_title() {
-    row.add_cell(Cell::new(&Truncatable::from(original_title).truncate(60)));
+    row.add_cell(Cell::new(&Truncatable::from(original_title).truncate(30)));
   } else {
     row.add_cell(Cell::new(""));
   }
