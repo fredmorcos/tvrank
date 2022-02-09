@@ -1,6 +1,6 @@
 #![warn(clippy::all)]
 
-use tvrank::imdb::{Imdb, ImdbQueryType};
+use tvrank::imdb::{Imdb, ImdbQuery};
 
 fn main() -> tvrank::Res<()> {
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
@@ -11,7 +11,7 @@ fn main() -> tvrank::Res<()> {
 
   println!("Matches for {} and {:?}:", title, year);
 
-  for title in imdb.by_title_and_year(title, year, ImdbQueryType::Movies) {
+  for title in imdb.by_title_and_year(title, year, ImdbQuery::Movies) {
     let id = title.title_id();
 
     println!("ID: {}", id);
