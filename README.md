@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/CI?label=Master&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
 [![Crates.io](https://img.shields.io/crates/v/tvrank?style=for-the-badge)](https://crates.io/crates/tvrank)
-[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.6.2/tvrank/)
+[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.7.0/tvrank/)
 
 [Github Repository](https://github.com/fredmorcos/tvrank)
 
@@ -143,7 +143,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tvrank = "0.6"
+tvrank = "0.7"
 ```
 
 Or, using `cargo add`:
