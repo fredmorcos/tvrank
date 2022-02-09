@@ -260,4 +260,18 @@ impl Service {
       .flatten()
       .collect()
   }
+
+  pub fn by_keywords_and_year<'a>(
+    &'a self,
+    keywords: &'a [&str],
+    year: u16,
+    query: Query,
+  ) -> FnvHashSet<&'a Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_keywords_and_year(keywords, year, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
 }

@@ -150,6 +150,18 @@ impl Db {
       Query::Series => Box::new(self.series.by_keywords(keywords)),
     }
   }
+
+  pub(crate) fn by_keywords_and_year<'a, 'k: 'a>(
+    &'a self,
+    keywords: &'k [&str],
+    year: u16,
+    query: Query,
+  ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
+    match query {
+      Query::Movies => Box::new(self.movies.by_keywords_and_year(keywords, year)),
+      Query::Series => Box::new(self.series.by_keywords_and_year(keywords, year)),
+    }
+  }
 }
 
 type ById<C> = FnvHashMap<usize, C>;
@@ -250,6 +262,24 @@ impl<C> DbImpl<C> {
       .flatten()
   }
 
+  fn cookies_by_keywords_and_year<'a, 'k: 'a>(
+    &'a self,
+    keywords: &'k [&str],
+    year: u16,
+  ) -> impl Iterator<Item = &'a C> {
+    let searcher = AhoCorasickBuilder::new().build(keywords);
+    self
+      .by_title
+      .iter()
+      .filter(move |&(title, _)| {
+        let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
+        matches.len() == keywords.len()
+      })
+      .filter_map(move |(_, by_year)| by_year.get(&year))
+      // .map(|(_, by_year)| by_year.values())
+      .flatten()
+  }
+
   fn insert_by_id(&mut self, id: &TitleId, cookie: C) -> bool {
     self.by_id.insert(id.as_usize(), cookie).is_none()
   }
@@ -282,6 +312,14 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
 
   pub(crate) fn by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
+  }
+
+  pub(crate) fn by_keywords_and_year<'a, 'k: 'a>(
+    &'a self,
+    keywords: &'k [&str],
+    year: u16,
+  ) -> impl Iterator<Item = &'a Title> {
+    self.cookies_by_keywords_and_year(keywords, year).map(|&cookie| &self[cookie])
   }
 }
 
