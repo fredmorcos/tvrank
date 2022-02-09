@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+mod info;
 mod search;
 mod ui;
 
@@ -8,20 +9,19 @@ use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
 use indicatif::ProgressBar;
+use info::TitleInfo;
 use log::{debug, error, log_enabled, warn};
 use regex::Regex;
 use reqwest::Url;
 use search::SearchRes;
-use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use structopt::StructOpt;
-use tvrank::imdb::{Imdb, ImdbQuery, ImdbTitleId};
+use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::Res;
 use ui::create_progress_spinner;
 use walkdir::WalkDir;
@@ -31,8 +31,6 @@ use walkdir::WalkDir;
 enum TvRankErr {
   #[display(fmt = "Could not find cache directory")]
   CacheDir,
-  #[display(fmt = "Invalid `tvrank.json` file")]
-  InvalidTitleInfo,
   #[display(fmt = "Empty set of keywords")]
   NoKeywords,
 }
@@ -40,10 +38,6 @@ enum TvRankErr {
 impl TvRankErr {
   fn cache_dir<T>() -> Res<T> {
     Err(Box::new(TvRankErr::CacheDir))
-  }
-
-  fn invalid_title_info<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::InvalidTitleInfo))
   }
 
   fn no_keywords<T>() -> Res<T> {
@@ -238,43 +232,6 @@ fn imdb_single_title<'a>(
   Ok(())
 }
 
-#[derive(Deserialize)]
-struct TitleInfo {
-  imdb: ImdbTitleInfo,
-}
-
-#[derive(Deserialize)]
-struct ImdbTitleInfo {
-  #[serde(deserialize_with = "deserialize_titleid")]
-  id: ImdbTitleId<'static>,
-}
-
-fn deserialize_titleid<'de, D>(deserializer: D) -> Result<ImdbTitleId<'static>, D::Error>
-where
-  D: Deserializer<'de>,
-{
-  let s = Box::leak(String::deserialize(deserializer)?.into_boxed_str());
-  let title_id = ImdbTitleId::try_from(s.as_bytes()).map_err(serde::de::Error::custom)?;
-  Ok(title_id)
-}
-
-fn load_title_info(entry_path: &Path) -> Res<TitleInfo> {
-  let title_info_path = entry_path.join("tvrank.json");
-  let title_info_file = fs::File::open(&title_info_path)?;
-  let title_info_file_reader = BufReader::new(title_info_file);
-  let title_info: Result<TitleInfo, _> = serde_json::from_reader(title_info_file_reader);
-
-  let title_info = match title_info {
-    Ok(title_info) => title_info,
-    Err(err) => {
-      warn!("Ignoring info in `{}` due to parse error: {}", title_info_path.display(), err);
-      return TvRankErr::invalid_title_info();
-    }
-  };
-
-  Ok(title_info)
-}
-
 fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
@@ -287,17 +244,15 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
     if entry.file_type().is_dir() {
       let entry_path = entry.path();
 
-      if let Ok(title_info) = load_title_info(entry_path) {
-        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQuery::Movies) {
+      if let Ok(title_info) = TitleInfo::from_path(entry_path) {
+        if let Some(result) = imdb.by_id(title_info.imdb().id(), ImdbQuery::Movies) {
           at_least_one_matched = true;
           results.push(result);
           continue;
         } else {
-          warn!(
-            "Could not find title ID `{}` for `{}`, ignoring `tvrank.json` file",
-            title_info.imdb.id,
-            entry_path.display()
-          );
+          let id = title_info.imdb().id();
+          let path = entry_path.display();
+          warn!("Could not find title ID `{id}` for `{path}`, ignoring `tvrank.json` file");
         }
       }
 
@@ -359,13 +314,13 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
     if entry.file_type().is_dir() {
       let entry_path = entry.path();
 
-      if let Ok(title_info) = load_title_info(entry_path) {
-        if let Some(result) = imdb.by_id(&title_info.imdb.id, ImdbQuery::Series) {
+      if let Ok(title_info) = TitleInfo::from_path(entry_path) {
+        if let Some(result) = imdb.by_id(title_info.imdb().id(), ImdbQuery::Series) {
           at_least_one_matched = true;
           results.push(result);
           continue;
         } else {
-          let id = title_info.imdb.id;
+          let id = title_info.imdb().id();
           let path = entry_path.display();
           warn!("Could not find title ID `{id}` for `{path}`, ignoring `tvrank.json` file");
         }
