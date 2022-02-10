@@ -10,7 +10,7 @@ repository = "https://github.com/fredmorcos/tvrank"
 readme = "README.md"
 keywords = ["tv", "series", "movies", "imdb", "rank"]
 categories = ["caching", "command-line-utilities", "filesystem", "multimedia::video", "parsing"]
-exclude = ["/.github", "/.gitignore", "/screencasts", "/screenshots"]
+exclude = ["/attic", "/.github", "/.gitignore", "/screencasts", "/screenshots"]
 
 [lib]
 name = "tvrank"
