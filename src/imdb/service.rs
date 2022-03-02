@@ -10,7 +10,7 @@ use humantime::format_duration;
 use log::{debug, log_enabled};
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, Response};
 use reqwest::Url;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter};
@@ -168,6 +168,16 @@ impl Service {
     }
   }
 
+  fn downloader(imdb_url: &Url, path: &str) -> Res<BufReader<GzDecoder<BufReader<Response>>>> {
+    let url = imdb_url.join(path)?;
+    let client = Client::builder().build()?;
+    let resp = client.get(url).send()?;
+    let reader = BufReader::new(resp);
+    let decoder = GzDecoder::new(reader);
+    let reader = BufReader::new(decoder);
+    Ok(reader)
+  }
+
   fn ensure_db_files(
     movies_db_filename: &Path,
     series_db_filename: &Path,
@@ -190,19 +200,8 @@ impl Service {
 
       let imdb_url = Url::parse(IMDB)?;
 
-      let basics_url = imdb_url.join(BASICS_FILENAME)?;
-      let basics_client = Client::builder().build()?;
-      let basics_resp = basics_client.get(basics_url).send()?;
-      let basics_reader = BufReader::new(basics_resp);
-      let basics_decoder = GzDecoder::new(basics_reader);
-      let basics_reader = BufReader::new(basics_decoder);
-
-      let ratings_url = imdb_url.join(RATINGS_FILENAME)?;
-      let ratings_client = Client::builder().build()?;
-      let ratings_resp = ratings_client.get(ratings_url).send()?;
-      let ratings_reader = BufReader::new(ratings_resp);
-      let ratings_decoder = GzDecoder::new(ratings_reader);
-      let ratings_reader = BufReader::new(ratings_decoder);
+      let basics_downloader = Self::downloader(&imdb_url, BASICS_FILENAME)?;
+      let ratings_downloader = Self::downloader(&imdb_url, RATINGS_FILENAME)?;
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);
@@ -210,7 +209,7 @@ impl Service {
       let series_db_file = File::create(series_db_filename)?;
       let series_db_writer = BufWriter::new(series_db_file);
 
-      Db::to_binary(ratings_reader, basics_reader, movies_db_writer, series_db_writer, progress_fn)?;
+      Db::to_binary(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer, progress_fn)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
