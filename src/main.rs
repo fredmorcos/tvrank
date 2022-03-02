@@ -101,13 +101,7 @@ fn create_project() -> Res<ProjectDirs> {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "Query information about movies and series")]
-#[structopt(author = "Fred Morcos <fm@fredmorcos.com>")]
-struct Opt {
-  /// Verbose output (can be specified multiple times)
-  #[structopt(short, long, parse(from_occurrences))]
-  verbose: u8,
-
+struct Opts {
   /// Force updating internal databases.
   #[structopt(short, long)]
   force_update: bool,
@@ -115,6 +109,18 @@ struct Opt {
   /// Sort by year/rating/title instead of rating/year/title
   #[structopt(short = "y", long)]
   sort_by_year: bool,
+
+  /// Verbose output (can be specified multiple times)
+  #[structopt(short, long, parse(from_occurrences))]
+  verbose: u8,
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(about = "Query information about movies and series")]
+#[structopt(author = "Fred Morcos <fm@fredmorcos.com>")]
+struct Opt {
+  #[structopt(flatten)]
+  opts: Opts,
 
   #[structopt(subcommand)]
   command: Command,
@@ -129,16 +135,25 @@ enum Command {
 
     #[structopt(name = "TITLE")]
     title: String,
+
+    #[structopt(flatten)]
+    opts: Opts,
   },
   /// Lookup movie titles from a directory
   MoviesDir {
     #[structopt(name = "DIR")]
     dir: PathBuf,
+
+    #[structopt(flatten)]
+    opts: Opts,
   },
   /// Lookup series titles from a directory
   SeriesDir {
     #[structopt(name = "DIR")]
     dir: PathBuf,
+
+    #[structopt(flatten)]
+    opts: Opts,
   },
 }
 
@@ -368,7 +383,7 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
   Ok(())
 }
 
-fn run(opt: Opt) -> Res<()> {
+fn run(cmd: Command, opt: Opts) -> Res<()> {
   let project = create_project()?;
   let app_cache_dir = project.cache_dir();
   debug!("Cache directory: {}", app_cache_dir.display());
@@ -400,10 +415,12 @@ fn run(opt: Opt) -> Res<()> {
 
   let start_time = Instant::now();
 
-  match opt.command {
-    Command::Title { exact, title } => imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, exact)?,
-    Command::MoviesDir { dir } => imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
-    Command::SeriesDir { dir } => imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
+  match cmd {
+    Command::Title { exact, title, opts: _ } => {
+      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, exact)?
+    }
+    Command::MoviesDir { dir, .. } => imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
+    Command::SeriesDir { dir, .. } => imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
   }
 
   debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
@@ -416,8 +433,23 @@ fn run(opt: Opt) -> Res<()> {
 fn main() {
   let start_time = Instant::now();
   let opt = Opt::from_args();
+  let opts = match &opt.command {
+    Command::Title { opts, .. } => opts,
+    Command::MoviesDir { opts, .. } => opts,
+    Command::SeriesDir { opts, .. } => opts,
+  };
 
-  let log_level = match opt.verbose {
+  let merge_opts = Opts {
+    force_update: opts.force_update || opt.opts.force_update,
+    sort_by_year: opts.sort_by_year || opt.opts.sort_by_year,
+    verbose: if opts.verbose > 0 {
+      opts.verbose
+    } else {
+      opt.opts.verbose
+    },
+  };
+
+  let log_level = match merge_opts.verbose {
     0 => log::LevelFilter::Off,
     1 => log::LevelFilter::Error,
     2 => log::LevelFilter::Warn,
@@ -440,7 +472,7 @@ fn main() {
   // debug!("Debug output enabled.");
   // trace!("Trace output enabled.");
 
-  if let Err(e) = run(opt) {
+  if let Err(e) = run(opt.command, merge_opts) {
     if have_logger {
       error!("Error: {}", e);
     } else {
