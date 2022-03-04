@@ -257,8 +257,7 @@ impl<C> DbImpl<C> {
         let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
         matches.len() == keywords.len()
       })
-      .map(|(_, by_year)| by_year.values())
-      .flatten()
+      .flat_map(|(_, by_year)| by_year.values())
       .flatten()
   }
 
