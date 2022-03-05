@@ -92,6 +92,14 @@ level:
 $ tvrank -vvv --sort-by-year title "city of god"
 ```
 
+The following options can come before or after the sub-command. The latter have precedence over the former.
+
+```sh
+--verbose
+--sort-by-year
+--force-update
+```
+
 To find help, see the `help` sub-command:
 
 ```sh
