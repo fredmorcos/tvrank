@@ -110,6 +110,10 @@ struct Opts {
   #[structopt(short = "y", long)]
   sort_by_year: bool,
 
+  /// Display only top n results
+  #[structopt(short, long)]
+  top: Option<u16>,
+
   /// Verbose output (can be specified multiple times)
   #[structopt(short, long, parse(from_occurrences))]
   verbose: u8,
@@ -191,10 +195,11 @@ fn imdb_single_title<'a>(
   imdb: &'a Imdb,
   imdb_url: &Url,
   sort_by_year: bool,
+  top: Option<u16>,
   exact: bool,
 ) -> Res<()> {
-  let mut movies_results = SearchRes::new_movies(imdb_url, sort_by_year);
-  let mut series_results = SearchRes::new_series(imdb_url, sort_by_year);
+  let mut movies_results = SearchRes::new_movies(imdb_url, sort_by_year, top);
+  let mut series_results = SearchRes::new_series(imdb_url, sort_by_year, top);
 
   if let Some((title, year)) = parse_title_and_year(title) {
     let lc_title = title.to_lowercase();
@@ -247,10 +252,10 @@ fn imdb_single_title<'a>(
   Ok(())
 }
 
-fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) -> Res<()> {
+fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool, top: Option<u16>) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_movies(imdb_url, sort_by_year);
+  let mut results = SearchRes::new_movies(imdb_url, sort_by_year, top);
   let walkdir = WalkDir::new(dir).min_depth(1);
 
   for entry in walkdir {
@@ -277,7 +282,7 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
         if let Some((title, year)) = parse_title_and_year(&filename) {
           at_least_one = true;
 
-          let mut local_results = SearchRes::new_movies(imdb_url, sort_by_year);
+          let mut local_results = SearchRes::new_movies(imdb_url, sort_by_year, top);
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -317,10 +322,10 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
   Ok(())
 }
 
-fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) -> Res<()> {
+fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool, top: Option<u16>) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_series(imdb_url, sort_by_year);
+  let mut results = SearchRes::new_series(imdb_url, sort_by_year, top);
   let walkdir = WalkDir::new(dir).min_depth(1).max_depth(1);
 
   for entry in walkdir {
@@ -345,7 +350,7 @@ fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool) 
         at_least_one = true;
 
         let filename = filename.to_string_lossy();
-        let mut local_results = SearchRes::new_series(imdb_url, sort_by_year);
+        let mut local_results = SearchRes::new_series(imdb_url, sort_by_year, top);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
@@ -417,10 +422,10 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
 
   match cmd {
     Command::Title { exact, title, opts: _ } => {
-      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, exact)?
+      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, exact)?
     }
-    Command::MoviesDir { dir, .. } => imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
-    Command::SeriesDir { dir, .. } => imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year)?,
+    Command::MoviesDir { dir, .. } => imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top)?,
+    Command::SeriesDir { dir, .. } => imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top)?,
   }
 
   debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
@@ -442,6 +447,11 @@ fn main() {
   let merge_opts = Opts {
     force_update: opts.force_update || opt.opts.force_update,
     sort_by_year: opts.sort_by_year || opt.opts.sort_by_year,
+    top: if opt.opts.top.is_some() {
+      opt.opts.top
+    } else {
+      opts.top
+    },
     verbose: if opts.verbose > 0 {
       opts.verbose
     } else {
