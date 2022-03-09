@@ -101,7 +101,7 @@ impl DerefMut for Ratings {
 }
 
 impl Ratings {
-  pub(crate) fn from_tsv<R: BufRead>(mut reader: R, progress_fn: &mut dyn FnMut(u64)) -> Res<Self> {
+  pub(crate) fn from_tsv<R: BufRead>(mut reader: R) -> Res<Self> {
     // TODO: See if we can use byte vectors instead of strings. Ultimately we end up
     // parsing bytes rather than strings, and when we need strings, we already know they
     // are valid UTF-8 because we trust the source.
@@ -110,13 +110,11 @@ impl Ratings {
     let mut line = String::new();
 
     // Skip the first line.
-    let bytes = reader.read_line(&mut line)?;
-    progress_fn(bytes as u64);
+    reader.read_line(&mut line)?;
     line.clear();
 
     loop {
       let bytes = reader.read_line(&mut line)?;
-      progress_fn(bytes as u64);
 
       if bytes == 0 {
         break;
@@ -172,7 +170,7 @@ mod tests_ratings {
   #[test]
   fn test_ratings_csv() {
     let reader = make_ratings_reader();
-    let ratings = Ratings::from_tsv(reader, &mut (|_| {})).unwrap();
+    let ratings = Ratings::from_tsv(reader).unwrap();
     assert_eq!(ratings.len(), 10);
 
     let id = TitleId::try_from("tt0000001".as_bytes()).unwrap();
