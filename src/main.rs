@@ -166,7 +166,7 @@ fn display_title_and_year(title: &str, year: u16) -> String {
 }
 
 fn display_keywords(keywords: &[&str]) -> String {
-  keywords.join(" ")
+  keywords.join(", ")
 }
 
 fn create_keywords_set(title: &str) -> Res<Vec<&str>> {
