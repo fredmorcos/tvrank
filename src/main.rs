@@ -112,7 +112,7 @@ struct Opts {
 
   /// Display only top n results
   #[structopt(short, long)]
-  top: Option<u16>,
+  top: Option<usize>,
 
   /// Verbose output (can be specified multiple times)
   #[structopt(short, long, parse(from_occurrences))]
@@ -166,7 +166,7 @@ fn display_title_and_year(title: &str, year: u16) -> String {
 }
 
 fn display_keywords(keywords: &[&str]) -> String {
-  keywords.join(" ")
+  keywords.join(", ")
 }
 
 fn create_keywords_set(title: &str) -> Res<Vec<&str>> {
@@ -195,7 +195,7 @@ fn imdb_single_title<'a>(
   imdb: &'a Imdb,
   imdb_url: &Url,
   sort_by_year: bool,
-  top: Option<u16>,
+  top: Option<usize>,
   exact: bool,
 ) -> Res<()> {
   let mut movies_results = SearchRes::new_movies(imdb_url, sort_by_year, top);
@@ -252,7 +252,13 @@ fn imdb_single_title<'a>(
   Ok(())
 }
 
-fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool, top: Option<u16>) -> Res<()> {
+fn imdb_movies_dir(
+  dir: &Path,
+  imdb: &Imdb,
+  imdb_url: &Url,
+  sort_by_year: bool,
+  top: Option<usize>,
+) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
   let mut results = SearchRes::new_movies(imdb_url, sort_by_year, top);
@@ -322,7 +328,13 @@ fn imdb_movies_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool, 
   Ok(())
 }
 
-fn imdb_series_dir(dir: &Path, imdb: &Imdb, imdb_url: &Url, sort_by_year: bool, top: Option<u16>) -> Res<()> {
+fn imdb_series_dir(
+  dir: &Path,
+  imdb: &Imdb,
+  imdb_url: &Url,
+  sort_by_year: bool,
+  top: Option<usize>,
+) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
   let mut results = SearchRes::new_series(imdb_url, sort_by_year, top);

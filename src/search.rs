@@ -12,7 +12,7 @@ use tvrank::Res;
 pub struct SearchRes<'a, 'storage, 'url> {
   results: Vec<&'a ImdbTitle<'storage>>,
   sort_by_year: bool,
-  top: Option<u16>,
+  top: Option<usize>,
   imdb_url: &'url Url,
   query: ImdbQuery,
 }
@@ -54,11 +54,11 @@ impl<'a, 'storage, 'url> IntoIterator for SearchRes<'a, 'storage, 'url> {
 }
 
 impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
-  pub fn new_movies(imdb_url: &'url Url, sort_by_year: bool, top: Option<u16>) -> Self {
+  pub fn new_movies(imdb_url: &'url Url, sort_by_year: bool, top: Option<usize>) -> Self {
     Self { results: Vec::new(), imdb_url, sort_by_year, top, query: ImdbQuery::Movies }
   }
 
-  pub fn new_series(imdb_url: &'url Url, sort_by_year: bool, top: Option<u16>) -> Self {
+  pub fn new_series(imdb_url: &'url Url, sort_by_year: bool, top: Option<usize>) -> Self {
     Self { results: Vec::new(), imdb_url, sort_by_year, top, query: ImdbQuery::Series }
   }
 
