@@ -24,7 +24,7 @@ use std::time::Instant;
 use structopt::StructOpt;
 use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::Res;
-use ui::create_progress_spinner;
+use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
 
 #[derive(Debug, Display)]
@@ -398,16 +398,20 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
 
-  let imdb = Imdb::new(app_cache_dir, opt.force_update, &|delta| {
+  let imdb = Imdb::new(app_cache_dir, opt.force_update, &|content_len: Option<u64>, delta| {
     let mut progress_bar_mut = progress_bar.borrow_mut();
-    if let Some(bar) = &*progress_bar_mut {
-      bar.inc(delta);
-      return;
-    }
+    match &*progress_bar_mut {
+      Some(bar) => bar.inc(delta),
+      None => {
+        let bar = match content_len {
+          Some(len) => create_progress_bar("Downloading IMDB databases...".to_string(), len),
+          None => create_progress_spinner("Downloading IMDB databases...".to_string()),
+        };
 
-    let bar = create_progress_spinner("Downloading IMDB databases...".to_string());
-    bar.inc(delta);
-    *progress_bar_mut = Some(bar);
+        bar.inc(delta);
+        *progress_bar_mut = Some(bar);
+      }
+    }
   })?;
 
   if let Some(bar) = &*progress_bar.borrow_mut() {

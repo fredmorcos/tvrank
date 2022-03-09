@@ -27,7 +27,7 @@ const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 
 impl Service {
-  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: &dyn Fn(u64)) -> Res<Self> {
+  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: &dyn Fn(Option<u64>, u64)) -> Res<Self> {
     // Delete old imdb cache directory.
     let old_cache_dir = cache_dir.join("imdb");
     let _ = fs::remove_dir_all(old_cache_dir);
@@ -169,14 +169,17 @@ impl Service {
     }
   }
 
-  fn downloader<'a>(
-    imdb_url: &Url,
-    path: &str,
-    progress_fn: &'a dyn Fn(u64),
-  ) -> Res<BufReader<GzDecoder<BufReader<Progress<'a, Response>>>>> {
+  fn get_response(imdb_url: &Url, path: &str) -> Res<Response> {
     let url = imdb_url.join(path)?;
     let client = Client::builder().build()?;
     let resp = client.get(url).send()?;
+    Ok(resp)
+  }
+
+  fn create_downloader(
+    resp: Response,
+    progress_fn: &dyn Fn(Option<u64>, u64),
+  ) -> Res<BufReader<GzDecoder<BufReader<Progress<Response>>>>> {
     let progress = Progress::new(resp, progress_fn);
     let reader = BufReader::new(progress);
     let decoder = GzDecoder::new(reader);
@@ -188,7 +191,7 @@ impl Service {
     movies_db_filename: &Path,
     series_db_filename: &Path,
     force_db_update: bool,
-    progress_fn: &dyn Fn(u64),
+    progress_fn: &dyn Fn(Option<u64>, u64),
   ) -> Res<()> {
     let needs_update = {
       let movies_db_file = Self::file_exists(movies_db_filename)?;
@@ -206,8 +209,18 @@ impl Service {
 
       let imdb_url = Url::parse(IMDB)?;
 
-      let basics_downloader = Self::downloader(&imdb_url, BASICS_FILENAME, progress_fn)?;
-      let ratings_downloader = Self::downloader(&imdb_url, RATINGS_FILENAME, progress_fn)?;
+      let basics_resp = Self::get_response(&imdb_url, BASICS_FILENAME)?;
+      let ratings_resp = Self::get_response(&imdb_url, RATINGS_FILENAME)?;
+
+      match (basics_resp.content_length(), ratings_resp.content_length()) {
+        (None, None) | (None, Some(_)) | (Some(_), None) => progress_fn(None, 0),
+        (Some(basics_content_len), Some(ratings_content_len)) => {
+          progress_fn(Some(basics_content_len + ratings_content_len), 0)
+        }
+      }
+
+      let basics_downloader = Self::create_downloader(basics_resp, progress_fn)?;
+      let ratings_downloader = Self::create_downloader(ratings_resp, progress_fn)?;
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);
