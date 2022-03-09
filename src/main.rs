@@ -15,6 +15,7 @@ use regex::Regex;
 use reqwest::Url;
 use search::SearchRes;
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fs;
@@ -23,7 +24,7 @@ use std::time::Instant;
 use structopt::StructOpt;
 use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::Res;
-use ui::create_progress_spinner;
+use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
 
 #[derive(Debug, Display)]
@@ -412,20 +413,25 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   let imdb_url = Url::parse(IMDB)?;
 
   let start_time = Instant::now();
-  let mut progress_bar: Option<ProgressBar> = None;
-  let progress_bar_mut = &mut progress_bar;
-  let imdb = Imdb::new(app_cache_dir, opt.force_update, &mut |delta| {
-    if let Some(bar) = progress_bar_mut {
-      bar.inc(delta);
-      return;
-    }
+  let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
 
-    let bar = create_progress_spinner("Downloading IMDB databases...".to_string());
-    bar.inc(delta);
-    *progress_bar_mut = Some(bar);
+  let imdb = Imdb::new(app_cache_dir, opt.force_update, &|content_len: Option<u64>, delta| {
+    let mut progress_bar_mut = progress_bar.borrow_mut();
+    match &*progress_bar_mut {
+      Some(bar) => bar.inc(delta),
+      None => {
+        let bar = match content_len {
+          Some(len) => create_progress_bar("Downloading IMDB databases...".to_string(), len),
+          None => create_progress_spinner("Downloading IMDB databases...".to_string()),
+        };
+
+        bar.inc(delta);
+        *progress_bar_mut = Some(bar);
+      }
+    }
   })?;
 
-  if let Some(bar) = progress_bar {
+  if let Some(bar) = &*progress_bar.borrow_mut() {
     bar.finish_and_clear();
   }
   debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));

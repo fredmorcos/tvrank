@@ -70,20 +70,17 @@ impl Db {
     mut basics_reader: R2,
     mut movies_db_writer: W1,
     mut series_db_writer: W2,
-    progress_fn: &mut dyn FnMut(u64),
   ) -> Res<()> {
-    let ratings = Ratings::from_tsv(ratings_reader, progress_fn)?;
+    let ratings = Ratings::from_tsv(ratings_reader)?;
 
     let mut line = String::new();
 
     // Skip the first line.
-    let bytes = basics_reader.read_line(&mut line)?;
-    progress_fn(bytes as u64);
+    basics_reader.read_line(&mut line)?;
     line.clear();
 
     loop {
       let bytes = basics_reader.read_line(&mut line)?;
-      progress_fn(bytes as u64);
 
       if bytes == 0 {
         break;
@@ -371,13 +368,12 @@ mod test_db {
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    Db::to_binary(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage, &mut |_| {})
-      .unwrap();
+    Db::to_binary(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
     let mut basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
 
-    let ratings = Ratings::from_tsv(ratings_reader, &mut |_| {}).unwrap();
+    let ratings = Ratings::from_tsv(ratings_reader).unwrap();
 
     let mut basics_data = String::new();
     basics_reader.read_to_string(&mut basics_data).unwrap();

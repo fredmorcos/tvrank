@@ -3,6 +3,7 @@
 mod db;
 mod error;
 mod genre;
+mod progress;
 mod ratings;
 mod service;
 mod title;

@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 
 use crate::imdb::db::{Db, Query};
+use crate::imdb::progress::Progress;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::Res;
@@ -10,7 +11,7 @@ use humantime::format_duration;
 use log::{debug, log_enabled};
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, Response};
 use reqwest::Url;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter};
@@ -26,7 +27,7 @@ const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 
 impl Service {
-  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: &mut dyn FnMut(u64)) -> Res<Self> {
+  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: &dyn Fn(Option<u64>, u64)) -> Res<Self> {
     // Delete old imdb cache directory.
     let old_cache_dir = cache_dir.join("imdb");
     let _ = fs::remove_dir_all(old_cache_dir);
@@ -168,11 +169,29 @@ impl Service {
     }
   }
 
+  fn get_response(imdb_url: &Url, path: &str) -> Res<Response> {
+    let url = imdb_url.join(path)?;
+    let client = Client::builder().build()?;
+    let resp = client.get(url).send()?;
+    Ok(resp)
+  }
+
+  fn create_downloader(
+    resp: Response,
+    progress_fn: &dyn Fn(Option<u64>, u64),
+  ) -> Res<BufReader<GzDecoder<BufReader<Progress<Response>>>>> {
+    let progress = Progress::new(resp, progress_fn);
+    let reader = BufReader::new(progress);
+    let decoder = GzDecoder::new(reader);
+    let reader = BufReader::new(decoder);
+    Ok(reader)
+  }
+
   fn ensure_db_files(
     movies_db_filename: &Path,
     series_db_filename: &Path,
     force_db_update: bool,
-    progress_fn: &mut dyn FnMut(u64),
+    progress_fn: &dyn Fn(Option<u64>, u64),
   ) -> Res<()> {
     let needs_update = {
       let movies_db_file = Self::file_exists(movies_db_filename)?;
@@ -190,19 +209,18 @@ impl Service {
 
       let imdb_url = Url::parse(IMDB)?;
 
-      let basics_url = imdb_url.join(BASICS_FILENAME)?;
-      let basics_client = Client::builder().build()?;
-      let basics_resp = basics_client.get(basics_url).send()?;
-      let basics_reader = BufReader::new(basics_resp);
-      let basics_decoder = GzDecoder::new(basics_reader);
-      let basics_reader = BufReader::new(basics_decoder);
+      let basics_resp = Self::get_response(&imdb_url, BASICS_FILENAME)?;
+      let ratings_resp = Self::get_response(&imdb_url, RATINGS_FILENAME)?;
 
-      let ratings_url = imdb_url.join(RATINGS_FILENAME)?;
-      let ratings_client = Client::builder().build()?;
-      let ratings_resp = ratings_client.get(ratings_url).send()?;
-      let ratings_reader = BufReader::new(ratings_resp);
-      let ratings_decoder = GzDecoder::new(ratings_reader);
-      let ratings_reader = BufReader::new(ratings_decoder);
+      match (basics_resp.content_length(), ratings_resp.content_length()) {
+        (None, None) | (None, Some(_)) | (Some(_), None) => progress_fn(None, 0),
+        (Some(basics_content_len), Some(ratings_content_len)) => {
+          progress_fn(Some(basics_content_len + ratings_content_len), 0)
+        }
+      }
+
+      let basics_downloader = Self::create_downloader(basics_resp, progress_fn)?;
+      let ratings_downloader = Self::create_downloader(ratings_resp, progress_fn)?;
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);
@@ -210,7 +228,7 @@ impl Service {
       let series_db_file = File::create(series_db_filename)?;
       let series_db_writer = BufWriter::new(series_db_file);
 
-      Db::to_binary(ratings_reader, basics_reader, movies_db_writer, series_db_writer, progress_fn)?;
+      Db::to_binary(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
