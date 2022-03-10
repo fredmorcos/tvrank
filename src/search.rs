@@ -122,13 +122,17 @@ impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
       if let Some(search_terms) = search_terms {
         match self.top {
           Some(n) => {
-            println!("Found {num} {} {matches} for `{search_terms}`, {} will be displayed:", self.query, n)
+            println!(
+              "Found {num} {} {matches} for `{search_terms}`, {} will be displayed:",
+              self.query,
+              num.min(n)
+            )
           }
           None => println!("Found {num} {} {matches} for `{search_terms}`:", self.query),
         };
       } else {
         match self.top {
-          Some(n) => println!("Found {num} {} {matches}, {} will be displayed:", self.query, n),
+          Some(n) => println!("Found {num} {} {matches}, {} will be displayed:", self.query, num.min(n)),
           None => println!("Found {num} {} {matches}:", self.query),
         };
       }
@@ -136,7 +140,7 @@ impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
       let mut table = create_table();
 
       let results = match self.top {
-        Some(n) => &self.results[0..n as usize],
+        Some(n) => &self.results[0..num.min(n)],
         None => &self.results,
       };
 
