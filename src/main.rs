@@ -111,8 +111,8 @@ struct Opts {
   #[structopt(short = "y", long)]
   sort_by_year: bool,
 
-  /// Display only top n results
-  #[structopt(short, long)]
+  /// Only display the top N results
+  #[structopt(short, long, name = "N")]
   top: Option<usize>,
 
   /// Verbose output (can be specified multiple times)

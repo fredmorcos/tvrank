@@ -84,6 +84,12 @@ rating and title, `--sort-by-year` can be passed before any sub-command:
 $ tvrank --sort-by-year title "house of cards"
 ```
 
+You can also limit the output of movies and series to the top N entries:
+
+```sh
+$ tvrank title "the great gatsby" --top 2
+```
+
 To print out more information about what the application is doing, use `-v` before any
 sub-command. Multiple occurrences of `-v` on the command-line will increase the verbosity
 level:
@@ -92,12 +98,14 @@ level:
 $ tvrank -vvv --sort-by-year title "city of god"
 ```
 
-The following options can come before or after the sub-command. The latter have precedence over the former.
+The following options can come before or after the sub-command. The latter have precedence
+over the former.
 
 ```sh
 --verbose
 --sort-by-year
 --force-update
+--top
 ```
 
 To find help, see the `help` sub-command:
