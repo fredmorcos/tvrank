@@ -17,6 +17,7 @@ use search::SearchRes;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -115,6 +116,10 @@ struct Opts {
   #[structopt(short, long, name = "N")]
   top: Option<usize>,
 
+  /// Display colors regardless of the NO_COLOR environment variable
+  #[structopt(short, long)]
+  color: bool,
+
   /// Verbose output (can be specified multiple times)
   #[structopt(short, long, parse(from_occurrences))]
   verbose: u8,
@@ -198,10 +203,11 @@ fn imdb_single_title<'a>(
   imdb_url: &Url,
   sort_by_year: bool,
   top: Option<usize>,
+  color: bool,
   exact: bool,
 ) -> Res<()> {
-  let mut movies_results = SearchRes::new_movies(imdb_url, sort_by_year, top);
-  let mut series_results = SearchRes::new_series(imdb_url, sort_by_year, top);
+  let mut movies_results = SearchRes::new_movies(imdb_url, sort_by_year, top, color);
+  let mut series_results = SearchRes::new_series(imdb_url, sort_by_year, top, color);
 
   if let Some((title, year)) = parse_title_and_year(title) {
     let lc_title = title.to_lowercase();
@@ -260,10 +266,11 @@ fn imdb_movies_dir(
   imdb_url: &Url,
   sort_by_year: bool,
   top: Option<usize>,
+  color: bool,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_movies(imdb_url, sort_by_year, top);
+  let mut results = SearchRes::new_movies(imdb_url, sort_by_year, top, color);
   let walkdir = WalkDir::new(dir).min_depth(1);
 
   for entry in walkdir {
@@ -290,7 +297,7 @@ fn imdb_movies_dir(
         if let Some((title, year)) = parse_title_and_year(&filename) {
           at_least_one = true;
 
-          let mut local_results = SearchRes::new_movies(imdb_url, sort_by_year, top);
+          let mut local_results = SearchRes::new_movies(imdb_url, sort_by_year, top, color);
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -336,10 +343,11 @@ fn imdb_series_dir(
   imdb_url: &Url,
   sort_by_year: bool,
   top: Option<usize>,
+  color: bool,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_series(imdb_url, sort_by_year, top);
+  let mut results = SearchRes::new_series(imdb_url, sort_by_year, top, color);
   let walkdir = WalkDir::new(dir).min_depth(1).max_depth(1);
 
   for entry in walkdir {
@@ -364,7 +372,7 @@ fn imdb_series_dir(
         at_least_one = true;
 
         let filename = filename.to_string_lossy();
-        let mut local_results = SearchRes::new_series(imdb_url, sort_by_year, top);
+        let mut local_results = SearchRes::new_series(imdb_url, sort_by_year, top, color);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
@@ -438,13 +446,18 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
 
   let start_time = Instant::now();
+  let color: bool = env::var("NO_COLOR").is_err() || opt.color;
 
   match cmd {
     Command::Title { exact, title, opts: _ } => {
-      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, exact)?
+      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, color, exact)?
     }
-    Command::MoviesDir { dir, .. } => imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top)?,
-    Command::SeriesDir { dir, .. } => imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top)?,
+    Command::MoviesDir { dir, .. } => {
+      imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, color)?
+    }
+    Command::SeriesDir { dir, .. } => {
+      imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, color)?
+    }
   }
 
   debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
@@ -471,6 +484,7 @@ fn main() {
     } else {
       opts.top
     },
+    color: opts.color || opt.opts.color,
     verbose: if opts.verbose > 0 {
       opts.verbose
     } else {

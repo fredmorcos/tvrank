@@ -13,6 +13,7 @@ pub struct SearchRes<'a, 'storage, 'url> {
   results: Vec<&'a ImdbTitle<'storage>>,
   sort_by_year: bool,
   top: Option<usize>,
+  color: bool,
   imdb_url: &'url Url,
   query: ImdbQuery,
 }
@@ -54,12 +55,12 @@ impl<'a, 'storage, 'url> IntoIterator for SearchRes<'a, 'storage, 'url> {
 }
 
 impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
-  pub fn new_movies(imdb_url: &'url Url, sort_by_year: bool, top: Option<usize>) -> Self {
-    Self { results: Vec::new(), imdb_url, sort_by_year, top, query: ImdbQuery::Movies }
+  pub fn new_movies(imdb_url: &'url Url, sort_by_year: bool, top: Option<usize>, color: bool) -> Self {
+    Self { results: Vec::new(), imdb_url, sort_by_year, top, color, query: ImdbQuery::Movies }
   }
 
-  pub fn new_series(imdb_url: &'url Url, sort_by_year: bool, top: Option<usize>) -> Self {
-    Self { results: Vec::new(), imdb_url, sort_by_year, top, query: ImdbQuery::Series }
+  pub fn new_series(imdb_url: &'url Url, sort_by_year: bool, top: Option<usize>, color: bool) -> Self {
+    Self { results: Vec::new(), imdb_url, sort_by_year, top, color, query: ImdbQuery::Series }
   }
 
   pub fn extend(&mut self, iter: impl IntoIterator<Item = &'a ImdbTitle<'storage>>) {
@@ -137,7 +138,7 @@ impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
         };
       }
 
-      let mut table = create_table();
+      let mut table = create_table(self.color);
 
       let results = match self.top {
         Some(n) => &self.results[0..num.min(n)],
@@ -179,11 +180,14 @@ impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
     if let Some(rating) = title.rating() {
       let rating_text = &format!("{}/100", rating.rating());
 
-      let rating_cell = Cell::new(rating_text).with_style(match rating {
-        rating if rating.rating() >= 70 => GREEN,
-        rating if (60..70).contains(&rating.rating()) => YELLOW,
-        _ => RED,
-      });
+      let mut rating_cell = Cell::new(rating_text);
+      if self.color {
+        rating_cell = rating_cell.with_style(match rating {
+          rating if rating.rating() >= 70 => GREEN,
+          rating if (60..70).contains(&rating.rating()) => YELLOW,
+          _ => RED,
+        });
+      }
 
       row.add_cell(rating_cell);
       row.add_cell(Cell::new(&format!("{}", rating.votes())));
@@ -211,7 +215,7 @@ impl<'a, 'storage, 'url> SearchRes<'a, 'storage, 'url> {
   }
 }
 
-fn create_table() -> Table {
+fn create_table(color: bool) -> Table {
   let mut table = Table::new();
 
   let table_format = format::FormatBuilder::new()
@@ -223,16 +227,56 @@ fn create_table() -> Table {
   table.set_format(table_format);
 
   table.add_row(Row::new(vec![
-    Cell::new("Primary Title").with_style(Attr::Bold),
-    Cell::new("Original Title").with_style(Attr::Bold),
-    Cell::new("Year").with_style(Attr::Bold),
-    Cell::new("Rating").with_style(Attr::Bold),
-    Cell::new("Votes").with_style(Attr::Bold),
-    Cell::new("Runtime").with_style(Attr::Bold),
-    Cell::new("Genres").with_style(Attr::Bold),
-    Cell::new("Type").with_style(Attr::Bold),
-    Cell::new("IMDB ID").with_style(Attr::Bold),
-    Cell::new("IMDB Link").with_style(Attr::Bold),
+    if color {
+      Cell::new("Primary Title").with_style(Attr::Bold)
+    } else {
+      Cell::new("Primary Title")
+    },
+    if color {
+      Cell::new("Original Title").with_style(Attr::Bold)
+    } else {
+      Cell::new("Original Title")
+    },
+    if color {
+      Cell::new("Year").with_style(Attr::Bold)
+    } else {
+      Cell::new("Year")
+    },
+    if color {
+      Cell::new("Rating").with_style(Attr::Bold)
+    } else {
+      Cell::new("Rating")
+    },
+    if color {
+      Cell::new("Votes").with_style(Attr::Bold)
+    } else {
+      Cell::new("Votes")
+    },
+    if color {
+      Cell::new("Runtime").with_style(Attr::Bold)
+    } else {
+      Cell::new("Runtime")
+    },
+    if color {
+      Cell::new("Genres").with_style(Attr::Bold)
+    } else {
+      Cell::new("Genres")
+    },
+    if color {
+      Cell::new("Type").with_style(Attr::Bold)
+    } else {
+      Cell::new("Type")
+    },
+    if color {
+      Cell::new("IMDB ID").with_style(Attr::Bold)
+    } else {
+      Cell::new("IMDB ID")
+    },
+    if color {
+      Cell::new("IMDB Link").with_style(Attr::Bold)
+    } else {
+      Cell::new("IMDB Link")
+    },
   ]));
 
   table
