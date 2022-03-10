@@ -135,6 +135,7 @@ struct Opt {
 enum Command {
   /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
   Title {
+    /// Match the given title exactly
     #[structopt(short, long)]
     exact: bool,
 
