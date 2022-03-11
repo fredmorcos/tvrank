@@ -226,57 +226,27 @@ fn create_table(color: bool) -> Table {
 
   table.set_format(table_format);
 
+  #[macro_export]
+  macro_rules! make_bold {
+    ($title: expr, $color: expr) => {
+      match $color {
+        true => Cell::new($title).with_style(Attr::Bold),
+        false => Cell::new($title),
+      }
+    };
+  }
+
   table.add_row(Row::new(vec![
-    if color {
-      Cell::new("Primary Title").with_style(Attr::Bold)
-    } else {
-      Cell::new("Primary Title")
-    },
-    if color {
-      Cell::new("Original Title").with_style(Attr::Bold)
-    } else {
-      Cell::new("Original Title")
-    },
-    if color {
-      Cell::new("Year").with_style(Attr::Bold)
-    } else {
-      Cell::new("Year")
-    },
-    if color {
-      Cell::new("Rating").with_style(Attr::Bold)
-    } else {
-      Cell::new("Rating")
-    },
-    if color {
-      Cell::new("Votes").with_style(Attr::Bold)
-    } else {
-      Cell::new("Votes")
-    },
-    if color {
-      Cell::new("Runtime").with_style(Attr::Bold)
-    } else {
-      Cell::new("Runtime")
-    },
-    if color {
-      Cell::new("Genres").with_style(Attr::Bold)
-    } else {
-      Cell::new("Genres")
-    },
-    if color {
-      Cell::new("Type").with_style(Attr::Bold)
-    } else {
-      Cell::new("Type")
-    },
-    if color {
-      Cell::new("IMDB ID").with_style(Attr::Bold)
-    } else {
-      Cell::new("IMDB ID")
-    },
-    if color {
-      Cell::new("IMDB Link").with_style(Attr::Bold)
-    } else {
-      Cell::new("IMDB Link")
-    },
+    make_bold!("Primary Title", color),
+    make_bold!("Original Title", color),
+    make_bold!("Year", color),
+    make_bold!("Rating", color),
+    make_bold!("Votes", color),
+    make_bold!("Runtime", color),
+    make_bold!("Genres", color),
+    make_bold!("Type", color),
+    make_bold!("IMDB ID", color),
+    make_bold!("IMDB Link", color),
   ]));
 
   table

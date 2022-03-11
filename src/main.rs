@@ -446,17 +446,16 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
 
   let start_time = Instant::now();
-  let color: bool = env::var("NO_COLOR").is_err() || opt.color;
 
   match cmd {
     Command::Title { exact, title, opts: _ } => {
-      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, color, exact)?
+      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, opt.color, exact)?
     }
     Command::MoviesDir { dir, .. } => {
-      imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, color)?
+      imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, opt.color)?
     }
     Command::SeriesDir { dir, .. } => {
-      imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, color)?
+      imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, opt.color)?
     }
   }
 
@@ -484,7 +483,7 @@ fn main() {
     } else {
       opts.top
     },
-    color: opts.color || opt.opts.color,
+    color: env::var("NO_COLOR").is_err() || opts.color || opt.opts.color,
     verbose: if opts.verbose > 0 {
       opts.verbose
     } else {
