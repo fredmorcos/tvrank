@@ -105,7 +105,8 @@ over the former.
 --verbose
 --sort-by-year
 --force-update
---top
+--top <N>
+--color
 ```
 
 To find help, see the `help` sub-command:
@@ -125,6 +126,18 @@ described above instead of what is shown in the screencast.
 <p align="center">
     <img src="screencasts/screencast_2021-11-22.gif">
 </p>
+
+### Disabling Colors
+
+By default, `TVrank` displays some of the content with color. However, it supports the
+`NO_COLOR` environment variable. When `NO_COLOR` is set, `TVrank` will not use color in
+its output. This can also be overridden by passing the `--color` argument on the
+command-line:
+
+```sh
+NO_COLOR=1 tvrank title "the great gatsby"           # Without colors
+NO_COLOR=1 tvrank title "the great gatsby" --color   # With colors
+```
 
 ## Installation
 
