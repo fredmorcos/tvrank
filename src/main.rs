@@ -324,12 +324,12 @@ fn imdb_movies_dir(
   }
 
   if !at_least_one {
-    println!("No valid directory names");
+    eprintln!("No valid directory names");
     return Ok(());
   }
 
   if !at_least_one_matched {
-    println!("None of the directories matched any titles");
+    eprintln!("None of the directories matched any titles");
     return Ok(());
   }
 
@@ -397,12 +397,12 @@ fn imdb_series_dir(
   }
 
   if !at_least_one {
-    println!("No valid directory names");
+    eprintln!("No valid directory names");
     return Ok(());
   }
 
   if !at_least_one_matched {
-    println!("None of the directories matched any titles");
+    eprintln!("None of the directories matched any titles");
     return Ok(());
   }
 
