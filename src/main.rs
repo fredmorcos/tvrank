@@ -1,9 +1,11 @@
 #![warn(clippy::all)]
 
 mod info;
+mod print;
 mod search;
 mod ui;
 
+use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter};
 use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
@@ -35,6 +37,8 @@ enum TvRankErr {
   CacheDir,
   #[display(fmt = "Empty set of keywords")]
   NoKeywords,
+  #[display(fmt = "Output is not supported")]
+  NotSupportedOutput,
 }
 
 impl TvRankErr {
@@ -44,6 +48,10 @@ impl TvRankErr {
 
   fn no_keywords<T>() -> Res<T> {
     Err(Box::new(TvRankErr::NoKeywords))
+  }
+
+  fn not_supported_output<T>() -> Res<T> {
+    Err(Box::new(TvRankErr::NotSupportedOutput))
   }
 }
 
@@ -119,6 +127,10 @@ struct Opts {
   /// Display colors regardless of the NO_COLOR environment variable
   #[structopt(short, long)]
   color: bool,
+
+  /// Set output format
+  #[structopt(short, long, default_value = "table", possible_values = &[ "json", "table" ])]
+  output: OutputFormat,
 
   /// Verbose output (can be specified multiple times)
   #[structopt(short, long, parse(from_occurrences))]
@@ -203,15 +215,20 @@ fn imdb_single_title<'a>(
   imdb_url: &Url,
   sort_by_year: bool,
   top: Option<usize>,
-  color: bool,
   exact: bool,
+  printer: Box<dyn Printer>,
 ) -> Res<()> {
-  let mut movies_results = SearchRes::new_movies(imdb_url, sort_by_year, top, color);
-  let mut series_results = SearchRes::new_series(imdb_url, sort_by_year, top, color);
+  let mut movies_results = SearchRes::new_movies(sort_by_year, top);
+  let mut series_results = SearchRes::new_series(sort_by_year, top);
+
+  let lc_title;
+  let keywords;
+  let st: String;
+  let search_terms: Option<&str>;
 
   if let Some((title, year)) = parse_title_and_year(title) {
-    let lc_title = title.to_lowercase();
-    let keywords = if exact {
+    lc_title = title.to_lowercase();
+    keywords = if exact {
       None
     } else {
       Some(create_keywords_set(&lc_title)?)
@@ -223,18 +240,17 @@ fn imdb_single_title<'a>(
       movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Movies));
     }
 
-    movies_results.print(Some(&display_title_and_year(title, year)))?;
-
     if let Some(keywords) = &keywords {
       series_results.extend(imdb.by_keywords_and_year(keywords, year, ImdbQuery::Series));
     } else {
       series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Series));
     }
 
-    series_results.print(Some(&display_title_and_year(title, year)))?;
+    st = display_title_and_year(title, year);
+    search_terms = Some(&st);
   } else {
-    let lc_title = title.to_lowercase();
-    let keywords = if exact {
+    lc_title = title.to_lowercase();
+    keywords = if exact {
       None
     } else {
       Some(create_keywords_set(&lc_title)?)
@@ -242,20 +258,26 @@ fn imdb_single_title<'a>(
 
     if let Some(keywords) = &keywords {
       movies_results.extend(imdb.by_keywords(keywords, ImdbQuery::Movies));
-      movies_results.print(Some(&display_keywords(keywords)))?;
     } else {
       movies_results.extend(imdb.by_title(&lc_title, ImdbQuery::Movies));
-      movies_results.print(Some(&lc_title))?;
     }
 
     if let Some(keywords) = &keywords {
       series_results.extend(imdb.by_keywords(keywords, ImdbQuery::Series));
-      series_results.print(Some(&display_keywords(keywords)))?;
+      st = display_keywords(keywords);
+      search_terms = Some(&st);
     } else {
       series_results.extend(imdb.by_title(&lc_title, ImdbQuery::Series));
-      series_results.print(Some(&lc_title))?;
+      search_terms = Some(&lc_title);
     }
   }
+
+  printer.print(
+    Some(movies_results.top_sorted_results()),
+    Some(series_results.top_sorted_results()),
+    imdb_url,
+    search_terms,
+  )?;
 
   Ok(())
 }
@@ -266,11 +288,11 @@ fn imdb_movies_dir(
   imdb_url: &Url,
   sort_by_year: bool,
   top: Option<usize>,
-  color: bool,
+  printer: Box<dyn Printer>,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_movies(imdb_url, sort_by_year, top, color);
+  let mut results = SearchRes::new_movies(sort_by_year, top);
   let walkdir = WalkDir::new(dir).min_depth(1);
 
   for entry in walkdir {
@@ -297,7 +319,7 @@ fn imdb_movies_dir(
         if let Some((title, year)) = parse_title_and_year(&filename) {
           at_least_one = true;
 
-          let mut local_results = SearchRes::new_movies(imdb_url, sort_by_year, top, color);
+          let mut local_results = SearchRes::new_movies(sort_by_year, top);
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -305,7 +327,16 @@ fn imdb_movies_dir(
               at_least_one_matched = true;
             }
 
-            local_results.print(Some(&display_title_and_year(title, year)))?;
+            if matches!(printer.get_format(), OutputFormat::Table) {
+              printer.print(
+                Some(local_results.top_sorted_results()),
+                None,
+                imdb_url,
+                Some(&display_title_and_year(title, year)),
+              )?;
+            } else {
+              results.extend(local_results);
+            }
           } else {
             at_least_one_matched = true;
             results.extend(local_results);
@@ -333,7 +364,8 @@ fn imdb_movies_dir(
     return Ok(());
   }
 
-  results.print(None)?;
+  printer.print(Some(results.top_sorted_results()), None, imdb_url, None)?;
+
   Ok(())
 }
 
@@ -343,11 +375,11 @@ fn imdb_series_dir(
   imdb_url: &Url,
   sort_by_year: bool,
   top: Option<usize>,
-  color: bool,
+  printer: Box<dyn Printer>,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_series(imdb_url, sort_by_year, top, color);
+  let mut results = SearchRes::new_series(sort_by_year, top);
   let walkdir = WalkDir::new(dir).min_depth(1).max_depth(1);
 
   for entry in walkdir {
@@ -372,7 +404,7 @@ fn imdb_series_dir(
         at_least_one = true;
 
         let filename = filename.to_string_lossy();
-        let mut local_results = SearchRes::new_series(imdb_url, sort_by_year, top, color);
+        let mut local_results = SearchRes::new_series(sort_by_year, top);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
@@ -387,7 +419,11 @@ fn imdb_series_dir(
             at_least_one_matched = true;
           }
 
-          local_results.print(Some(&search_terms))?;
+          if matches!(printer.get_format(), OutputFormat::Table) {
+            printer.print(None, Some(local_results.top_sorted_results()), imdb_url, Some(&search_terms))?;
+          } else {
+            results.extend(local_results);
+          }
         } else {
           at_least_one_matched = true;
           results.extend(local_results);
@@ -406,7 +442,8 @@ fn imdb_series_dir(
     return Ok(());
   }
 
-  results.print(None)?;
+  printer.print(None, Some(results.top_sorted_results()), imdb_url, None)?;
+
   Ok(())
 }
 
@@ -420,6 +457,11 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
 
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
+
+  let printer: Box<dyn Printer> = match opt.output {
+    OutputFormat::Json => Box::new(JsonPrinter {}),
+    OutputFormat::Table => Box::new(TablePrinter { color: opt.color, top: opt.top }),
+  };
 
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
@@ -449,13 +491,13 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
 
   match cmd {
     Command::Title { exact, title, opts: _ } => {
-      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, opt.color, exact)?
+      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, exact, printer)?
     }
     Command::MoviesDir { dir, .. } => {
-      imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, opt.color)?
+      imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, printer)?
     }
     Command::SeriesDir { dir, .. } => {
-      imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, opt.color)?
+      imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, printer)?
     }
   }
 
@@ -489,6 +531,7 @@ fn main() {
     } else {
       opt.opts.verbose
     },
+    output: opts.output,
   };
 
   let log_level = match merge_opts.verbose {

@@ -2,10 +2,11 @@
 
 use derive_more::Display;
 use enum_utils::FromStr;
+use serde::Serialize;
 use std::hash::Hash;
 
 /// Encodes the 13 types a title can be
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 #[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
 pub enum TitleType {

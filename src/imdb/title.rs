@@ -10,6 +10,7 @@ use crate::imdb::utils::tokens;
 use crate::iter_next;
 use crate::Res;
 use atoi::atoi;
+use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::str::FromStr;
@@ -34,9 +35,11 @@ impl<T> From<TsvAction<T>> for Option<T> {
 }
 
 /// Primary/original titles of a movie/series and its relevant information such as duration and rating
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct Title<'a> {
+  #[serde(flatten)]
   header: TitleHeader,
+  #[serde(flatten)]
   title_id: TitleId<'a>,
   primary_title: &'a str,
   original_title: Option<&'a str>,

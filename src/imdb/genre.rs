@@ -2,10 +2,12 @@
 
 use derive_more::Display;
 use enum_utils::FromStr;
+use serde::ser::SerializeSeq;
+use serde::{Serialize, Serializer};
 use std::fmt;
 
 /// 27 genres a title can be associated with
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 #[display(fmt = "{}")]
 pub enum Genre {
   /// Action
@@ -32,10 +34,12 @@ pub enum Genre {
   Fantasy = 10,
   #[display(fmt = "Film-Noir")]
   #[enumeration(rename = "Film-Noir")]
+  #[serde(rename(serialize = "Film-Noir"))]
   /// FilmNoir
   FilmNoir = 11,
   #[display(fmt = "Game-Show")]
   #[enumeration(rename = "Game-Show")]
+  #[serde(rename(serialize = "Game-Show"))]
   /// GameShow
   GameShow = 12,
   /// History
@@ -52,12 +56,14 @@ pub enum Genre {
   News = 18,
   #[display(fmt = "Reality-TV")]
   #[enumeration(rename = "Reality-TV")]
+  #[serde(rename(serialize = "Reality-TV"))]
   /// RealityTv
   RealityTv = 19,
   /// Romance
   Romance = 20,
   #[display(fmt = "Sci-Fi")]
   #[enumeration(rename = "Sci-Fi")]
+  #[serde(rename(serialize = "Sci-Fi"))]
   /// SciFi
   SciFi = 21,
   /// Short
@@ -66,6 +72,7 @@ pub enum Genre {
   Sport = 23,
   #[display(fmt = "Talk-Show")]
   #[enumeration(rename = "Talk-Show")]
+  #[serde(rename(serialize = "Talk-Show"))]
   /// TalkShow
   TalkShow = 24,
   /// Thriller
@@ -121,6 +128,19 @@ impl Genres {
     } else {
       None
     }
+  }
+}
+
+impl Serialize for Genres {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let mut seq = serializer.serialize_seq(None)?;
+    for e in self.iter() {
+      seq.serialize_element(&e)?;
+    }
+    seq.end()
   }
 }
 
