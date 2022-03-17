@@ -87,7 +87,7 @@ impl<'a> Title<'a> {
     self.header.start_year()
   }
 
-  /// Returns the duration of the title 
+  /// Returns the duration of the title
   pub fn runtime(&self) -> Option<Duration> {
     self
       .header
@@ -106,7 +106,7 @@ impl<'a> Title<'a> {
   }
 
   /// Reads a title from tab separated values and returns it inside a TsvAction struct
-  /// # Arguments 
+  /// # Arguments
   /// * `line` - A title as tab separated values
   /// * `ratings` - Ratings struct containing the ratings of the titles
   pub(crate) fn from_tsv(line: &'a [u8], ratings: &Ratings) -> Res<TsvAction<Self>> {
@@ -211,7 +211,7 @@ impl<'a> Title<'a> {
   }
 
   /// Writes the title as binary
-  /// # Arguments 
+  /// # Arguments
   /// `writer` - Writer to write the title to
   pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res<()> {
     let _ = writer.write_all(&self.header.to_le_bytes())?;
@@ -234,7 +234,7 @@ impl<'a> Title<'a> {
   }
 
   /// Reads a title from its binary representation and returns it inside a Result
-  /// # Arguments 
+  /// # Arguments
   /// * `source` - Title to be read as binary
   pub(crate) fn from_binary(source: &mut &'a [u8]) -> Res<Self> {
     if (*source).len() < 23 {
