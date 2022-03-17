@@ -15,6 +15,7 @@ use std::io::Write;
 use std::str::FromStr;
 use std::time::Duration;
 
+/// Wraps a title based on its type
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum TsvAction<T> {
   Skip,
@@ -32,6 +33,7 @@ impl<T> From<TsvAction<T>> for Option<T> {
   }
 }
 
+/// Primary/original titles of a movie/series and its relevant information such as duration and rating
 #[derive(Debug, Clone, Copy)]
 pub struct Title<'a> {
   header: TitleHeader,
@@ -55,30 +57,37 @@ impl Hash for Title<'_> {
 }
 
 impl<'a> Title<'a> {
+  /// Returns the id of the title
   pub fn title_id(&self) -> &TitleId {
     &self.title_id
   }
 
+  /// Returns the type of the title (e.g. Movie, Series etc.)
   pub fn title_type(&self) -> TitleType {
     self.header.title_type()
   }
 
+  /// Returns the primary title in English
   pub fn primary_title(&self) -> &str {
     self.primary_title
   }
 
+  /// Returns an Option containing the original title in the original language if exists
   pub fn original_title(&self) -> Option<&str> {
     self.original_title
   }
 
+  /// Returns if the title is rated R
   pub fn is_adult(&self) -> bool {
     self.header.is_adult()
   }
 
+  /// Returns the release date of the title
   pub fn start_year(&self) -> Option<u16> {
     self.header.start_year()
   }
 
+  /// Returns the duration of the title in minutes
   pub fn runtime(&self) -> Option<Duration> {
     self
       .header
@@ -86,14 +95,17 @@ impl<'a> Title<'a> {
       .map(|runtime| Duration::from_secs(u64::from(runtime) * 60))
   }
 
+  /// Returns the set of genres associated with the title
   pub fn genres(&self) -> Genres {
     self.header.genres()
   }
 
+  /// Returns the rating of the title
   pub fn rating(&self) -> Option<Rating> {
     self.header.rating()
   }
 
+  /// Reads a title from tab separated values and returns it inside a TsvAction struct
   pub(crate) fn from_tsv(line: &'a [u8], ratings: &Ratings) -> Res<TsvAction<Self>> {
     let mut columns = line.split(|&b| b == tokens::TAB);
 
@@ -195,6 +207,7 @@ impl<'a> Title<'a> {
     }
   }
 
+  /// Writes the title to the given writer
   pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res<()> {
     let _ = writer.write_all(&self.header.to_le_bytes())?;
 
@@ -215,6 +228,7 @@ impl<'a> Title<'a> {
     Ok(())
   }
 
+  /// Reads a title from its binary representation and returns it inside a Result
   pub(crate) fn from_binary(source: &mut &'a [u8]) -> Res<Self> {
     if (*source).len() < 23 {
       // # 23 bytes:

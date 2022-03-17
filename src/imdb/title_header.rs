@@ -45,6 +45,7 @@ impl From<[u8; 16]> for TitleHeader {
 }
 
 impl TitleHeader {
+  /// Create a new TitleHeader with the given values
   pub(crate) fn new_version_0(
     has_original_title: bool,
     is_adult: bool,
@@ -106,16 +107,19 @@ impl TitleHeader {
   //   (self.0 & mask) as u8
   // }
 
+  /// Returns true if the title has an original title
   pub(crate) fn has_original_title(&self) -> bool {
     let mask = 1 << 6;
     ((self.0 & mask) >> 6) == 1
   }
 
+  /// Returns true if the title is rated R
   pub(crate) fn is_adult(&self) -> bool {
     let mask = 1 << 7;
     ((self.0 & mask) >> 7) == 1
   }
 
+  /// Returns an Option containing the duration of the title in minutes
   pub(crate) fn runtime_minutes(&self) -> Option<u16> {
     let mask = (2_u128.pow(16) - 1) << 8;
     let value = (self.0 & mask) >> 8;
@@ -126,6 +130,7 @@ impl TitleHeader {
     }
   }
 
+  /// Returns the release date of the title inside an Option
   pub(crate) fn start_year(&self) -> Option<u16> {
     let mask = (2_u128.pow(9) - 1) << 24;
     let value = (self.0 & mask) >> 24;
@@ -136,6 +141,7 @@ impl TitleHeader {
     }
   }
 
+  /// Returns the rating of the title inside an Option
   pub(crate) fn rating(&self) -> Option<Rating> {
     let mask = (2_u128.pow(7) - 1) << 33;
     let rating = (self.0 & mask) >> 33;
@@ -149,12 +155,14 @@ impl TitleHeader {
     }
   }
 
+  /// Returns the type of the title
   pub(crate) fn title_type(&self) -> TitleType {
     let mask = (2_u128.pow(5) - 1) << 63;
     let value = (self.0 & mask) >> 63;
     unsafe { TitleType::from(value as u8) }
   }
 
+  /// Returns the set of genres the title is associated with
   pub(crate) fn genres(&self) -> Genres {
     let mask = (2_u128.pow(32) - 1) << 68;
     let value = (self.0 & mask) >> 68;

@@ -1,6 +1,11 @@
 #![warn(clippy::all)]
 
 pub(crate) mod tokens {
+  /// Returns the next item of an iterator or propagates the end-of-file error if the end of the iterator is reached
+  /// # Arguments
+  /// * `($iter: ident)` - An iterator
+  /// # Errors
+  /// Returns an unexpected end-of-file error `Err::Eof` if the end of the file is reached
   #[macro_export]
   macro_rules! iter_next {
     ($iter:ident) => {{

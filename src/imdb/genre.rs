@@ -4,6 +4,7 @@ use derive_more::Display;
 use enum_utils::FromStr;
 use std::fmt;
 
+/// 27 genres a title can be associated with
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
 pub enum Genre {
@@ -48,28 +49,40 @@ pub enum Genre {
 }
 
 impl Genre {
+  /// Returns the very last item encoded in the Genre enum as u8
   pub(crate) const fn max() -> u8 {
     Self::Western as u8
   }
 
+  /// Converts a number into its corresponding Genre item
+  /// # Arguments
+  /// * `value` - u8 value to be converted to a Genre item
   pub(crate) const unsafe fn from(value: u8) -> Self {
     std::mem::transmute(value)
   }
 }
 
+/// Represents the set of genres a title is associated with
 #[derive(PartialEq, Eq, Default, Clone, Copy)]
 pub struct Genres(u32);
 
 impl Genres {
+  /// Add a new Genre into the Genres
+  /// # Arguments
+  /// * `genre` - Genre to be added to the Genres
   pub(crate) fn add(&mut self, genre: Genre) {
     let index = genre as u8;
     self.0 |= 1 << index;
   }
 
+  /// Returns an iterator for the genres
   pub fn iter(&self) -> GenresIter {
     GenresIter::new(*self)
   }
 
+  /// Returns the item at the given index in the Genre enum
+  /// # Arguments
+  /// * `index` - Index of the item to be returned
   fn get(&self, index: u8) -> Option<Genre> {
     if index > Genre::max() {
       panic!("Genre index `{}` out of range (max: {})", index, Genre::max());
@@ -118,12 +131,16 @@ impl fmt::Display for Genres {
   }
 }
 
+/// Iterator for the Genres struct
 pub struct GenresIter {
   genres: Genres,
   index: u8,
 }
 
 impl GenresIter {
+  /// Creates and returns a GenresIter
+  /// # Arguments
+  /// * `genres` - Genres struct to get the iterator
   pub fn new(genres: Genres) -> Self {
     Self { genres, index: 0 }
   }
@@ -132,6 +149,7 @@ impl GenresIter {
 impl Iterator for GenresIter {
   type Item = Genre;
 
+  /// Get the next item in the GenresIter
   fn next(&mut self) -> Option<Self::Item> {
     loop {
       if self.index > Genre::max() {

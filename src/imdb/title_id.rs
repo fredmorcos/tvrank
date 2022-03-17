@@ -7,6 +7,7 @@ use std::error::Error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
+/// The ID corresponding to a title as u8 and usize
 #[derive(Debug, Clone, Copy)]
 pub struct TitleId<'a> {
   bytes: &'a [u8],
@@ -28,14 +29,17 @@ impl Hash for TitleId<'_> {
 }
 
 impl<'a> TitleId<'a> {
+  /// Returns the title id as bytes
   pub(crate) fn as_bytes(&self) -> &'a [u8] {
     self.bytes
   }
 
+  /// Returns the title id as str
   pub(crate) fn as_str(&self) -> &'a str {
     unsafe { std::str::from_utf8_unchecked(self.bytes) }
   }
 
+  /// Returns the title id as usize
   pub(crate) fn as_usize(&self) -> usize {
     self.num
   }

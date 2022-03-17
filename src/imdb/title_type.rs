@@ -4,6 +4,7 @@ use derive_more::Display;
 use enum_utils::FromStr;
 use std::hash::Hash;
 
+/// Encodes the 13 types a title can be
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
@@ -44,10 +45,14 @@ impl TitleType {
   //   Self::RadioSeries as u8
   // }
 
+  /// Converts a byte representation to its corresponding TitleType
+  /// # Arguments
+  /// * `value` - Byte representation of a TitleType
   pub(crate) const unsafe fn from(value: u8) -> Self {
     std::mem::transmute(value)
   }
 
+  /// Returns true if the TitleType is movie
   pub(crate) fn is_movie(&self) -> bool {
     match self {
       // Games
@@ -72,6 +77,7 @@ impl TitleType {
     }
   }
 
+  /// Returns true if the TitleType is series
   pub(crate) fn is_series(&self) -> bool {
     match self {
       // Games

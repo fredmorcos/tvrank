@@ -14,6 +14,7 @@ use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
+/// Average user rating of a title together with the number of the votes
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Rating {
   rating: u8,
@@ -43,10 +44,16 @@ impl Ord for Rating {
 }
 
 impl Rating {
+  /// Create a new Rating
+  /// #Arguments
+  /// * `rating` - Average user rating
+  /// * `votes` - Number of the votes
   pub(crate) fn new(rating: u8, votes: u32) -> Self {
     Self { rating, votes }
   }
 
+  /// Creates a Rating from a tab separated value
+  /// * `columns` - Rating of a title as a tab separated value
   fn from_tsv<'a>(columns: &mut impl Iterator<Item = &'a [u8]>) -> Res<Self> {
     let rating = f32::from_str(unsafe { std::str::from_utf8_unchecked(iter_next!(columns)) })?;
     let rating = unsafe { (rating * 10.0).to_int_unchecked() };
@@ -54,16 +61,19 @@ impl Rating {
     Ok(Self::new(rating, votes))
   }
 
+  /// Returns the average user rating
   pub fn rating(&self) -> u8 {
     self.rating
   }
 
+  /// Returns the number of votes
   pub fn votes(&self) -> u32 {
     self.votes
   }
 }
 
 #[derive(Default)]
+/// Maps a set of title IDs to their corresponding ratings
 pub(crate) struct Ratings {
   ratings: FnvHashMap<usize, Rating>,
 }
@@ -101,6 +111,8 @@ impl DerefMut for Ratings {
 }
 
 impl Ratings {
+  /// Create and return Ratings from tab separated values
+  /// * `reader` - Reader containing a list of titles as tab separated values
   pub(crate) fn from_tsv<R: BufRead>(mut reader: R) -> Res<Self> {
     // TODO: See if we can use byte vectors instead of strings. Ultimately we end up
     // parsing bytes rather than strings, and when we need strings, we already know they
