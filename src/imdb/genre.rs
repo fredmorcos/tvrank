@@ -7,45 +7,72 @@ use std::fmt;
 /// 27 genres a title can be associated with
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
-#[allow(missing_docs)]
 pub enum Genre {
+  /// Action
   Action = 0,
+  /// Adult
   Adult = 1,
+  /// Adventure
   Adventure = 2,
+  /// Animation
   Animation = 3,
+  /// Biography
   Biography = 4,
+  /// Comedy
   Comedy = 5,
+  /// Crime
   Crime = 6,
+  /// Documentary
   Documentary = 7,
+  /// Drama
   Drama = 8,
+  /// Family
   Family = 9,
+  /// Fantasy
   Fantasy = 10,
   #[display(fmt = "Film-Noir")]
   #[enumeration(rename = "Film-Noir")]
+  /// FilmNoir
   FilmNoir = 11,
   #[display(fmt = "Game-Show")]
   #[enumeration(rename = "Game-Show")]
+  /// GameShow
   GameShow = 12,
+  /// History
   History = 13,
+  /// Horror
   Horror = 14,
+  /// Music
   Music = 15,
+  /// Musical
   Musical = 16,
+  /// Mystery
   Mystery = 17,
+  /// News
   News = 18,
   #[display(fmt = "Reality-TV")]
   #[enumeration(rename = "Reality-TV")]
+  /// RealityTv
   RealityTv = 19,
+  /// Romance
   Romance = 20,
   #[display(fmt = "Sci-Fi")]
   #[enumeration(rename = "Sci-Fi")]
+  /// SciFi
   SciFi = 21,
+  /// Short
   Short = 22,
+  /// Sport
   Sport = 23,
   #[display(fmt = "Talk-Show")]
   #[enumeration(rename = "Talk-Show")]
+  /// TalkShow
   TalkShow = 24,
+  /// Thriller
   Thriller = 25,
+  /// War
   War = 26,
+  /// Western
   Western = 27,
 }
 
