@@ -15,6 +15,7 @@ use std::io::{BufRead, Write};
 use std::ops::Index;
 
 /// Specifies if a query is for movies or series database
+#[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub enum Query {
   Movies,

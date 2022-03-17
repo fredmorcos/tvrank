@@ -126,7 +126,7 @@ impl Service {
     }
   }
 
-  /// Parses titles from the given binary and inserts them into the movies/series databases with multithreading
+  /// Parses titles from the given binary and inserts them into the movies/series databases
   /// # Arguments
   /// * `movies_data` - Binary movies data
   /// * `series_data` - Binary series data
@@ -155,7 +155,8 @@ impl Service {
     Self { dbs: dbs.into_inner() }
   }
 
-  /// Opens the file at the given path and returns the file or an error in case of failure
+  /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
+  /// Returns an Error if a problem occurs while opening an existing file. 
   /// # Arguments
   /// * `path` - Path of the file to be opened
   fn file_exists(path: &Path) -> Res<Option<File>> {

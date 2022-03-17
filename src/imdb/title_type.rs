@@ -8,6 +8,7 @@ use std::hash::Hash;
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
+#[allow(missing_docs)]
 pub enum TitleType {
   // Games
   VideoGame = 0,

@@ -4,9 +4,11 @@ use derive_more::Display;
 use enum_utils::FromStr;
 use std::fmt;
 
+
 /// 27 genres a title can be associated with
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
+#[allow(missing_docs)]
 pub enum Genre {
   Action = 0,
   Adult = 1,

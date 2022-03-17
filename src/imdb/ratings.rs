@@ -14,7 +14,7 @@ use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
-/// Average user rating of a title together with the number of the votes
+/// Average user rating of a title together with the number of votes
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Rating {
   rating: u8,
@@ -45,9 +45,9 @@ impl Ord for Rating {
 
 impl Rating {
   /// Create a new Rating
-  /// #Arguments
+  /// # Arguments
   /// * `rating` - Average user rating
-  /// * `votes` - Number of the votes
+  /// * `votes` - Number of votes
   pub(crate) fn new(rating: u8, votes: u32) -> Self {
     Self { rating, votes }
   }
@@ -72,8 +72,8 @@ impl Rating {
   }
 }
 
-#[derive(Default)]
 /// Maps a set of title IDs to their corresponding ratings
+#[derive(Default)]
 pub(crate) struct Ratings {
   ratings: FnvHashMap<usize, Rating>,
 }
