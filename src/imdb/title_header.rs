@@ -3,6 +3,8 @@
 use crate::imdb::genre::Genres;
 use crate::imdb::ratings::Rating;
 use crate::imdb::title_type::TitleType;
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 use std::ops::Deref;
 
 /// # Header version 0 is 16 bytes composed of (from MSB to LSB):
@@ -29,6 +31,21 @@ use std::ops::Deref;
 /// * 3 bytes are reserved for later version use.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) struct TitleHeader(u128);
+
+impl Serialize for TitleHeader {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let mut state = serializer.serialize_struct("TitleHeader", 5)?;
+    state.serialize_field("rating", &self.rating())?;
+    state.serialize_field("start_year", &self.start_year())?;
+    state.serialize_field("runtime", &self.runtime_minutes())?;
+    state.serialize_field("genres", &self.genres())?;
+    state.serialize_field("title_type", &self.title_type())?;
+    state.end()
+  }
+}
 
 impl Deref for TitleHeader {
   type Target = u128;

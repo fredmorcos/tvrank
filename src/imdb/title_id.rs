@@ -3,14 +3,18 @@
 use crate::imdb::error::Err;
 use crate::imdb::utils::tokens;
 use atoi::atoi;
+use serde::{Serialize, Serializer};
 use std::error::Error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
 /// The ID corresponding to a title as u8 and usize
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct TitleId<'a> {
+  #[serde(serialize_with = "bytes_serializer", rename = "title_id")]
   bytes: &'a [u8],
+
+  #[serde(skip_serializing)]
   num: usize,
 }
 
@@ -64,4 +68,13 @@ impl fmt::Display for TitleId<'_> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}", self.as_str())
   }
+}
+
+fn bytes_serializer<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+  S: Serializer,
+{
+  let s = unsafe { std::str::from_utf8_unchecked(bytes) };
+
+  serializer.serialize_str(s)
 }

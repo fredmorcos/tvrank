@@ -7,6 +7,7 @@ use crate::iter_next;
 use crate::Res;
 use atoi::atoi;
 use fnv::FnvHashMap;
+use serde::Serialize;
 use std::borrow::Borrow;
 use std::cmp::Ord;
 use std::cmp::Ordering;
@@ -15,7 +16,7 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 /// Average user rating of a title together with the number of votes
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
 pub struct Rating {
   rating: u8,
   votes: u32,
