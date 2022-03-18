@@ -14,9 +14,12 @@ use std::fmt;
 use std::io::{BufRead, Write};
 use std::ops::Index;
 
+/// Specifies if a query is for movies or series database
 #[derive(Clone, Copy)]
 pub enum Query {
+  /// Movies
   Movies,
+  /// Series
   Series,
 }
 
@@ -35,36 +38,56 @@ struct MoviesCookie(usize);
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, From, Into)]
 struct SeriesCookie(usize);
 
+/// Provides an interface for the movies and series databases
 pub struct Db {
   movies: DbImpl<MoviesCookie>,
   series: DbImpl<SeriesCookie>,
 }
 
 impl Db {
+  /// Initializes a movies and series database with the given capacity
+  /// # Arguments
+  /// * `movies_capacity` - Capacity of the movies database
+  /// * `series_capacity` - Capacity of the series database
   pub fn with_capacities(movies_capacity: usize, series_capacity: usize) -> Self {
     Self { movies: DbImpl::with_capacity(movies_capacity), series: DbImpl::with_capacity(series_capacity) }
   }
 
+  /// Returns the number of titles in the movies database
   pub fn n_movies(&self) -> usize {
     self.movies.n_titles()
   }
 
+  /// Returns the number of titles in the series database
   pub fn n_series(&self) -> usize {
     self.series.n_titles()
   }
 
+  /// Returns the total number of titles in movies and series databases
   pub fn n_entries(&self) -> usize {
     self.n_movies() + self.n_series()
   }
 
+  /// Inserts the given title into the movies database
+  /// # Arguments
+  /// * `title` - Title to be inserted into the movies database
   pub(crate) fn store_movie(&mut self, title: Title<'static>) {
     self.movies.store_title(title)
   }
 
+  /// Inserts the given title into the series database
+  /// # Arguments
+  /// * `title` - Title to be inserted into the series database
   pub(crate) fn store_series(&mut self, title: Title<'static>) {
     self.series.store_title(title)
   }
 
+  /// Reads movies/series data from tab separated values and writes as binary
+  /// # Arguments
+  /// * `ratings_reader` - Tab separated values for ratings
+  /// * `basics_reader` - Tab separated values for titles
+  /// * `movies_db_writer` - Writer to store movies
+  /// * `series_db_writer` - Writer to store series
   pub(crate) fn to_binary<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
     ratings_reader: R1,
     mut basics_reader: R2,
@@ -107,6 +130,10 @@ impl Db {
     Ok(())
   }
 
+  /// Returns the title with the given ID from the database
+  /// # Arguments
+  /// * `TitleId` - Title ID to be queried
+  /// * `query` - Specifies if the query is for movies or series
   pub(crate) fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
     match query {
       Query::Movies => self.movies.by_id(id),
@@ -114,6 +141,10 @@ impl Db {
     }
   }
 
+  /// Returns titles with the given title string from the database
+  /// # Arguments
+  /// * `title` - Title to be queried
+  /// * `query` - Specifies if the query is for movies or series
   pub(crate) fn by_title<'a>(
     &'a self,
     title: &str,
@@ -125,6 +156,11 @@ impl Db {
     }
   }
 
+  /// Returns titles by title and year from the database
+  /// # Arguments
+  /// * `title` - Title to be queried
+  /// * `year` - Release date to be queried
+  /// * `query` - Specifies if the query is for movies or series
   pub(crate) fn by_title_and_year<'a>(
     &'a self,
     title: &str,
@@ -137,6 +173,10 @@ impl Db {
     }
   }
 
+  /// Returns titles by keywords
+  /// # Arguments
+  /// * `keywords` - Keywords to be searched in the titles
+  /// * `query` - Specifies if the query is for movies or series
   pub(crate) fn by_keywords<'a, 'k: 'a>(
     &'a self,
     keywords: &'k [&str],
@@ -148,6 +188,11 @@ impl Db {
     }
   }
 
+  /// Returns titles by keywords and year from the database
+  /// # Arguments
+  /// * `keywords` - Keywords to be searched in the titles
+  /// * `year` - Release date to be queried
+  /// * `query` - Specifies if the query is for movies or series
   pub(crate) fn by_keywords_and_year<'a, 'k: 'a>(
     &'a self,
     keywords: &'k [&str],
@@ -189,6 +234,9 @@ impl<C: From<usize>> DbImpl<C> {
 }
 
 impl<C: From<usize> + Into<usize> + Copy> DbImpl<C> {
+  /// Inserts the given title into the database
+  /// # Arguments
+  /// * `title` - Title to be inserted into the database
   fn store_title(&mut self, title: Title<'static>) {
     let cookie = self.next_cookie();
 
@@ -219,22 +267,36 @@ impl<C: From<usize> + Into<usize> + Copy> DbImpl<C> {
 }
 
 impl<C> DbImpl<C> {
+  /// Initializes and returns a database with the given capacity
+  /// # Arguments
+  /// * `capacity` - Maximum number of titles to be hold in the database
   fn with_capacity(capacity: usize) -> Self {
     Self { titles: Vec::with_capacity(capacity), by_id: Default::default(), by_title: Default::default() }
   }
 
+  /// Inserts the given title into the database
+  /// # Arguments
+  /// * `title` - Title to be stored in the database
   fn store(&mut self, title: Title<'static>) {
     self.titles.push(title);
   }
 
+  /// Returns the number of titles in the database
   fn n_titles(&self) -> usize {
     self.titles.len()
   }
 
+  /// Returns the cookie with the given title ID
+  /// # Arguments
+  /// * `id` - Title ID to be queried
   fn cookie_by_id(&self, id: &TitleId) -> Option<&C> {
     self.by_id.get(&id.as_usize())
   }
 
+  /// Returns cookies with the given title and year
+  /// # Arguments
+  /// * `title` - Title to be queried
+  /// * `year` - Release date to be queried
   fn cookies_by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &C> {
     if let Some(by_year) = self.by_title.get(title) {
       if let Some(cookies) = by_year.get(&year) {
@@ -245,6 +307,9 @@ impl<C> DbImpl<C> {
     [].iter()
   }
 
+  /// Returns cookies by keywords
+  /// # Arguments
+  /// * `keywords` - Keywords to be searched in the titles
   fn cookies_by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().build(keywords);
     self
@@ -258,6 +323,10 @@ impl<C> DbImpl<C> {
       .flatten()
   }
 
+  /// Returns cookies by keywords and year
+  /// # Arguments
+  /// * `keywords` - Keywords to be searched in the titles
+  /// * `year` - Release date to be queried
   fn cookies_by_keywords_and_year<'a, 'k: 'a>(
     &'a self,
     keywords: &'k [&str],
@@ -276,10 +345,19 @@ impl<C> DbImpl<C> {
       .flatten()
   }
 
+  /// Inserts cookie with the given title ID
+  /// # Arguments
+  /// * `id` - Title ID of the cookie
+  /// * `cookie` - Cookie to be inserted
   fn insert_by_id(&mut self, id: &TitleId, cookie: C) -> bool {
     self.by_id.insert(id.as_usize(), cookie).is_none()
   }
 
+  /// Inserts cookie with the given title and year
+  /// # Arguments
+  /// * `title` - Title of the cookie to be inserted
+  /// * `year` - Release date of the cookie to be inserted
+  /// * `cookie` - Cookie to be inserted
   fn insert_by_title_and_year(&mut self, title: String, year: Option<u16>, cookie: C) {
     if let Some(year) = year {
       self.by_title.entry(title).or_default().entry(year).or_default().push(cookie);
@@ -290,10 +368,16 @@ impl<C> DbImpl<C> {
 }
 
 impl<C: Into<usize> + Copy> DbImpl<C> {
+  /// Returns the title with the given ID from the database
+  /// # Arguments
+  /// * `id` - ID of the title to be returned
   pub(crate) fn by_id(&self, id: &TitleId) -> Option<&Title> {
     self.cookie_by_id(id).map(|&cookie| &self[cookie])
   }
 
+  /// Returns titles with the given title string from the database
+  /// # Arguments
+  /// * `title` - Title to be queried
   pub(crate) fn by_title<'a>(&'a self, title: &str) -> Box<dyn Iterator<Item = &Title> + 'a> {
     if let Some(by_year) = self.by_title.get(title) {
       return Box::new(by_year.values().flatten().map(|&cookie| &self[cookie]));
@@ -302,14 +386,25 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
     Box::new(std::iter::empty())
   }
 
+  /// Returns titles by title and year from the database
+  /// # Arguments
+  /// * `title` - Title to be queried
+  /// * `year` - Release date of the title to be queried
   pub(crate) fn by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &Title> {
     self.cookies_by_title_and_year(title, year).map(|&cookie| &self[cookie])
   }
 
+  /// Returns titles by keywords from the database
+  /// # Arguments
+  /// * `keywords` - Keywords to be searched in the titles
   pub(crate) fn by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 
+  /// Returns titles by keywords and year from the database
+  /// # Arguments
+  /// * `keywords` - Keywords to be searched in the titles
+  /// * `year` - Release date of the title to be queried
   pub(crate) fn by_keywords_and_year<'a, 'k: 'a>(
     &'a self,
     keywords: &'k [&str],

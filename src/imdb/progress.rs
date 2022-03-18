@@ -1,11 +1,16 @@
 use std::io::Read;
 
+/// A closure to keep track of the download progress together with the download content
 pub struct Progress<'a, R> {
   inner: R,
   progress_fn: &'a dyn Fn(Option<u64>, u64),
 }
 
 impl<'a, R: Read> Progress<'a, R> {
+  /// Creates a new Progress struct
+  /// # Arguments
+  /// * `inner` - Download content
+  /// * `progress_fn` - Closure to keep track of the download progress
   pub fn new(inner: R, progress_fn: &'a dyn Fn(Option<u64>, u64)) -> Self {
     Self { inner, progress_fn }
   }

@@ -4,72 +4,113 @@ use derive_more::Display;
 use enum_utils::FromStr;
 use std::fmt;
 
+/// 27 genres a title can be associated with
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy)]
 #[display(fmt = "{}")]
 pub enum Genre {
+  /// Action
   Action = 0,
+  /// Adult
   Adult = 1,
+  /// Adventure
   Adventure = 2,
+  /// Animation
   Animation = 3,
+  /// Biography
   Biography = 4,
+  /// Comedy
   Comedy = 5,
+  /// Crime
   Crime = 6,
+  /// Documentary
   Documentary = 7,
+  /// Drama
   Drama = 8,
+  /// Family
   Family = 9,
+  /// Fantasy
   Fantasy = 10,
   #[display(fmt = "Film-Noir")]
   #[enumeration(rename = "Film-Noir")]
+  /// FilmNoir
   FilmNoir = 11,
   #[display(fmt = "Game-Show")]
   #[enumeration(rename = "Game-Show")]
+  /// GameShow
   GameShow = 12,
+  /// History
   History = 13,
+  /// Horror
   Horror = 14,
+  /// Music
   Music = 15,
+  /// Musical
   Musical = 16,
+  /// Mystery
   Mystery = 17,
+  /// News
   News = 18,
   #[display(fmt = "Reality-TV")]
   #[enumeration(rename = "Reality-TV")]
+  /// RealityTv
   RealityTv = 19,
+  /// Romance
   Romance = 20,
   #[display(fmt = "Sci-Fi")]
   #[enumeration(rename = "Sci-Fi")]
+  /// SciFi
   SciFi = 21,
+  /// Short
   Short = 22,
+  /// Sport
   Sport = 23,
   #[display(fmt = "Talk-Show")]
   #[enumeration(rename = "Talk-Show")]
+  /// TalkShow
   TalkShow = 24,
+  /// Thriller
   Thriller = 25,
+  /// War
   War = 26,
+  /// Western
   Western = 27,
 }
 
 impl Genre {
+  /// Returns the very last item encoded in the Genre enum as u8
   pub(crate) const fn max() -> u8 {
     Self::Western as u8
   }
 
+  /// Converts a number into its corresponding Genre item
+  /// # Arguments
+  /// * `value` - u8 value to be converted to a Genre item
   pub(crate) const unsafe fn from(value: u8) -> Self {
     std::mem::transmute(value)
   }
 }
 
+/// Represents the set of genres a title is associated with
 #[derive(PartialEq, Eq, Default, Clone, Copy)]
 pub struct Genres(u32);
 
 impl Genres {
+  /// Add a new Genre into the Genres
+  /// # Arguments
+  /// * `genre` - Genre to be added to the Genres
   pub(crate) fn add(&mut self, genre: Genre) {
     let index = genre as u8;
     self.0 |= 1 << index;
   }
 
+  /// Returns an iterator for the genres
   pub fn iter(&self) -> GenresIter {
     GenresIter::new(*self)
   }
 
+  /// Returns the item at the given index in the Genre enum
+  /// # Arguments
+  /// * `index` - Index of the item to be returned
   fn get(&self, index: u8) -> Option<Genre> {
     if index > Genre::max() {
       panic!("Genre index `{}` out of range (max: {})", index, Genre::max());
@@ -118,12 +159,16 @@ impl fmt::Display for Genres {
   }
 }
 
+/// Iterator for the Genres struct
 pub struct GenresIter {
   genres: Genres,
   index: u8,
 }
 
 impl GenresIter {
+  /// Creates and returns a GenresIter
+  /// # Arguments
+  /// * `genres` - Genres struct to get the iterator
   pub fn new(genres: Genres) -> Self {
     Self { genres, index: 0 }
   }
@@ -132,6 +177,7 @@ impl GenresIter {
 impl Iterator for GenresIter {
   type Item = Genre;
 
+  /// Get the next item in the GenresIter
   fn next(&mut self) -> Option<Self::Item> {
     loop {
       if self.index > Genre::max() {
