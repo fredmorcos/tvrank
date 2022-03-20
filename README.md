@@ -90,6 +90,12 @@ You can also limit the output of movies and series to the top N entries:
 $ tvrank title "the great gatsby" --top 2
 ```
 
+You can change the output format to `json` or `yaml`:
+
+```sh
+$ tvrank title "the great gatsby" --output json
+```
+
 To print out more information about what the application is doing, use `-v` before any
 sub-command. Multiple occurrences of `-v` on the command-line will increase the verbosity
 level:
