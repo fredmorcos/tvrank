@@ -13,6 +13,7 @@ use tvrank::Res;
 pub enum OutputFormat {
   Json,
   Table,
+  Yaml,
 }
 
 type ParseError = Box<dyn StdError>;
@@ -24,6 +25,7 @@ impl FromStr for OutputFormat {
     match format {
       "json" => Ok(OutputFormat::Json),
       "table" => Ok(OutputFormat::Table),
+      "yaml" => Ok(OutputFormat::Yaml),
       _ => TvRankErr::not_supported_output(),
     }
   }
@@ -62,6 +64,26 @@ impl Printer for JsonPrinter {
     _search_terms: Option<&str>,
   ) -> Res<()> {
     println!("{}", serde_json::to_string_pretty(&OutputWrapper { movies, series })?);
+
+    Ok(())
+  }
+}
+
+pub struct YamlPrinter {}
+
+impl Printer for YamlPrinter {
+  fn get_format(&self) -> OutputFormat {
+    OutputFormat::Yaml
+  }
+
+  fn print(
+    &self,
+    movies: Option<&[&ImdbTitle]>,
+    series: Option<&[&ImdbTitle]>,
+    _imdb_url: &Url,
+    _search_terms: Option<&str>,
+  ) -> Res<()> {
+    println!("{}", serde_yaml::to_string(&OutputWrapper { movies, series })?);
 
     Ok(())
   }

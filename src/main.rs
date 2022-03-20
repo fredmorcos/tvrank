@@ -5,7 +5,7 @@ mod print;
 mod search;
 mod ui;
 
-use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter};
+use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter};
 use atoi::atoi;
 use derive_more::Display;
 use directories::ProjectDirs;
@@ -129,7 +129,7 @@ struct Opts {
   color: bool,
 
   /// Set output format
-  #[structopt(short, long, default_value = "table", possible_values = &[ "json", "table" ])]
+  #[structopt(short, long, default_value = "table", possible_values = &[ "json", "yaml", "table" ])]
   output: OutputFormat,
 
   /// Verbose output (can be specified multiple times)
@@ -461,6 +461,7 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   let printer: Box<dyn Printer> = match opt.output {
     OutputFormat::Json => Box::new(JsonPrinter {}),
     OutputFormat::Table => Box::new(TablePrinter { color: opt.color, top: opt.top }),
+    OutputFormat::Yaml => Box::new(YamlPrinter {}),
   };
 
   let start_time = Instant::now();
