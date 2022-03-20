@@ -113,6 +113,7 @@ over the former.
 --force-update
 --top <N>
 --color
+--output [table|json|yaml]
 ```
 
 To find help, see the `help` sub-command:
