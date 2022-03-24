@@ -1,12 +1,22 @@
 # See documentation: https://www.gitpod.io/docs/config-gitpod-file
-
 ---
 tasks:
-  - init: |
+  - before: |
+      # Install mob tool.
       curl -sL install.mob.sh | sudo sh
-      rustup install stable
-      rustup component add rustfmt clippy rust-src rust-docs
-      rustup component add rls rust-analysis llvm-tools-preview
+
+      # GitPod's rustup wrapper seems not to work with current
+      # versions of rustup. Disable wrapper and unset CARGO_HOME
+      # while installing the current Rust stable toolchain
+      # and additional components.
+      mv ~/.cargo/bin/rustup ~/.cargo/bin/rustup.script
+      mv ~/.cargo/bin/rustup.main ~/.cargo/bin/rustup
+      CARGO_HOME= rustup toolchain install stable
+      CARGO_HOME= rustup component add rust-docs llvm-tools-preview
+      mv ~/.cargo/bin/rustup ~/.cargo/bin/rustup.main
+      mv ~/.cargo/bin/rustup.script ~/.cargo/bin/rustup
+  - init: |
+      # Build workspace.
       cargo build
 
 vscode:
