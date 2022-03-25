@@ -38,7 +38,7 @@ enum TvRankErr {
   #[display(fmt = "Empty set of keywords")]
   NoKeywords,
   #[display(fmt = "Output is not supported")]
-  NotSupportedOutput,
+  UnsupportedOutput,
 }
 
 impl TvRankErr {
@@ -50,8 +50,8 @@ impl TvRankErr {
     Err(Box::new(TvRankErr::NoKeywords))
   }
 
-  fn not_supported_output<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::NotSupportedOutput))
+  fn unsupported_output<T>() -> Res<T> {
+    Err(Box::new(TvRankErr::UnsupportedOutput))
   }
 }
 

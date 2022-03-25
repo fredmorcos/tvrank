@@ -24,7 +24,7 @@ impl FromStr for OutputFormat {
       "json" => Ok(OutputFormat::Json),
       "table" => Ok(OutputFormat::Table),
       "yaml" => Ok(OutputFormat::Yaml),
-      _ => TvRankErr::not_supported_output(),
+      _ => TvRankErr::unsupported_output(),
     }
   }
 }
