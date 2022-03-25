@@ -112,7 +112,7 @@ fn create_project() -> Res<ProjectDirs> {
 
 #[derive(Debug, StructOpt)]
 struct GeneralOpts {
-  /// Force updating internal databases.
+  /// Force updating internal databases
   #[structopt(short, long)]
   force_update: bool,
 
@@ -159,6 +159,7 @@ enum Command {
     #[structopt(short, long)]
     exact: bool,
 
+    /// Search terms, as "KEYWORDS" or "TITLE (YYYY)"
     #[structopt(name = "TITLE")]
     title: String,
 
@@ -171,6 +172,7 @@ enum Command {
 
   /// Lookup movie titles from a directory
   MoviesDir {
+    /// Directory of movie folders named TITLE (YYYY)
     #[structopt(name = "DIR")]
     dir: PathBuf,
 
@@ -183,6 +185,7 @@ enum Command {
 
   /// Lookup series titles from a directory
   SeriesDir {
+    /// Directory of series folders named TITLE [(YYYY)]
     #[structopt(name = "DIR")]
     dir: PathBuf,
 
