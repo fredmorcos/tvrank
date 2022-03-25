@@ -38,7 +38,7 @@ enum TvRankErr {
   #[display(fmt = "Empty set of keywords")]
   NoKeywords,
   #[display(fmt = "Output is not supported")]
-  NotSupportedOutput,
+  UnsupportedOutput,
 }
 
 impl TvRankErr {
@@ -50,8 +50,8 @@ impl TvRankErr {
     Err(Box::new(TvRankErr::NoKeywords))
   }
 
-  fn not_supported_output<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::NotSupportedOutput))
+  fn unsupported_output<T>() -> Res<T> {
+    Err(Box::new(TvRankErr::UnsupportedOutput))
   }
 }
 
@@ -111,11 +111,22 @@ fn create_project() -> Res<ProjectDirs> {
 }
 
 #[derive(Debug, StructOpt)]
-struct Opts {
-  /// Force updating internal databases.
+struct GeneralOpts {
+  /// Force updating internal databases
   #[structopt(short, long)]
   force_update: bool,
 
+  /// Display colors regardless of the NO_COLOR environment variable
+  #[structopt(short, long)]
+  color: bool,
+
+  /// Verbose output (can be specified multiple times)
+  #[structopt(short, long, parse(from_occurrences))]
+  verbose: u8,
+}
+
+#[derive(Debug, StructOpt)]
+struct SearchOpts {
   /// Sort by year/rating/title instead of rating/year/title
   #[structopt(short = "y", long)]
   sort_by_year: bool,
@@ -124,17 +135,9 @@ struct Opts {
   #[structopt(short, long, name = "N")]
   top: Option<usize>,
 
-  /// Display colors regardless of the NO_COLOR environment variable
-  #[structopt(short, long)]
-  color: bool,
-
   /// Set output format
   #[structopt(short, long, default_value = "table", possible_values = &[ "json", "yaml", "table" ])]
   output: OutputFormat,
-
-  /// Verbose output (can be specified multiple times)
-  #[structopt(short, long, parse(from_occurrences))]
-  verbose: u8,
 }
 
 #[derive(Debug, StructOpt)]
@@ -142,7 +145,7 @@ struct Opts {
 #[structopt(author = "Fred Morcos <fm@fredmorcos.com>")]
 struct Opt {
   #[structopt(flatten)]
-  opts: Opts,
+  general_opts: GeneralOpts,
 
   #[structopt(subcommand)]
   command: Command,
@@ -156,27 +159,41 @@ enum Command {
     #[structopt(short, long)]
     exact: bool,
 
+    /// Search terms, as "KEYWORDS" or "TITLE (YYYY)"
     #[structopt(name = "TITLE")]
     title: String,
 
     #[structopt(flatten)]
-    opts: Opts,
+    general_opts: GeneralOpts,
+
+    #[structopt(flatten)]
+    search_opts: SearchOpts,
   },
+
   /// Lookup movie titles from a directory
   MoviesDir {
+    /// Directory of movie folders named TITLE (YYYY)
     #[structopt(name = "DIR")]
     dir: PathBuf,
 
     #[structopt(flatten)]
-    opts: Opts,
+    general_opts: GeneralOpts,
+
+    #[structopt(flatten)]
+    search_opts: SearchOpts,
   },
+
   /// Lookup series titles from a directory
   SeriesDir {
+    /// Directory of series folders named TITLE [(YYYY)]
     #[structopt(name = "DIR")]
     dir: PathBuf,
 
     #[structopt(flatten)]
-    opts: Opts,
+    general_opts: GeneralOpts,
+
+    #[structopt(flatten)]
+    search_opts: SearchOpts,
   },
 }
 
@@ -447,7 +464,7 @@ fn imdb_series_dir(
   Ok(())
 }
 
-fn run(cmd: Command, opt: Opts) -> Res<()> {
+fn run(cmd: &Command, search_opts: &SearchOpts, general_opts: &GeneralOpts) -> Res<()> {
   let project = create_project()?;
   let app_cache_dir = project.cache_dir();
   debug!("Cache directory: {}", app_cache_dir.display());
@@ -458,16 +475,16 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
 
-  let printer: Box<dyn Printer> = match opt.output {
+  let printer: Box<dyn Printer> = match search_opts.output {
     OutputFormat::Json => Box::new(JsonPrinter {}),
-    OutputFormat::Table => Box::new(TablePrinter { color: opt.color, top: opt.top }),
+    OutputFormat::Table => Box::new(TablePrinter { color: general_opts.color, top: search_opts.top }),
     OutputFormat::Yaml => Box::new(YamlPrinter {}),
   };
 
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
 
-  let imdb = Imdb::new(app_cache_dir, opt.force_update, &|content_len: Option<u64>, delta| {
+  let imdb = Imdb::new(app_cache_dir, general_opts.force_update, &|content_len: Option<u64>, delta| {
     let mut progress_bar_mut = progress_bar.borrow_mut();
     match &*progress_bar_mut {
       Some(bar) => bar.inc(delta),
@@ -491,14 +508,14 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
   let start_time = Instant::now();
 
   match cmd {
-    Command::Title { exact, title, opts: _ } => {
-      imdb_single_title(&title, &imdb, &imdb_url, opt.sort_by_year, opt.top, exact, printer)?
+    Command::Title { exact, title, .. } => {
+      imdb_single_title(title, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, *exact, printer)?
     }
     Command::MoviesDir { dir, .. } => {
-      imdb_movies_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, printer)?
+      imdb_movies_dir(dir, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, printer)?
     }
     Command::SeriesDir { dir, .. } => {
-      imdb_series_dir(&dir, &imdb, &imdb_url, opt.sort_by_year, opt.top, printer)?
+      imdb_series_dir(dir, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, printer)?
     }
   }
 
@@ -511,31 +528,28 @@ fn run(cmd: Command, opt: Opts) -> Res<()> {
 
 fn main() {
   let start_time = Instant::now();
-  let opt = Opt::from_args();
-  let opts = match &opt.command {
-    Command::Title { opts, .. } => opts,
-    Command::MoviesDir { opts, .. } => opts,
-    Command::SeriesDir { opts, .. } => opts,
+  let args = Opt::from_args();
+  let search_opts = match &args.command {
+    Command::Title { search_opts, .. }
+    | Command::MoviesDir { search_opts, .. }
+    | Command::SeriesDir { search_opts, .. } => search_opts,
   };
 
-  let merge_opts = Opts {
-    force_update: opts.force_update || opt.opts.force_update,
-    sort_by_year: opts.sort_by_year || opt.opts.sort_by_year,
-    top: if opt.opts.top.is_some() {
-      opt.opts.top
-    } else {
-      opts.top
+  let general_opts = match &args.command {
+    Command::Title { general_opts, .. }
+    | Command::MoviesDir { general_opts, .. }
+    | Command::SeriesDir { general_opts, .. } => GeneralOpts {
+      force_update: general_opts.force_update || args.general_opts.force_update,
+      color: env::var("NO_COLOR").is_err() || general_opts.color || args.general_opts.color,
+      verbose: if general_opts.verbose > 0 {
+        general_opts.verbose
+      } else {
+        args.general_opts.verbose
+      },
     },
-    color: env::var("NO_COLOR").is_err() || opts.color || opt.opts.color,
-    verbose: if opts.verbose > 0 {
-      opts.verbose
-    } else {
-      opt.opts.verbose
-    },
-    output: opts.output,
   };
 
-  let log_level = match merge_opts.verbose {
+  let log_level = match general_opts.verbose {
     0 => log::LevelFilter::Off,
     1 => log::LevelFilter::Error,
     2 => log::LevelFilter::Warn,
@@ -558,7 +572,7 @@ fn main() {
   // debug!("Debug output enabled.");
   // trace!("Trace output enabled.");
 
-  if let Err(e) = run(opt.command, merge_opts) {
+  if let Err(e) = run(&args.command, search_opts, &general_opts) {
     if have_logger {
       error!("Error: {}", e);
     } else {

@@ -2,8 +2,8 @@ use crate::TvRankErr;
 use humantime::format_duration;
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use reqwest::Url;
-use serde::de::StdError;
 use serde::Serialize;
+use std::error::Error;
 use std::str::FromStr;
 use truncatable::Truncatable;
 use tvrank::imdb::{ImdbQuery, ImdbTitle};
@@ -16,17 +16,15 @@ pub enum OutputFormat {
   Yaml,
 }
 
-type ParseError = Box<dyn StdError>;
-
 impl FromStr for OutputFormat {
-  type Err = ParseError;
+  type Err = Box<dyn Error>;
 
   fn from_str(format: &str) -> Result<Self, Self::Err> {
     match format {
       "json" => Ok(OutputFormat::Json),
       "table" => Ok(OutputFormat::Table),
       "yaml" => Ok(OutputFormat::Yaml),
-      _ => TvRankErr::not_supported_output(),
+      _ => TvRankErr::unsupported_output(),
     }
   }
 }
