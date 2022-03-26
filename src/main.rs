@@ -569,12 +569,9 @@ fn main() {
   };
 
   let logger = env_logger::Builder::new().filter_level(log_level).try_init();
-  let have_logger = if let Err(e) = logger {
+  if let Err(e) = &logger {
     eprintln!("Error initializing logger: {}", e);
-    false
-  } else {
-    true
-  };
+  }
 
   // error!("Error output enabled.");
   // warn!("Warning output enabled.");
@@ -583,7 +580,7 @@ fn main() {
   // trace!("Trace output enabled.");
 
   if let Err(e) = run(&args.command, &general_opts, search_opts) {
-    if have_logger {
+    if logger.is_err() {
       error!("Error: {}", e);
     } else {
       eprintln!("Error: {}", e);
