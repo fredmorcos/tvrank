@@ -536,38 +536,52 @@ fn run(cmd: &Command, general_opts: &GeneralOpts, search_opts: &SearchOpts) -> R
   Ok(())
 }
 
-fn main() {
-  let start_time = Instant::now();
-  let args = Opt::parse();
-  let search_opts = match &args.command {
-    Command::Title { search_opts, .. }
-    | Command::MoviesDir { search_opts, .. }
-    | Command::SeriesDir { search_opts, .. } => search_opts,
-  };
+fn is_no_color_env_set() -> bool {
+  match env::var("NO_COLOR") {
+    Ok(val) => val != "0",
+    Err(_) => false,
+  }
+}
 
-  let general_opts = match &args.command {
-    Command::Title { general_opts, .. }
-    | Command::MoviesDir { general_opts, .. }
-    | Command::SeriesDir { general_opts, .. } => GeneralOpts {
-      force_update: general_opts.force_update || args.general_opts.force_update,
-      color: env::var("NO_COLOR").is_err() || general_opts.color || args.general_opts.color,
-      verbose: if general_opts.verbose > 0 {
-        general_opts.verbose
-      } else {
-        args.general_opts.verbose
-      },
+fn merge_general_opts(locals: &GeneralOpts, globals: &GeneralOpts) -> GeneralOpts {
+  GeneralOpts {
+    force_update: locals.force_update || globals.force_update,
+    color: !is_no_color_env_set() || locals.color || globals.color,
+    verbose: if locals.verbose > 0 {
+      locals.verbose
+    } else {
+      globals.verbose
     },
-  };
+  }
+}
 
-  let log_level = match general_opts.verbose {
+fn get_log_level(verbose: u8) -> log::LevelFilter {
+  match verbose {
     0 => log::LevelFilter::Off,
     1 => log::LevelFilter::Error,
     2 => log::LevelFilter::Warn,
     3 => log::LevelFilter::Info,
     4 => log::LevelFilter::Debug,
     _ => log::LevelFilter::Trace,
+  }
+}
+
+fn main() {
+  let start_time = Instant::now();
+
+  let args = Opt::parse();
+  let search_opts = match &args.command {
+    Command::Title { search_opts, .. }
+    | Command::MoviesDir { search_opts, .. }
+    | Command::SeriesDir { search_opts, .. } => search_opts,
+  };
+  let general_opts = match &args.command {
+    Command::Title { general_opts, .. }
+    | Command::MoviesDir { general_opts, .. }
+    | Command::SeriesDir { general_opts, .. } => merge_general_opts(general_opts, &args.general_opts),
   };
 
+  let log_level = get_log_level(general_opts.verbose);
   let logger = env_logger::Builder::new().filter_level(log_level).try_init();
   if let Err(e) = &logger {
     eprintln!("Error initializing logger: {}", e);
