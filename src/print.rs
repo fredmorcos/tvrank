@@ -31,7 +31,14 @@ pub trait Printer {
   ) -> Res<()>;
 }
 
-pub struct JsonPrinter {}
+pub struct JsonPrinter;
+
+impl JsonPrinter {
+  #[must_use]
+  pub fn new() -> Self {
+    Self
+  }
+}
 
 impl Printer for JsonPrinter {
   fn get_format(&self) -> OutputFormat {
@@ -51,7 +58,14 @@ impl Printer for JsonPrinter {
   }
 }
 
-pub struct YamlPrinter {}
+pub struct YamlPrinter;
+
+impl YamlPrinter {
+  #[must_use]
+  pub fn new() -> Self {
+    Self
+  }
+}
 
 impl Printer for YamlPrinter {
   fn get_format(&self) -> OutputFormat {
@@ -73,8 +87,8 @@ impl Printer for YamlPrinter {
 
 #[derive(Clone)]
 pub struct TablePrinter {
-  pub(crate) color: bool,
-  pub(crate) top: Option<usize>,
+  color: bool,
+  top: Option<usize>,
 }
 
 impl Printer for TablePrinter {
@@ -101,6 +115,11 @@ impl Printer for TablePrinter {
 }
 
 impl TablePrinter {
+  #[must_use]
+  pub fn new(color: bool, top: Option<usize>) -> Self {
+    Self { color, top }
+  }
+
   fn print_results(
     &self,
     results: &[&ImdbTitle],

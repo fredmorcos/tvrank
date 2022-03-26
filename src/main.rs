@@ -477,9 +477,9 @@ fn create_output_printer(
   general_opts: &GeneralOpts,
 ) -> Box<dyn Printer> {
   match output_format {
-    OutputFormat::Json => Box::new(JsonPrinter {}),
-    OutputFormat::Table => Box::new(TablePrinter { color: general_opts.color, top: search_opts.top }),
-    OutputFormat::Yaml => Box::new(YamlPrinter {}),
+    OutputFormat::Json => Box::new(JsonPrinter::new()),
+    OutputFormat::Table => Box::new(TablePrinter::new(general_opts.color, search_opts.top)),
+    OutputFormat::Yaml => Box::new(YamlPrinter::new()),
   }
 }
 
