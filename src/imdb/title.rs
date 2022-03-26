@@ -39,8 +39,10 @@ impl<T> From<TsvAction<T>> for Option<T> {
 pub struct Title<'a> {
   #[serde(flatten)]
   header: TitleHeader,
+
   #[serde(flatten)]
   title_id: TitleId<'a>,
+
   primary_title: &'a str,
   original_title: Option<&'a str>,
 }

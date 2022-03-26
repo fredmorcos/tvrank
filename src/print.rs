@@ -98,16 +98,16 @@ impl Printer for TablePrinter {
 
   fn print(
     &self,
-    movies_results: Option<&[&ImdbTitle]>,
-    series_results: Option<&[&ImdbTitle]>,
+    movies: Option<&[&ImdbTitle]>,
+    series: Option<&[&ImdbTitle]>,
     imdb_url: &Url,
     search_terms: Option<&str>,
   ) -> Res<()> {
-    if let Some(movies_results) = movies_results {
-      self.print_results(movies_results, imdb_url, ImdbQuery::Movies, search_terms)?;
+    if let Some(movies) = movies {
+      self.print_results(movies, imdb_url, ImdbQuery::Movies, search_terms)?;
     }
-    if let Some(series_results) = series_results {
-      self.print_results(series_results, imdb_url, ImdbQuery::Series, search_terms)?;
+    if let Some(series) = series {
+      self.print_results(series, imdb_url, ImdbQuery::Series, search_terms)?;
     }
 
     Ok(())
