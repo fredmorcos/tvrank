@@ -95,15 +95,6 @@ fn parse_title_and_year(input: &str) -> Option<(&str, u16)> {
   Some((title_match.as_str(), year_val))
 }
 
-fn create_project() -> Res<ProjectDirs> {
-  let prj = ProjectDirs::from("com.fredmorcos", "Fred Morcos", "tvrank");
-  if let Some(prj) = prj {
-    Ok(prj)
-  } else {
-    TvRankErr::cache_dir()
-  }
-}
-
 #[derive(Debug, clap::Args)]
 struct GeneralOpts {
   /// Force updating internal databases
@@ -458,27 +449,44 @@ fn imdb_series_dir(
   Ok(())
 }
 
-fn run(cmd: &Command, search_opts: &SearchOpts, general_opts: &GeneralOpts) -> Res<()> {
-  let project = create_project()?;
+fn create_project() -> Res<ProjectDirs> {
+  let prj = ProjectDirs::from("com.fredmorcos", "Fred Morcos", "tvrank");
+  if let Some(prj) = prj {
+    Ok(prj)
+  } else {
+    TvRankErr::cache_dir()
+  }
+}
+
+fn create_cache_dir(project: &ProjectDirs) -> Res<&Path> {
   let app_cache_dir = project.cache_dir();
-  debug!("Cache directory: {}", app_cache_dir.display());
-
   fs::create_dir_all(app_cache_dir)?;
-  debug!("Created cache directory");
+  debug!("Cache directory: {}", app_cache_dir.display());
+  Ok(app_cache_dir)
+}
 
+fn get_imdb_url() -> Res<Url> {
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
+  Ok(imdb_url)
+}
 
-  let printer: Box<dyn Printer> = match search_opts.output {
+fn create_output_printer(
+  output_format: &OutputFormat,
+  search_opts: &SearchOpts,
+  general_opts: &GeneralOpts,
+) -> Box<dyn Printer> {
+  match output_format {
     OutputFormat::Json => Box::new(JsonPrinter {}),
     OutputFormat::Table => Box::new(TablePrinter { color: general_opts.color, top: search_opts.top }),
     OutputFormat::Yaml => Box::new(YamlPrinter {}),
-  };
+  }
+}
 
+fn create_imdb_service(app_cache_dir: &Path, force_update: bool) -> Res<Imdb> {
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
-
-  let imdb = Imdb::new(app_cache_dir, general_opts.force_update, &|content_len: Option<u64>, delta| {
+  let imdb = Imdb::new(app_cache_dir, force_update, &|content_len: Option<u64>, delta| {
     let mut progress_bar_mut = progress_bar.borrow_mut();
     match &*progress_bar_mut {
       Some(bar) => bar.inc(delta),
@@ -493,11 +501,19 @@ fn run(cmd: &Command, search_opts: &SearchOpts, general_opts: &GeneralOpts) -> R
       }
     }
   })?;
-
   if let Some(bar) = &*progress_bar.borrow_mut() {
     bar.finish_and_clear();
   }
   debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
+  Ok(imdb)
+}
+
+fn run(cmd: &Command, general_opts: &GeneralOpts, search_opts: &SearchOpts) -> Res<()> {
+  let project = create_project()?;
+  let app_cache_dir = create_cache_dir(&project)?;
+  let imdb_url = get_imdb_url()?;
+  let printer = create_output_printer(&search_opts.output, search_opts, general_opts);
+  let imdb = create_imdb_service(app_cache_dir, general_opts.force_update)?;
 
   let start_time = Instant::now();
 
@@ -566,7 +582,7 @@ fn main() {
   // debug!("Debug output enabled.");
   // trace!("Trace output enabled.");
 
-  if let Err(e) = run(&args.command, search_opts, &general_opts) {
+  if let Err(e) = run(&args.command, &general_opts, search_opts) {
     if have_logger {
       error!("Error: {}", e);
     } else {
