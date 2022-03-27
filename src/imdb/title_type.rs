@@ -155,6 +155,40 @@ mod tests {
     assert_eq!(TitleType::RadioSeries, unsafe { TitleType::from(12) });
   }
 
+  #[test]
+  fn test_is_movie() {
+    assert!(unsafe { !TitleType::from(0).is_movie() });
+    assert!(unsafe { TitleType::from(1).is_movie() });
+    assert!(unsafe { TitleType::from(2).is_movie() });
+    assert!(unsafe { TitleType::from(3).is_movie() });
+    assert!(unsafe { TitleType::from(4).is_movie() });
+    assert!(unsafe { TitleType::from(5).is_movie() });
+    assert!(unsafe { TitleType::from(6).is_movie() });
+    assert!(unsafe { !TitleType::from(7).is_movie() });
+    assert!(unsafe { !TitleType::from(8).is_movie() });
+    assert!(unsafe { !TitleType::from(9).is_movie() });
+    assert!(unsafe { !TitleType::from(10).is_movie() });
+    assert!(unsafe { !TitleType::from(11).is_movie() });
+    assert!(unsafe { !TitleType::from(12).is_movie() });
+  }
+
+  #[test]
+  fn test_is_series() {
+    assert!(unsafe { !TitleType::from(0).is_series() });
+    assert!(unsafe { !TitleType::from(1).is_series() });
+    assert!(unsafe { !TitleType::from(2).is_series() });
+    assert!(unsafe { !TitleType::from(3).is_series() });
+    assert!(unsafe { !TitleType::from(4).is_series() });
+    assert!(unsafe { !TitleType::from(5).is_series() });
+    assert!(unsafe { !TitleType::from(6).is_series() });
+    assert!(unsafe { !TitleType::from(7).is_series() });
+    assert!(unsafe { !TitleType::from(8).is_series() });
+    assert!(unsafe { !TitleType::from(9).is_series() });
+    assert!(unsafe { TitleType::from(10).is_series() });
+    assert!(unsafe { TitleType::from(11).is_series() });
+    assert!(unsafe { !TitleType::from(12).is_series() });
+  }
+
   // #[test]
   // fn test_title_type_max() {
   //   assert_eq!(TitleType::max(), TitleType::RadioSeries as u8);

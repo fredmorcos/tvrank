@@ -299,9 +299,11 @@ impl<'a> Title<'a> {
 
 #[cfg(test)]
 mod test_title {
+  use super::Genre;
   use super::Rating;
   use super::Ratings;
   use super::Title;
+  use super::TitleType;
 
   #[test]
   fn test_title() {
@@ -315,6 +317,21 @@ mod test_title {
     .unwrap();
     let title: Option<Title> = title.into();
     let title = title.unwrap();
+
+    assert_eq!(title.title_id().as_str(), "tt0000001");
+    assert_eq!(title.title_type(), TitleType::Short);
+    assert_eq!(title.primary_title(), "Carmencita");
+    assert_eq!(title.original_title(), None);
+    assert!(!title.is_adult());
+    assert_eq!(title.start_year().unwrap(), 1894);
+    assert_eq!(title.runtime().unwrap().as_secs(), 60);
+
+    let mut genres_iter = title.genres().iter();
+    assert_eq!(genres_iter.next().unwrap(), Genre::Documentary);
+    assert_eq!(genres_iter.next().unwrap(), Genre::Short);
+
+    assert_eq!(title.rating().unwrap().rating(), 57);
+    assert_eq!(title.rating().unwrap().votes(), 1846);
 
     let mut binary = Vec::new();
     title.write_binary(&mut binary).unwrap();
