@@ -7,6 +7,7 @@ mod ui;
 
 use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter};
 use atoi::atoi;
+use clap::{Args, Parser, Subcommand};
 use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
@@ -24,7 +25,6 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use structopt::StructOpt;
 use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::Res;
 use ui::{create_progress_bar, create_progress_spinner};
@@ -37,8 +37,6 @@ enum TvRankErr {
   CacheDir,
   #[display(fmt = "Empty set of keywords")]
   NoKeywords,
-  #[display(fmt = "Output is not supported")]
-  UnsupportedOutput,
 }
 
 impl TvRankErr {
@@ -48,10 +46,6 @@ impl TvRankErr {
 
   fn no_keywords<T>() -> Res<T> {
     Err(Box::new(TvRankErr::NoKeywords))
-  }
-
-  fn unsupported_output<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::UnsupportedOutput))
   }
 }
 
@@ -110,89 +104,89 @@ fn create_project() -> Res<ProjectDirs> {
   }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 struct GeneralOpts {
   /// Force updating internal databases
-  #[structopt(short, long)]
+  #[clap(short, long)]
   force_update: bool,
 
   /// Display colors regardless of the NO_COLOR environment variable
-  #[structopt(short, long)]
+  #[clap(short, long)]
   color: bool,
 
   /// Verbose output (can be specified multiple times)
-  #[structopt(short, long, parse(from_occurrences))]
+  #[clap(short, long, parse(from_occurrences))]
   verbose: u8,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 struct SearchOpts {
   /// Sort by year/rating/title instead of rating/year/title
-  #[structopt(short = "y", long)]
+  #[clap(short = 'y', long)]
   sort_by_year: bool,
 
   /// Only display the top N results
-  #[structopt(short, long, name = "N")]
+  #[clap(short, long, name = "N")]
   top: Option<usize>,
 
   /// Set output format
-  #[structopt(short, long, default_value = "table", possible_values = &[ "json", "yaml", "table" ])]
+  #[clap(short, long, arg_enum, default_value = "table")]
   output: OutputFormat,
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Query information about movies and series")]
-#[structopt(author = "Fred Morcos <fm@fredmorcos.com>")]
+#[derive(Debug, Parser)]
+#[clap(about = "Query information about movies and series")]
+#[clap(author = "Fred Morcos <fm@fredmorcos.com>")]
 struct Opt {
-  #[structopt(flatten)]
+  #[clap(flatten)]
   general_opts: GeneralOpts,
 
-  #[structopt(subcommand)]
+  #[clap(subcommand)]
   command: Command,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 enum Command {
   /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
   Title {
     /// Match the given title exactly
-    #[structopt(short, long)]
+    #[clap(short, long)]
     exact: bool,
 
     /// Search terms, as "KEYWORDS" or "TITLE (YYYY)"
-    #[structopt(name = "TITLE")]
+    #[clap(name = "TITLE")]
     title: String,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     general_opts: GeneralOpts,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     search_opts: SearchOpts,
   },
 
   /// Lookup movie titles from a directory
   MoviesDir {
     /// Directory of movie folders named TITLE (YYYY)
-    #[structopt(name = "DIR")]
+    #[clap(name = "DIR")]
     dir: PathBuf,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     general_opts: GeneralOpts,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     search_opts: SearchOpts,
   },
 
   /// Lookup series titles from a directory
   SeriesDir {
     /// Directory of series folders named TITLE [(YYYY)]
-    #[structopt(name = "DIR")]
+    #[clap(name = "DIR")]
     dir: PathBuf,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     general_opts: GeneralOpts,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     search_opts: SearchOpts,
   },
 }
@@ -528,7 +522,7 @@ fn run(cmd: &Command, search_opts: &SearchOpts, general_opts: &GeneralOpts) -> R
 
 fn main() {
   let start_time = Instant::now();
-  let args = Opt::from_args();
+  let args = Opt::parse();
   let search_opts = match &args.command {
     Command::Title { search_opts, .. }
     | Command::MoviesDir { search_opts, .. }
