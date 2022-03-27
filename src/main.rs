@@ -7,7 +7,7 @@ mod ui;
 
 use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter};
 use atoi::atoi;
-use clap::{Args, Parser, Subcommand};
+use clap::Parser;
 use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
@@ -104,7 +104,7 @@ fn create_project() -> Res<ProjectDirs> {
   }
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 struct GeneralOpts {
   /// Force updating internal databases
   #[clap(short, long)]
@@ -119,7 +119,7 @@ struct GeneralOpts {
   verbose: u8,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 struct SearchOpts {
   /// Sort by year/rating/title instead of rating/year/title
   #[clap(short = 'y', long)]
@@ -134,7 +134,7 @@ struct SearchOpts {
   output: OutputFormat,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, clap::Parser)]
 #[clap(about = "Query information about movies and series")]
 #[clap(author = "Fred Morcos <fm@fredmorcos.com>")]
 struct Opt {
@@ -145,7 +145,7 @@ struct Opt {
   command: Command,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 enum Command {
   /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
   Title {
