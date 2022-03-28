@@ -140,13 +140,13 @@ struct Opt {
 enum Command {
   /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
   Title {
-    /// Match the given title exactly
-    #[clap(short, long)]
-    exact: bool,
-
     /// Search terms, as "KEYWORDS" or "TITLE (YYYY)"
     #[clap(name = "TITLE")]
     title: String,
+
+    /// Match the given title exactly
+    #[clap(short, long)]
+    exact: bool,
 
     #[clap(flatten)]
     general_opts: GeneralOpts,
@@ -215,13 +215,12 @@ fn imdb_single_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   imdb_url: &Url,
-  sort_by_year: bool,
-  top: Option<usize>,
+  search_opts: &SearchOpts,
   exact: bool,
   printer: Box<dyn Printer>,
 ) -> Res<()> {
-  let mut movies_results = SearchRes::new_movies(sort_by_year, top);
-  let mut series_results = SearchRes::new_series(sort_by_year, top);
+  let mut movies_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
+  let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
   let lc_title;
   let keywords;
@@ -288,13 +287,12 @@ fn imdb_movies_dir(
   dir: &Path,
   imdb: &Imdb,
   imdb_url: &Url,
-  sort_by_year: bool,
-  top: Option<usize>,
+  search_opts: &SearchOpts,
   printer: Box<dyn Printer>,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_movies(sort_by_year, top);
+  let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let walkdir = WalkDir::new(dir).min_depth(1);
 
   for entry in walkdir {
@@ -321,7 +319,7 @@ fn imdb_movies_dir(
         if let Some((title, year)) = parse_title_and_year(&filename) {
           at_least_one = true;
 
-          let mut local_results = SearchRes::new_movies(sort_by_year, top);
+          let mut local_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -375,13 +373,12 @@ fn imdb_series_dir(
   dir: &Path,
   imdb: &Imdb,
   imdb_url: &Url,
-  sort_by_year: bool,
-  top: Option<usize>,
+  search_opts: &SearchOpts,
   printer: Box<dyn Printer>,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_series(sort_by_year, top);
+  let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let walkdir = WalkDir::new(dir).min_depth(1).max_depth(1);
 
   for entry in walkdir {
@@ -406,7 +403,7 @@ fn imdb_series_dir(
         at_least_one = true;
 
         let filename = filename.to_string_lossy();
-        let mut local_results = SearchRes::new_series(sort_by_year, top);
+        let mut local_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
@@ -508,34 +505,6 @@ fn create_imdb_service(app_cache_dir: &Path, force_update: bool) -> Res<Imdb> {
   Ok(imdb)
 }
 
-fn run(cmd: &Command, general_opts: &GeneralOpts, search_opts: &SearchOpts) -> Res<()> {
-  let project = create_project()?;
-  let app_cache_dir = create_cache_dir(&project)?;
-  let imdb_url = get_imdb_url()?;
-  let printer = create_output_printer(&search_opts.output, search_opts, general_opts);
-  let imdb = create_imdb_service(app_cache_dir, general_opts.force_update)?;
-
-  let start_time = Instant::now();
-
-  match cmd {
-    Command::Title { exact, title, .. } => {
-      imdb_single_title(title, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, *exact, printer)?
-    }
-    Command::MoviesDir { dir, .. } => {
-      imdb_movies_dir(dir, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, printer)?
-    }
-    Command::SeriesDir { dir, .. } => {
-      imdb_series_dir(dir, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, printer)?
-    }
-  }
-
-  debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
-
-  std::mem::forget(imdb);
-
-  Ok(())
-}
-
 fn is_no_color_env_set() -> bool {
   match env::var("NO_COLOR") {
     Ok(val) => val != "0",
@@ -543,7 +512,7 @@ fn is_no_color_env_set() -> bool {
   }
 }
 
-fn merge_general_opts(locals: &GeneralOpts, globals: &GeneralOpts) -> GeneralOpts {
+fn merge_general_opts(locals: GeneralOpts, globals: GeneralOpts) -> GeneralOpts {
   GeneralOpts {
     force_update: locals.force_update || globals.force_update,
     color: !is_no_color_env_set() || locals.color || globals.color,
@@ -566,41 +535,99 @@ fn get_log_level(verbose: u8) -> log::LevelFilter {
   }
 }
 
-fn main() {
-  let start_time = Instant::now();
+macro_rules! fail {
+  ($logger:expr, $e:expr) => {{
+    fail!($logger, $e => {})
+  }};
 
-  let args = Opt::parse();
-  let search_opts = match &args.command {
-    Command::Title { search_opts, .. }
-    | Command::MoviesDir { search_opts, .. }
-    | Command::SeriesDir { search_opts, .. } => search_opts,
+  ($logger:expr, $e:expr => $exec:block) => {
+    match $e {
+      Ok(v) => v,
+      Err(e) => {
+        let logger: bool = $logger;
+        if logger {
+          error!("Error: {e}");
+        } else {
+          eprintln!("Error: {e}");
+        }
+        $exec;
+        std::process::exit(1);
+      }
+    }
   };
-  let general_opts = match &args.command {
-    Command::Title { general_opts, .. }
-    | Command::MoviesDir { general_opts, .. }
-    | Command::SeriesDir { general_opts, .. } => merge_general_opts(general_opts, &args.general_opts),
-  };
+}
 
-  let log_level = get_log_level(general_opts.verbose);
-  let logger = env_logger::Builder::new().filter_level(log_level).try_init();
-  if let Err(e) = &logger {
-    eprintln!("Error initializing logger: {}", e);
+struct Context {
+  general_opts: GeneralOpts,
+  have_logger: bool,
+  imdb_url: Url,
+  service: Imdb,
+}
+
+impl Context {
+  fn new(locals: GeneralOpts, globals: GeneralOpts) -> Self {
+    let general_opts = merge_general_opts(locals, globals);
+    let log_level = get_log_level(general_opts.verbose);
+    let logger = env_logger::Builder::new().filter_level(log_level).try_init();
+    if let Err(e) = &logger {
+      eprintln!("Error initializing logger: {}", e);
+    }
+    let have_logger = logger.is_err();
+
+    // error!("Error output enabled.");
+    // warn!("Warning output enabled.");
+    // info!("Info output enabled.");
+    // debug!("Debug output enabled.");
+    // trace!("Trace output enabled.");
+
+    let project = fail!(have_logger, create_project());
+    let app_cache_dir = fail!(have_logger, create_cache_dir(&project));
+    let imdb_url = fail!(have_logger, get_imdb_url());
+    let service = fail!(have_logger, create_imdb_service(app_cache_dir, general_opts.force_update));
+
+    Self { general_opts, have_logger, imdb_url, service }
   }
 
-  // error!("Error output enabled.");
-  // warn!("Warning output enabled.");
-  // info!("Info output enabled.");
-  // debug!("Debug output enabled.");
-  // trace!("Trace output enabled.");
+  fn destroy(self) {
+    std::mem::forget(self)
+  }
+}
 
-  if let Err(e) = run(&args.command, &general_opts, search_opts) {
-    if logger.is_err() {
-      error!("Error: {}", e);
-    } else {
-      eprintln!("Error: {}", e);
+fn main() {
+  let start_time = Instant::now();
+  let args = Opt::parse();
+
+  match args.command {
+    Command::Title { title, exact, general_opts, search_opts } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_single_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
     }
-
-    std::process::exit(1);
+    Command::MoviesDir { dir, general_opts, search_opts } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_movies_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
+    }
+    Command::SeriesDir { dir, general_opts, search_opts } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_series_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
+    }
   }
 
   eprintln!("Total time: {}", format_duration(Instant::now().duration_since(start_time)));

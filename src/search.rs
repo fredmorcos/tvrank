@@ -47,11 +47,7 @@ impl<'a, 'storage> IntoIterator for SearchRes<'a, 'storage> {
 }
 
 impl<'a, 'storage> SearchRes<'a, 'storage> {
-  pub fn new_movies(sort_by_year: bool, top: Option<usize>) -> Self {
-    Self { results: Vec::new(), sort_by_year, top }
-  }
-
-  pub fn new_series(sort_by_year: bool, top: Option<usize>) -> Self {
+  pub fn new(sort_by_year: bool, top: Option<usize>) -> Self {
     Self { results: Vec::new(), sort_by_year, top }
   }
 
