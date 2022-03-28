@@ -157,7 +157,7 @@ enum Command {
 
   /// Lookup movie titles from a directory
   MoviesDir {
-    /// Directory of movie folders named TITLE (YYYY)
+    /// Directory of movie folders named "TITLE (YYYY)"
     #[clap(name = "DIR")]
     dir: PathBuf,
 
@@ -170,7 +170,7 @@ enum Command {
 
   /// Lookup series titles from a directory
   SeriesDir {
-    /// Directory of series folders named TITLE [(YYYY)]
+    /// Directory of series folders named "TITLE [(YYYY)]"
     #[clap(name = "DIR")]
     dir: PathBuf,
 
