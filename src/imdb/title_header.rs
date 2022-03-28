@@ -186,3 +186,40 @@ impl TitleHeader {
     Genres::from(value as u32)
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::imdb::genre::Genre;
+
+  #[test]
+  fn test() {
+    let mut genres = Genres::default();
+    genres.add(Genre::Adventure);
+    genres.add(Genre::Music);
+    genres.add(Genre::War);
+
+    let header = TitleHeader::new_version_0(
+      true,
+      true,
+      Some(150),
+      Some(1995),
+      Some(Rating::new(68, 1364)),
+      TitleType::Movie,
+      genres,
+    );
+
+    assert!(header.has_original_title());
+    assert!(header.is_adult());
+    assert_eq!(header.runtime_minutes(), Some(150));
+    assert_eq!(header.start_year(), Some(1995));
+    assert_eq!(header.rating().unwrap().rating(), 68);
+    assert_eq!(header.rating().unwrap().votes(), 1364);
+    assert_eq!(header.title_type(), TitleType::Movie);
+
+    let mut genres_iter = header.genres().iter();
+    assert_eq!(genres_iter.next().unwrap(), Genre::Adventure);
+    assert_eq!(genres_iter.next().unwrap(), Genre::Music);
+    assert_eq!(genres_iter.next().unwrap(), Genre::War);
+  }
+}

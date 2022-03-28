@@ -78,3 +78,16 @@ where
 
   serializer.serialize_str(s)
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test() {
+    let id = TitleId::try_from("tt0000001".as_bytes()).unwrap();
+    assert_eq!(id.as_bytes(), "tt0000001".as_bytes());
+    assert_eq!(id.as_str(), "tt0000001");
+    assert_eq!(id.as_usize(), 1);
+  }
+}
