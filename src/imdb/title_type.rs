@@ -55,10 +55,6 @@ pub enum TitleType {
 }
 
 impl TitleType {
-  // pub(crate) const fn max() -> u8 {
-  //   Self::RadioSeries as u8
-  // }
-
   /// Converts a byte representation to its corresponding TitleType
   /// # Arguments
   /// * `value` - Byte representation of a TitleType
@@ -188,9 +184,4 @@ mod tests {
     assert!(unsafe { TitleType::from(11).is_series() });
     assert!(unsafe { !TitleType::from(12).is_series() });
   }
-
-  // #[test]
-  // fn test_title_type_max() {
-  //   assert_eq!(TitleType::max(), TitleType::RadioSeries as u8);
-  // }
 }
