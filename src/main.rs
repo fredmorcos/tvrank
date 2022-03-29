@@ -273,12 +273,7 @@ fn imdb_single_title<'a>(
     }
   }
 
-  printer.print(
-    Some(movies_results.top_sorted_results()),
-    Some(series_results.top_sorted_results()),
-    imdb_url,
-    search_terms,
-  )?;
+  printer.print(Some(movies_results), Some(series_results), imdb_url, search_terms)?;
 
   Ok(())
 }
@@ -319,7 +314,7 @@ fn imdb_movies_dir(
         if let Some((title, year)) = parse_title_and_year(&filename) {
           at_least_one = true;
 
-          let mut local_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
+          let mut local_results = SearchRes::new(search_opts.sort_by_year, None);
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -329,7 +324,7 @@ fn imdb_movies_dir(
 
             if matches!(printer.get_format(), OutputFormat::Table) {
               printer.print(
-                Some(local_results.top_sorted_results()),
+                Some(local_results),
                 None,
                 imdb_url,
                 Some(&display_title_and_year(title, year)),
@@ -364,7 +359,7 @@ fn imdb_movies_dir(
     return Ok(());
   }
 
-  printer.print(Some(results.top_sorted_results()), None, imdb_url, None)?;
+  printer.print(Some(results), None, imdb_url, None)?;
 
   Ok(())
 }
@@ -403,7 +398,7 @@ fn imdb_series_dir(
         at_least_one = true;
 
         let filename = filename.to_string_lossy();
-        let mut local_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
+        let mut local_results = SearchRes::new(search_opts.sort_by_year, None);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
@@ -419,7 +414,7 @@ fn imdb_series_dir(
           }
 
           if matches!(printer.get_format(), OutputFormat::Table) {
-            printer.print(None, Some(local_results.top_sorted_results()), imdb_url, Some(&search_terms))?;
+            printer.print(None, Some(local_results), imdb_url, Some(&search_terms))?;
           } else {
             results.extend(local_results);
           }
@@ -441,7 +436,7 @@ fn imdb_series_dir(
     return Ok(());
   }
 
-  printer.print(None, Some(results.top_sorted_results()), imdb_url, None)?;
+  printer.print(None, Some(results), imdb_url, None)?;
 
   Ok(())
 }
@@ -468,14 +463,10 @@ fn get_imdb_url() -> Res<Url> {
   Ok(imdb_url)
 }
 
-fn create_output_printer(
-  output_format: &OutputFormat,
-  search_opts: &SearchOpts,
-  general_opts: &GeneralOpts,
-) -> Box<dyn Printer> {
+fn create_output_printer(output_format: &OutputFormat, general_opts: &GeneralOpts) -> Box<dyn Printer> {
   match output_format {
     OutputFormat::Json => Box::new(JsonPrinter::new()),
-    OutputFormat::Table => Box::new(TablePrinter::new(general_opts.color, search_opts.top)),
+    OutputFormat::Table => Box::new(TablePrinter::new(general_opts.color)),
     OutputFormat::Yaml => Box::new(YamlPrinter::new()),
   }
 }
@@ -600,7 +591,7 @@ fn main() {
   match args.command {
     Command::Title { title, exact, general_opts, search_opts } => {
       let context = Context::new(general_opts, args.general_opts);
-      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
       fail!(context.have_logger, imdb_single_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
         context.destroy();
@@ -610,7 +601,7 @@ fn main() {
     }
     Command::MoviesDir { dir, general_opts, search_opts } => {
       let context = Context::new(general_opts, args.general_opts);
-      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
       fail!(context.have_logger, imdb_movies_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
         context.destroy();
@@ -620,7 +611,7 @@ fn main() {
     }
     Command::SeriesDir { dir, general_opts, search_opts } => {
       let context = Context::new(general_opts, args.general_opts);
-      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
       fail!(context.have_logger, imdb_series_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
         context.destroy();

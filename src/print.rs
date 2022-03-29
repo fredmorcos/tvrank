@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+use crate::search::SearchRes;
 use humantime::format_duration;
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use reqwest::Url;
@@ -16,9 +17,18 @@ pub enum OutputFormat {
 }
 
 #[derive(Serialize)]
-pub struct OutputWrapper<'a> {
-  movies: Option<&'a [&'a ImdbTitle<'a>]>,
-  series: Option<&'a [&'a ImdbTitle<'a>]>,
+struct OutputWrapper<'search_res, 'a, 'storage> {
+  movies: Option<&'search_res [&'a ImdbTitle<'storage>]>,
+  series: Option<&'search_res [&'a ImdbTitle<'storage>]>,
+}
+
+impl<'search_res, 'a, 'storage> OutputWrapper<'search_res, 'a, 'storage> {
+  fn new(
+    movies: Option<&'search_res [&'a ImdbTitle<'storage>]>,
+    series: Option<&'search_res [&'a ImdbTitle<'storage>]>,
+  ) -> Self {
+    Self { movies, series }
+  }
 }
 
 pub trait Printer {
@@ -26,8 +36,8 @@ pub trait Printer {
 
   fn print(
     &self,
-    movies: Option<&[&ImdbTitle]>,
-    series: Option<&[&ImdbTitle]>,
+    movies: Option<SearchRes>,
+    series: Option<SearchRes>,
     imdb_url: &Url,
     search_terms: Option<&str>,
   ) -> Res<()>;
@@ -49,13 +59,18 @@ impl Printer for JsonPrinter {
 
   fn print(
     &self,
-    movies: Option<&[&ImdbTitle]>,
-    series: Option<&[&ImdbTitle]>,
+    mut movies: Option<SearchRes>,
+    mut series: Option<SearchRes>,
     _imdb_url: &Url,
     _search_terms: Option<&str>,
   ) -> Res<()> {
-    println!("{}", serde_json::to_string_pretty(&OutputWrapper { movies, series })?);
-
+    println!(
+      "{}",
+      serde_json::to_string_pretty(&OutputWrapper::new(
+        movies.as_mut().map(|movies| movies.top_sorted_results()),
+        series.as_mut().map(|series| series.top_sorted_results()),
+      ))?
+    );
     Ok(())
   }
 }
@@ -76,13 +91,18 @@ impl Printer for YamlPrinter {
 
   fn print(
     &self,
-    movies: Option<&[&ImdbTitle]>,
-    series: Option<&[&ImdbTitle]>,
+    mut movies: Option<SearchRes>,
+    mut series: Option<SearchRes>,
     _imdb_url: &Url,
     _search_terms: Option<&str>,
   ) -> Res<()> {
-    println!("{}", serde_yaml::to_string(&OutputWrapper { movies, series })?);
-
+    println!(
+      "{}",
+      serde_yaml::to_string(&OutputWrapper::new(
+        movies.as_mut().map(|movies| movies.top_sorted_results()),
+        series.as_mut().map(|series| series.top_sorted_results()),
+      ))?
+    );
     Ok(())
   }
 }
@@ -90,7 +110,6 @@ impl Printer for YamlPrinter {
 #[derive(Clone)]
 pub struct TablePrinter {
   color: bool,
-  top: Option<usize>,
 }
 
 impl Printer for TablePrinter {
@@ -100,8 +119,8 @@ impl Printer for TablePrinter {
 
   fn print(
     &self,
-    movies: Option<&[&ImdbTitle]>,
-    series: Option<&[&ImdbTitle]>,
+    movies: Option<SearchRes>,
+    series: Option<SearchRes>,
     imdb_url: &Url,
     search_terms: Option<&str>,
   ) -> Res<()> {
@@ -118,13 +137,13 @@ impl Printer for TablePrinter {
 
 impl TablePrinter {
   #[must_use]
-  pub fn new(color: bool, top: Option<usize>) -> Self {
-    Self { color, top }
+  pub fn new(color: bool) -> Self {
+    Self { color }
   }
 
   fn print_results(
     &self,
-    results: &[&ImdbTitle],
+    mut results: SearchRes,
     imdb_url: &Url,
     query: ImdbQuery,
     search_terms: Option<&str>,
@@ -136,7 +155,7 @@ impl TablePrinter {
         eprintln!("No {} matches found", query);
       }
     } else {
-      let num = results.len();
+      let num = results.total_len();
       let matches = if num == 1 {
         "match"
       } else {
@@ -144,26 +163,24 @@ impl TablePrinter {
       };
 
       if let Some(search_terms) = search_terms {
-        match self.top {
-          Some(n) => {
-            println!(
-              "Found {num} {} {matches} for `{search_terms}`, {} will be displayed:",
-              query,
-              num.min(n)
-            )
-          }
-          None => println!("Found {num} {} {matches} for `{search_terms}`:", query),
-        };
+        if results.is_truncated() {
+          println!(
+            "Found {num} {} {matches} for `{search_terms}`, {} will be displayed:",
+            query,
+            results.len()
+          )
+        } else {
+          println!("Found {num} {} {matches} for `{search_terms}`:", query)
+        }
+      } else if results.is_truncated() {
+        println!("Found {num} {} {matches}, {} will be displayed:", query, results.len());
       } else {
-        match self.top {
-          Some(n) => println!("Found {num} {} {matches}, {} will be displayed:", query, num.min(n)),
-          None => println!("Found {num} {} {matches}:", query),
-        };
+        println!("Found {num} {} {matches}:", query);
       }
 
       let mut table = create_table(self.color);
 
-      for &res in results {
+      for res in results.top_sorted_results() {
         let row = self.create_table_row(res, imdb_url)?;
         table.add_row(row);
       }
