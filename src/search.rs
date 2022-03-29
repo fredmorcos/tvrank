@@ -73,7 +73,7 @@ impl<'a, 'storage> SearchRes<'a, 'storage> {
     self.results.extend(iter.into_iter())
   }
 
-  pub fn top_sorted_results(&mut self) -> &[&ImdbTitle] {
+  pub fn top_sorted_results(&mut self) -> &[&'a ImdbTitle<'storage>] {
     self.sort_results();
     &self.results[0..self.len()]
   }
