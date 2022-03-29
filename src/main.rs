@@ -5,18 +5,19 @@ mod print;
 mod search;
 mod ui;
 
+use crate::info::TitleInfo;
 use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter};
+use crate::search::SearchRes;
+use crate::ui::{create_progress_bar, create_progress_spinner};
 use atoi::atoi;
 use clap::Parser;
 use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
 use indicatif::ProgressBar;
-use info::TitleInfo;
 use log::{debug, error, log_enabled, warn};
 use regex::Regex;
 use reqwest::Url;
-use search::SearchRes;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -27,7 +28,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::Res;
-use ui::{create_progress_bar, create_progress_spinner};
 use walkdir::WalkDir;
 
 #[derive(Debug, Display)]
