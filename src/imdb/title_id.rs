@@ -10,12 +10,21 @@ use std::hash::{Hash, Hasher};
 
 /// The ID corresponding to a title as u8 and usize
 #[derive(Debug, Clone, Copy, Serialize)]
-pub struct TitleId<'a> {
+pub struct TitleId<'storage> {
   #[serde(serialize_with = "bytes_serializer", rename = "title_id")]
-  bytes: &'a [u8],
+  bytes: &'storage [u8],
 
   #[serde(skip_serializing)]
   num: usize,
+}
+
+fn bytes_serializer<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+  S: Serializer,
+{
+  let s = unsafe { std::str::from_utf8_unchecked(bytes) };
+
+  serializer.serialize_str(s)
 }
 
 impl PartialEq for TitleId<'_> {
@@ -32,14 +41,14 @@ impl Hash for TitleId<'_> {
   }
 }
 
-impl<'a> TitleId<'a> {
+impl<'storage> TitleId<'storage> {
   /// Returns the title id as bytes
-  pub(crate) fn as_bytes(&self) -> &'a [u8] {
+  pub(crate) fn as_bytes(&self) -> &'storage [u8] {
     self.bytes
   }
 
   /// Returns the title id as str
-  pub(crate) fn as_str(&self) -> &'a str {
+  pub(crate) fn as_str(&self) -> &'storage str {
     unsafe { std::str::from_utf8_unchecked(self.bytes) }
   }
 
@@ -49,10 +58,10 @@ impl<'a> TitleId<'a> {
   }
 }
 
-impl<'a> TryFrom<&'a [u8]> for TitleId<'a> {
+impl<'storage> TryFrom<&'storage [u8]> for TitleId<'storage> {
   type Error = Box<dyn Error>;
 
-  fn try_from(bytes: &'a [u8]) -> Result<Self, Self::Error> {
+  fn try_from(bytes: &'storage [u8]) -> Result<Self, Self::Error> {
     if &bytes[0..2] != tokens::TT {
       return Err::id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned());
     }
@@ -68,15 +77,6 @@ impl fmt::Display for TitleId<'_> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}", self.as_str())
   }
-}
-
-fn bytes_serializer<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-where
-  S: Serializer,
-{
-  let s = unsafe { std::str::from_utf8_unchecked(bytes) };
-
-  serializer.serialize_str(s)
 }
 
 #[cfg(test)]
