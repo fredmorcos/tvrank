@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use humantime::format_duration;
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use reqwest::Url;
