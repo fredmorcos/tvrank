@@ -1,21 +1,51 @@
 ---
-name: Lint, documentation, builds and tests
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
 
 jobs:
-  lint-docs-build-tests:
+  code-formatting:
     name: >-
-      Lint/Docs/Build/Tests on ${{matrix.os}}
-      with the ${{matrix.toolchain}} Toolchain
+      Check code formatting
+      (${{matrix.os}} -
+      ${{matrix.toolchain}} toolchain)
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+        toolchain: [stable]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install toolchain (${{matrix.toolchain}})
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{matrix.toolchain}}
+          override: true
+          components: rustfmt
+
+      - name: Check code formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check -l
+
+  lint:
+    name: >-
+      Lint
+      (${{matrix.os}} -
+      ${{matrix.build-type}} build -
+      ${{matrix.toolchain}} toolchain)
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -24,65 +54,119 @@ jobs:
           - windows-2022
           - macos-11
         toolchain: [stable]
+        build-type: [debug, release]
     steps:
-      - uses: actions/checkout@v2
-      - name: Install Toolchain (${{matrix.toolchain}})
+      - uses: actions/checkout@v3
+      - name: Install toolchain (${{matrix.toolchain}})
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
-          components: rustfmt, clippy
+          components: clippy
 
-      - name: Code Formatting
+      - name: Lint (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check -l
-
-      - name: Debug Lint
-        uses: actions-rs/cargo@v1
+        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: clippy
           args: --all-targets --all-features
-      - name: Debug Documentation
-        uses: actions-rs/cargo@v1
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-        with:
-          command: doc
-          args: --all-features --no-deps --document-private-items
-      - name: Debug Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-features
-      - name: Debug Tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
 
-      - name: Release Lint
+      - name: Lint (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
+        if: ${{ matrix.build-type == 'release' }}
         with:
           command: clippy
           args: --all-targets --all-features --release
-      - name: Release Documentation
+
+  documentation:
+    name: >-
+      Generate documentation
+      (${{matrix.os}} -
+      ${{matrix.build-type}} build -
+      ${{matrix.toolchain}} toolchain)
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+          - windows-2022
+          - macos-11
+        toolchain: [stable]
+        build-type: [debug, release]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install toolchain (${{matrix.toolchain}})
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{matrix.toolchain}}
+          override: true
+
+      - name: Documentation (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
         env:
           RUSTDOCFLAGS: -Dwarnings
+        if: ${{ matrix.build-type == 'debug' }}
+        with:
+          command: doc
+          args: --all-features --no-deps --document-private-items
+
+      - name: Documentation (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        if: ${{ matrix.build-type == 'release' }}
         with:
           command: doc
           args: --all-features --no-deps --document-private-items --release
-      - name: Release Build
+
+  build-and-test:
+    name: >-
+      Build and test (${{matrix.os}} -
+      ${{matrix.build-type}} build -
+      ${{matrix.toolchain}} toolchain)
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+          - windows-2022
+          - macos-11
+        toolchain: [stable]
+        build-type: [debug, release]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install toolchain (${{matrix.toolchain}})
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{matrix.toolchain}}
+          override: true
+
+      - name: Build (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
+        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: build
-          args: --all-features --release
-      - name: Release Tests
+          args: --all-features --all-targets
+      - name: Test (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
+        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: test
-          args: --all-features --release
+          args: --all-features --all-targets
+
+      - name: Build (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.build-type == 'release' }}
+        with:
+          command: build
+          args: --all-features --all-targets --release
+      - name: Test (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.build-type == 'release' }}
+        with:
+          command: test
+          args: --all-features --all-targets --release
 ...

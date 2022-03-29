@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Switch to Git Tag
         uses: dawidd6/action-get-tag@v1
         id: tag
@@ -101,7 +101,7 @@ jobs:
     runs-on: macos-11
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Switch to Git Tag
         uses: dawidd6/action-get-tag@v1
         id: tag
@@ -190,7 +190,7 @@ jobs:
     runs-on: windows-2019
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Switch to Git Tag
         uses: dawidd6/action-get-tag@v1
         id: tag
@@ -280,7 +280,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Switch to Git Tag
         uses: dawidd6/action-get-tag@v1
         id: tag
@@ -348,7 +348,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Switch to Git Tag
         uses: dawidd6/action-get-tag@v1
         id: tag
