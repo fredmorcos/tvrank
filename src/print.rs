@@ -31,7 +31,14 @@ pub trait Printer {
   ) -> Res<()>;
 }
 
-pub struct JsonPrinter {}
+pub struct JsonPrinter;
+
+impl JsonPrinter {
+  #[must_use]
+  pub fn new() -> Self {
+    Self
+  }
+}
 
 impl Printer for JsonPrinter {
   fn get_format(&self) -> OutputFormat {
@@ -51,7 +58,14 @@ impl Printer for JsonPrinter {
   }
 }
 
-pub struct YamlPrinter {}
+pub struct YamlPrinter;
+
+impl YamlPrinter {
+  #[must_use]
+  pub fn new() -> Self {
+    Self
+  }
+}
 
 impl Printer for YamlPrinter {
   fn get_format(&self) -> OutputFormat {
@@ -73,8 +87,8 @@ impl Printer for YamlPrinter {
 
 #[derive(Clone)]
 pub struct TablePrinter {
-  pub(crate) color: bool,
-  pub(crate) top: Option<usize>,
+  color: bool,
+  top: Option<usize>,
 }
 
 impl Printer for TablePrinter {
@@ -84,16 +98,16 @@ impl Printer for TablePrinter {
 
   fn print(
     &self,
-    movies_results: Option<&[&ImdbTitle]>,
-    series_results: Option<&[&ImdbTitle]>,
+    movies: Option<&[&ImdbTitle]>,
+    series: Option<&[&ImdbTitle]>,
     imdb_url: &Url,
     search_terms: Option<&str>,
   ) -> Res<()> {
-    if let Some(movies_results) = movies_results {
-      self.print_results(movies_results, imdb_url, ImdbQuery::Movies, search_terms)?;
+    if let Some(movies) = movies {
+      self.print_results(movies, imdb_url, ImdbQuery::Movies, search_terms)?;
     }
-    if let Some(series_results) = series_results {
-      self.print_results(series_results, imdb_url, ImdbQuery::Series, search_terms)?;
+    if let Some(series) = series {
+      self.print_results(series, imdb_url, ImdbQuery::Series, search_terms)?;
     }
 
     Ok(())
@@ -101,6 +115,11 @@ impl Printer for TablePrinter {
 }
 
 impl TablePrinter {
+  #[must_use]
+  pub fn new(color: bool, top: Option<usize>) -> Self {
+    Self { color, top }
+  }
+
   fn print_results(
     &self,
     results: &[&ImdbTitle],

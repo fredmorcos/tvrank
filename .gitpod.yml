@@ -18,6 +18,8 @@ tasks:
   - init: |
       # Build workspace.
       cargo build
+      cargo clippy
+      cargo build --release
 
 vscode:
   extensions:

@@ -95,15 +95,6 @@ fn parse_title_and_year(input: &str) -> Option<(&str, u16)> {
   Some((title_match.as_str(), year_val))
 }
 
-fn create_project() -> Res<ProjectDirs> {
-  let prj = ProjectDirs::from("com.fredmorcos", "Fred Morcos", "tvrank");
-  if let Some(prj) = prj {
-    Ok(prj)
-  } else {
-    TvRankErr::cache_dir()
-  }
-}
-
 #[derive(Debug, clap::Args)]
 struct GeneralOpts {
   /// Force updating internal databases
@@ -149,13 +140,13 @@ struct Opt {
 enum Command {
   /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
   Title {
-    /// Match the given title exactly
-    #[clap(short, long)]
-    exact: bool,
-
     /// Search terms, as "KEYWORDS" or "TITLE (YYYY)"
     #[clap(name = "TITLE")]
     title: String,
+
+    /// Match the given title exactly
+    #[clap(short, long)]
+    exact: bool,
 
     #[clap(flatten)]
     general_opts: GeneralOpts,
@@ -166,7 +157,7 @@ enum Command {
 
   /// Lookup movie titles from a directory
   MoviesDir {
-    /// Directory of movie folders named TITLE (YYYY)
+    /// Directory of movie folders named "TITLE (YYYY)"
     #[clap(name = "DIR")]
     dir: PathBuf,
 
@@ -179,7 +170,7 @@ enum Command {
 
   /// Lookup series titles from a directory
   SeriesDir {
-    /// Directory of series folders named TITLE [(YYYY)]
+    /// Directory of series folders named "TITLE [(YYYY)]"
     #[clap(name = "DIR")]
     dir: PathBuf,
 
@@ -224,13 +215,12 @@ fn imdb_single_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   imdb_url: &Url,
-  sort_by_year: bool,
-  top: Option<usize>,
+  search_opts: &SearchOpts,
   exact: bool,
   printer: Box<dyn Printer>,
 ) -> Res<()> {
-  let mut movies_results = SearchRes::new_movies(sort_by_year, top);
-  let mut series_results = SearchRes::new_series(sort_by_year, top);
+  let mut movies_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
+  let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
   let lc_title;
   let keywords;
@@ -297,13 +287,12 @@ fn imdb_movies_dir(
   dir: &Path,
   imdb: &Imdb,
   imdb_url: &Url,
-  sort_by_year: bool,
-  top: Option<usize>,
+  search_opts: &SearchOpts,
   printer: Box<dyn Printer>,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_movies(sort_by_year, top);
+  let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let walkdir = WalkDir::new(dir).min_depth(1);
 
   for entry in walkdir {
@@ -330,7 +319,7 @@ fn imdb_movies_dir(
         if let Some((title, year)) = parse_title_and_year(&filename) {
           at_least_one = true;
 
-          let mut local_results = SearchRes::new_movies(sort_by_year, top);
+          let mut local_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
@@ -384,13 +373,12 @@ fn imdb_series_dir(
   dir: &Path,
   imdb: &Imdb,
   imdb_url: &Url,
-  sort_by_year: bool,
-  top: Option<usize>,
+  search_opts: &SearchOpts,
   printer: Box<dyn Printer>,
 ) -> Res<()> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
-  let mut results = SearchRes::new_series(sort_by_year, top);
+  let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let walkdir = WalkDir::new(dir).min_depth(1).max_depth(1);
 
   for entry in walkdir {
@@ -415,7 +403,7 @@ fn imdb_series_dir(
         at_least_one = true;
 
         let filename = filename.to_string_lossy();
-        let mut local_results = SearchRes::new_series(sort_by_year, top);
+        let mut local_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
           local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
@@ -458,27 +446,44 @@ fn imdb_series_dir(
   Ok(())
 }
 
-fn run(cmd: &Command, search_opts: &SearchOpts, general_opts: &GeneralOpts) -> Res<()> {
-  let project = create_project()?;
+fn create_project() -> Res<ProjectDirs> {
+  let prj = ProjectDirs::from("com.fredmorcos", "Fred Morcos", "tvrank");
+  if let Some(prj) = prj {
+    Ok(prj)
+  } else {
+    TvRankErr::cache_dir()
+  }
+}
+
+fn create_cache_dir(project: &ProjectDirs) -> Res<&Path> {
   let app_cache_dir = project.cache_dir();
-  debug!("Cache directory: {}", app_cache_dir.display());
-
   fs::create_dir_all(app_cache_dir)?;
-  debug!("Created cache directory");
+  debug!("Cache directory: {}", app_cache_dir.display());
+  Ok(app_cache_dir)
+}
 
+fn get_imdb_url() -> Res<Url> {
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
+  Ok(imdb_url)
+}
 
-  let printer: Box<dyn Printer> = match search_opts.output {
-    OutputFormat::Json => Box::new(JsonPrinter {}),
-    OutputFormat::Table => Box::new(TablePrinter { color: general_opts.color, top: search_opts.top }),
-    OutputFormat::Yaml => Box::new(YamlPrinter {}),
-  };
+fn create_output_printer(
+  output_format: &OutputFormat,
+  search_opts: &SearchOpts,
+  general_opts: &GeneralOpts,
+) -> Box<dyn Printer> {
+  match output_format {
+    OutputFormat::Json => Box::new(JsonPrinter::new()),
+    OutputFormat::Table => Box::new(TablePrinter::new(general_opts.color, search_opts.top)),
+    OutputFormat::Yaml => Box::new(YamlPrinter::new()),
+  }
+}
 
+fn create_imdb_service(app_cache_dir: &Path, force_update: bool) -> Res<Imdb> {
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
-
-  let imdb = Imdb::new(app_cache_dir, general_opts.force_update, &|content_len: Option<u64>, delta| {
+  let imdb = Imdb::new(app_cache_dir, force_update, &|content_len: Option<u64>, delta| {
     let mut progress_bar_mut = progress_bar.borrow_mut();
     match &*progress_bar_mut {
       Some(bar) => bar.inc(delta),
@@ -493,84 +498,135 @@ fn run(cmd: &Command, search_opts: &SearchOpts, general_opts: &GeneralOpts) -> R
       }
     }
   })?;
-
   if let Some(bar) = &*progress_bar.borrow_mut() {
     bar.finish_and_clear();
   }
   debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start_time)));
-
-  let start_time = Instant::now();
-
-  match cmd {
-    Command::Title { exact, title, .. } => {
-      imdb_single_title(title, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, *exact, printer)?
-    }
-    Command::MoviesDir { dir, .. } => {
-      imdb_movies_dir(dir, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, printer)?
-    }
-    Command::SeriesDir { dir, .. } => {
-      imdb_series_dir(dir, &imdb, &imdb_url, search_opts.sort_by_year, search_opts.top, printer)?
-    }
-  }
-
-  debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
-
-  std::mem::forget(imdb);
-
-  Ok(())
+  Ok(imdb)
 }
 
-fn main() {
-  let start_time = Instant::now();
-  let args = Opt::parse();
-  let search_opts = match &args.command {
-    Command::Title { search_opts, .. }
-    | Command::MoviesDir { search_opts, .. }
-    | Command::SeriesDir { search_opts, .. } => search_opts,
-  };
+fn is_no_color_env_set() -> bool {
+  match env::var("NO_COLOR") {
+    Ok(val) => val != "0",
+    Err(_) => false,
+  }
+}
 
-  let general_opts = match &args.command {
-    Command::Title { general_opts, .. }
-    | Command::MoviesDir { general_opts, .. }
-    | Command::SeriesDir { general_opts, .. } => GeneralOpts {
-      force_update: general_opts.force_update || args.general_opts.force_update,
-      color: env::var("NO_COLOR").is_err() || general_opts.color || args.general_opts.color,
-      verbose: if general_opts.verbose > 0 {
-        general_opts.verbose
-      } else {
-        args.general_opts.verbose
-      },
+fn merge_general_opts(locals: GeneralOpts, globals: GeneralOpts) -> GeneralOpts {
+  GeneralOpts {
+    force_update: locals.force_update || globals.force_update,
+    color: !is_no_color_env_set() || locals.color || globals.color,
+    verbose: if locals.verbose > 0 {
+      locals.verbose
+    } else {
+      globals.verbose
     },
-  };
+  }
+}
 
-  let log_level = match general_opts.verbose {
+fn get_log_level(verbose: u8) -> log::LevelFilter {
+  match verbose {
     0 => log::LevelFilter::Off,
     1 => log::LevelFilter::Error,
     2 => log::LevelFilter::Warn,
     3 => log::LevelFilter::Info,
     4 => log::LevelFilter::Debug,
     _ => log::LevelFilter::Trace,
+  }
+}
+
+macro_rules! fail {
+  ($logger:expr, $e:expr) => {{
+    fail!($logger, $e => {})
+  }};
+
+  ($logger:expr, $e:expr => $exec:block) => {
+    match $e {
+      Ok(v) => v,
+      Err(e) => {
+        let logger: bool = $logger;
+        if logger {
+          error!("Error: {e}");
+        } else {
+          eprintln!("Error: {e}");
+        }
+        $exec;
+        std::process::exit(1);
+      }
+    }
   };
+}
 
-  let logger = env_logger::Builder::new().filter_level(log_level).try_init();
-  let have_logger = if let Err(e) = logger {
-    eprintln!("Error initializing logger: {}", e);
-    false
-  } else {
-    true
-  };
+struct Context {
+  general_opts: GeneralOpts,
+  have_logger: bool,
+  imdb_url: Url,
+  service: Imdb,
+}
 
-  // error!("Error output enabled.");
-  // warn!("Warning output enabled.");
-  // info!("Info output enabled.");
-  // debug!("Debug output enabled.");
-  // trace!("Trace output enabled.");
+impl Context {
+  fn new(locals: GeneralOpts, globals: GeneralOpts) -> Self {
+    let general_opts = merge_general_opts(locals, globals);
+    let log_level = get_log_level(general_opts.verbose);
+    let logger = env_logger::Builder::new().filter_level(log_level).try_init();
+    if let Err(e) = &logger {
+      eprintln!("Error initializing logger: {}", e);
+    }
+    let have_logger = logger.is_err();
 
-  if let Err(e) = run(&args.command, search_opts, &general_opts) {
-    if have_logger {
-      error!("Error: {}", e);
-    } else {
-      eprintln!("Error: {}", e);
+    // error!("Error output enabled.");
+    // warn!("Warning output enabled.");
+    // info!("Info output enabled.");
+    // debug!("Debug output enabled.");
+    // trace!("Trace output enabled.");
+
+    let project = fail!(have_logger, create_project());
+    let app_cache_dir = fail!(have_logger, create_cache_dir(&project));
+    let imdb_url = fail!(have_logger, get_imdb_url());
+    let service = fail!(have_logger, create_imdb_service(app_cache_dir, general_opts.force_update));
+
+    Self { general_opts, have_logger, imdb_url, service }
+  }
+
+  fn destroy(self) {
+    std::mem::forget(self)
+  }
+}
+
+fn main() {
+  let start_time = Instant::now();
+  let args = Opt::parse();
+
+  match args.command {
+    Command::Title { title, exact, general_opts, search_opts } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_single_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
+    }
+    Command::MoviesDir { dir, general_opts, search_opts } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_movies_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
+    }
+    Command::SeriesDir { dir, general_opts, search_opts } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let printer = create_output_printer(&search_opts.output, &search_opts, &context.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_series_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
     }
   }
 
