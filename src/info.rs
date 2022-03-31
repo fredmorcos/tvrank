@@ -27,12 +27,6 @@ pub struct ImdbTitleInfo {
   id: ImdbTitleId<'static>,
 }
 
-impl ImdbTitleInfo {
-  pub fn id(&self) -> &ImdbTitleId<'static> {
-    &self.id
-  }
-}
-
 fn deserialize_titleid<'de, D>(deserializer: D) -> Result<ImdbTitleId<'static>, D::Error>
 where
   D: Deserializer<'de>,
@@ -40,6 +34,12 @@ where
   let s = Box::leak(String::deserialize(deserializer)?.into_boxed_str());
   let title_id = ImdbTitleId::try_from(s.as_bytes()).map_err(serde::de::Error::custom)?;
   Ok(title_id)
+}
+
+impl ImdbTitleInfo {
+  pub fn id(&self) -> &ImdbTitleId<'static> {
+    &self.id
+  }
 }
 
 impl TitleInfo {

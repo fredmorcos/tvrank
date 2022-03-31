@@ -51,17 +51,31 @@ impl<'a, 'storage> SearchRes<'a, 'storage> {
     Self { results: Vec::new(), sort_by_year, top }
   }
 
+  pub fn total_len(&self) -> usize {
+    self.results.len()
+  }
+
+  pub fn len(&self) -> usize {
+    match self.top {
+      Some(top) => top.min(self.total_len()),
+      None => self.total_len(),
+    }
+  }
+
+  pub fn is_truncated(&self) -> bool {
+    match self.top {
+      Some(top) => top <= self.total_len(),
+      None => false,
+    }
+  }
+
   pub fn extend(&mut self, iter: impl IntoIterator<Item = &'a ImdbTitle<'storage>>) {
     self.results.extend(iter.into_iter())
   }
 
-  pub fn top_sorted_results(&mut self) -> &[&ImdbTitle] {
+  pub fn top_sorted_results(&mut self) -> &[&'a ImdbTitle<'storage>] {
     self.sort_results();
-
-    match self.top {
-      Some(n) => &self.results[0..self.results.len().min(n)],
-      None => &self.results,
-    }
+    &self.results[0..self.len()]
   }
 
   fn sort_results(&mut self) {

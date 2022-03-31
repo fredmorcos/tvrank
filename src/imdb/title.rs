@@ -36,15 +36,15 @@ impl<T> From<TsvAction<T>> for Option<T> {
 
 /// Primary/original titles of a movie/series and its relevant information such as duration and rating
 #[derive(Debug, Clone, Copy, Serialize)]
-pub struct Title<'a> {
+pub struct Title<'storage> {
   #[serde(flatten)]
   header: TitleHeader,
 
   #[serde(flatten)]
-  title_id: TitleId<'a>,
+  title_id: TitleId<'storage>,
 
-  primary_title: &'a str,
-  original_title: Option<&'a str>,
+  primary_title: &'storage str,
+  original_title: Option<&'storage str>,
 }
 
 impl PartialEq for Title<'_> {
@@ -61,7 +61,7 @@ impl Hash for Title<'_> {
   }
 }
 
-impl<'a> Title<'a> {
+impl<'storage> Title<'storage> {
   /// Returns the id of the title
   pub fn title_id(&self) -> &TitleId {
     &self.title_id
@@ -114,7 +114,7 @@ impl<'a> Title<'a> {
   /// # Arguments
   /// * `line` - A title as tab separated values
   /// * `ratings` - Ratings struct containing the ratings of the titles
-  pub(crate) fn from_tsv(line: &'a [u8], ratings: &Ratings) -> Res<TsvAction<Self>> {
+  pub(crate) fn from_tsv(line: &'storage [u8], ratings: &Ratings) -> Res<TsvAction<Self>> {
     let mut columns = line.split(|&b| b == tokens::TAB);
 
     let title_id = TitleId::try_from(iter_next!(columns))?;
@@ -241,7 +241,7 @@ impl<'a> Title<'a> {
   /// Reads a title from its binary representation and returns it inside a Result
   /// # Arguments
   /// * `source` - Title to be read as binary
-  pub(crate) fn from_binary(source: &mut &'a [u8]) -> Res<Self> {
+  pub(crate) fn from_binary(source: &mut &'storage [u8]) -> Res<Self> {
     if (*source).len() < 23 {
       // # 23 bytes:
       //
