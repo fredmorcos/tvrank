@@ -177,7 +177,7 @@ impl Db {
   /// # Arguments
   /// * `keywords` - Keywords to be searched in the titles
   /// * `query` - Specifies if the query is for movies or series
-  pub(crate) fn by_keywords<'a, 'k: 'a>(
+  pub(crate) fn by_keywords<'a, 'k>(
     &'a self,
     keywords: &'k [&str],
     query: Query,
@@ -193,7 +193,7 @@ impl Db {
   /// * `keywords` - Keywords to be searched in the titles
   /// * `year` - Release date to be queried
   /// * `query` - Specifies if the query is for movies or series
-  pub(crate) fn by_keywords_and_year<'a, 'k: 'a>(
+  pub(crate) fn by_keywords_and_year<'a, 'k>(
     &'a self,
     keywords: &'k [&str],
     year: u16,
@@ -310,14 +310,15 @@ impl<C> DbImpl<C> {
   /// Returns cookies by keywords
   /// # Arguments
   /// * `keywords` - Keywords to be searched in the titles
-  fn cookies_by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a C> {
+  fn cookies_by_keywords<'a, 'k>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().build(keywords);
+    let keywords_len = keywords.len();
     self
       .by_title
       .iter()
       .filter(move |&(title, _)| {
         let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
-        matches.len() == keywords.len()
+        matches.len() == keywords_len
       })
       .flat_map(|(_, by_year)| by_year.values())
       .flatten()
@@ -327,21 +328,21 @@ impl<C> DbImpl<C> {
   /// # Arguments
   /// * `keywords` - Keywords to be searched in the titles
   /// * `year` - Release date to be queried
-  fn cookies_by_keywords_and_year<'a, 'k: 'a>(
+  fn cookies_by_keywords_and_year<'a, 'k>(
     &'a self,
     keywords: &'k [&str],
     year: u16,
   ) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().build(keywords);
+    let keywords_len = keywords.len();
     self
       .by_title
       .iter()
       .filter(move |&(title, _)| {
         let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
-        matches.len() == keywords.len()
+        matches.len() == keywords_len
       })
       .filter_map(move |(_, by_year)| by_year.get(&year))
-      // .map(|(_, by_year)| by_year.values())
       .flatten()
   }
 
@@ -397,7 +398,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// Returns titles by keywords from the database
   /// # Arguments
   /// * `keywords` - Keywords to be searched in the titles
-  pub(crate) fn by_keywords<'a, 'k: 'a>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a Title> {
+  pub(crate) fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 
@@ -405,7 +406,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   /// * `keywords` - Keywords to be searched in the titles
   /// * `year` - Release date of the title to be queried
-  pub(crate) fn by_keywords_and_year<'a, 'k: 'a>(
+  pub(crate) fn by_keywords_and_year<'a, 'k>(
     &'a self,
     keywords: &'k [&str],
     year: u16,

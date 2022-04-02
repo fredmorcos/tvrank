@@ -223,53 +223,34 @@ fn imdb_single_title<'a>(
   let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
   let lc_title;
-  let keywords;
   let st: String;
   let search_terms: Option<&str>;
 
   if let Some((title, year)) = parse_title_and_year(title) {
     lc_title = title.to_lowercase();
-    keywords = if exact {
-      None
-    } else {
-      Some(create_keywords_set(&lc_title)?)
-    };
-
-    if let Some(keywords) = &keywords {
-      movies_results.extend(imdb.by_keywords_and_year(keywords, year, ImdbQuery::Movies));
-    } else {
+    if exact {
       movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Movies));
-    }
-
-    if let Some(keywords) = &keywords {
-      series_results.extend(imdb.by_keywords_and_year(keywords, year, ImdbQuery::Series));
-    } else {
       series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Series));
+    } else {
+      let keywords = create_keywords_set(&lc_title)?;
+      movies_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Movies));
+      series_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Series));
     }
 
     st = display_title_and_year(title, year);
     search_terms = Some(&st);
   } else {
     lc_title = title.to_lowercase();
-    keywords = if exact {
-      None
-    } else {
-      Some(create_keywords_set(&lc_title)?)
-    };
-
-    if let Some(keywords) = &keywords {
-      movies_results.extend(imdb.by_keywords(keywords, ImdbQuery::Movies));
-    } else {
+    if exact {
       movies_results.extend(imdb.by_title(&lc_title, ImdbQuery::Movies));
-    }
-
-    if let Some(keywords) = &keywords {
-      series_results.extend(imdb.by_keywords(keywords, ImdbQuery::Series));
-      st = display_keywords(keywords);
-      search_terms = Some(&st);
-    } else {
       series_results.extend(imdb.by_title(&lc_title, ImdbQuery::Series));
       search_terms = Some(&lc_title);
+    } else {
+      let keywords = create_keywords_set(&lc_title)?;
+      movies_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Movies));
+      series_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Series));
+      st = display_keywords(&keywords);
+      search_terms = Some(&st);
     }
   }
 
