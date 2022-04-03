@@ -211,7 +211,7 @@ fn create_keywords_set(title: &str) -> Res<Vec<&str>> {
   Ok(keywords)
 }
 
-fn imdb_single_title<'a>(
+fn imdb_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   imdb_url: &Url,
@@ -222,58 +222,33 @@ fn imdb_single_title<'a>(
   let mut movies_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
-  let lc_title;
-  let keywords;
-  let st: String;
-  let search_terms: Option<&str>;
-
-  if let Some((title, year)) = parse_title_and_year(title) {
-    lc_title = title.to_lowercase();
-    keywords = if exact {
-      None
-    } else {
-      Some(create_keywords_set(&lc_title)?)
-    };
-
-    if let Some(keywords) = &keywords {
-      movies_results.extend(imdb.by_keywords_and_year(keywords, year, ImdbQuery::Movies));
-    } else {
+  let search_terms = if let Some((title, year)) = parse_title_and_year(title) {
+    let lc_title = title.to_lowercase();
+    if exact {
       movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Movies));
-    }
-
-    if let Some(keywords) = &keywords {
-      series_results.extend(imdb.by_keywords_and_year(keywords, year, ImdbQuery::Series));
-    } else {
       series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Series));
+    } else {
+      let keywords = create_keywords_set(&lc_title)?;
+      movies_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Movies));
+      series_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Series));
     }
 
-    st = display_title_and_year(title, year);
-    search_terms = Some(&st);
+    Some(display_title_and_year(title, year))
   } else {
-    lc_title = title.to_lowercase();
-    keywords = if exact {
-      None
-    } else {
-      Some(create_keywords_set(&lc_title)?)
-    };
-
-    if let Some(keywords) = &keywords {
-      movies_results.extend(imdb.by_keywords(keywords, ImdbQuery::Movies));
-    } else {
+    let lc_title = title.to_lowercase();
+    if exact {
       movies_results.extend(imdb.by_title(&lc_title, ImdbQuery::Movies));
-    }
-
-    if let Some(keywords) = &keywords {
-      series_results.extend(imdb.by_keywords(keywords, ImdbQuery::Series));
-      st = display_keywords(keywords);
-      search_terms = Some(&st);
-    } else {
       series_results.extend(imdb.by_title(&lc_title, ImdbQuery::Series));
-      search_terms = Some(&lc_title);
+      Some(lc_title)
+    } else {
+      let keywords = create_keywords_set(&lc_title)?;
+      movies_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Movies));
+      series_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Series));
+      Some(display_keywords(&keywords))
     }
-  }
+  };
 
-  printer.print(Some(movies_results), Some(series_results), imdb_url, search_terms)?;
+  printer.print(Some(movies_results), Some(series_results), imdb_url, search_terms.as_deref())?;
 
   Ok(())
 }
@@ -593,7 +568,7 @@ fn main() {
       let context = Context::new(general_opts, args.general_opts);
       let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
-      fail!(context.have_logger, imdb_single_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
+      fail!(context.have_logger, imdb_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
         context.destroy();
       });
       debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));

@@ -326,7 +326,7 @@ impl Service {
   /// # Arguments
   /// * `keywords` - List of keywords to search in titles
   /// * `query` - Specifies if movies or series are queried
-  pub fn by_keywords<'a>(&'a self, keywords: &'a [&str], query: Query) -> FnvHashSet<&'a Title> {
+  pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str], query: Query) -> FnvHashSet<&'a Title> {
     self
       .dbs
       .par_iter()
@@ -340,9 +340,9 @@ impl Service {
   /// * `keywords` - List of keywords to search in titles
   /// * `year` - Release year of the title
   /// * `query` - Specifies if movies or series are queried
-  pub fn by_keywords_and_year<'a>(
+  pub fn by_keywords_and_year<'a, 'k>(
     &'a self,
-    keywords: &'a [&str],
+    keywords: &'k [&str],
     year: u16,
     query: Query,
   ) -> FnvHashSet<&'a Title> {
