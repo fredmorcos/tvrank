@@ -7,7 +7,6 @@ on:
     tags: '*'
   pull_request:
     branches: [main]
-  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,225 +14,278 @@ env:
 
 jobs:
   code-formatting:
-    name: >-
-      Check code formatting
-      (${{matrix.os}} -
-      ${{matrix.toolchain}} toolchain)
-    runs-on: ${{matrix.os}}
+    name: Code formatting | ${{matrix.os.edition}} - ${{matrix.toolchain}}
     strategy:
       matrix:
-        os:
-          - ubuntu-20.04
         toolchain: [stable]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install toolchain (${{matrix.toolchain}})
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
           components: rustfmt
-
-      - name: Check code formatting
+      - name: Code formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: >-
             --all -- --check -l
 
+  setup-build-matrix:
+    name: Setup build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{steps.set-matrix.outputs.matrix}}
+    steps:
+      - id: set-matrix
+        shell: python
+        env:
+          ENABLE_PRODUCTION: ${{startsWith(github.ref, 'refs/tags/')}}
+        run: |
+          import os
+          import json
+
+          matrix = {
+            'os': [
+              {
+                'name': 'linux',
+                'edition': 'ubuntu-20.04',
+                'execext': '',
+                'pkgext': '.tar.bz2',
+                'pkgcmd': 'tar -c -f $PKG${{matrix.os.pkgext}} $PKG',
+              },
+              {
+                'name': 'windows',
+                'edition': 'windows-2022',
+                'execext': '.exe',
+                'pkgext': '.zip',
+                'pkgcmd': '7z a $PKG${{matrix.os.pkgext}} $PKG',
+              },
+              {
+                'name': 'macos',
+                'edition': 'macos-11',
+                'execext': '',
+                'pkgext': '.dmg',
+                'pkgcmd': ('hdiutil create -format UDZO -srcfolder '
+                           '$PKG $PKG${{matrix.os.pkgext}}'),
+              },
+            ],
+            'toolchain': [
+              'stable',
+            ],
+            'build-config': [
+              {
+                'id': 'debug',
+                'args': '',
+              },
+              {
+                'id': 'release',
+                'args': '--release',
+              },
+            ]
+          }
+
+          if os.getenv('ENABLE_PRODUCTION', default='false') == 'true':
+            matrix['build-config'].append({
+              'id': 'production',
+              'args': '--profile production',
+            })
+
+          print('::set-output name=matrix::%s' % json.dumps(matrix))
+
   lint:
     name: >-
-      Lint
-      (${{matrix.os}} -
-      ${{matrix.build-type}} build -
-      ${{matrix.toolchain}} toolchain)
-    runs-on: ${{matrix.os}}
+      Lint:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}},
+      ${{matrix.toolchain}}
+    needs: setup-build-matrix
     strategy:
-      matrix:
-        os:
-          - ubuntu-20.04
-          - windows-2022
-          - macos-11
-        toolchain: [stable]
-        build-type: [debug, release, production]
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
     steps:
       - uses: actions/checkout@v3
-      - uses: dawidd6/action-get-tag@v1
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        id: tag
-      - name: Install toolchain (${{matrix.toolchain}})
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
           components: clippy
-
-      - name: Lint (${{matrix.build-type}})
+      - name: Lint
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: clippy
           args: >-
             --all-targets --all-features
-
-      - name: Lint (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        if: ${{ matrix.build-type == 'release' }}
-        with:
-          command: clippy
-          args: >-
-            --all-targets --all-features --release
-
-      - name: Lint (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        if: >-
-          ${{ matrix.build-type == 'production' &&
-          startsWith(github.ref, 'refs/tags/') }}
-        with:
-          command: clippy
-          args: >-
-            --all-targets --all-features
-            --profile production
+            ${{matrix.build-config.args}}
 
   documentation:
     name: >-
-      Generate documentation
-      (${{matrix.os}} -
-      ${{matrix.build-type}} build -
-      ${{matrix.toolchain}} toolchain)
-    runs-on: ${{matrix.os}}
+      Doc:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}},
+      ${{matrix.toolchain}}
+    needs: setup-build-matrix
     strategy:
-      matrix:
-        os:
-          - ubuntu-20.04
-          - windows-2022
-          - macos-11
-        toolchain: [stable]
-        build-type: [debug, release, production]
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
     steps:
       - uses: actions/checkout@v3
-      - uses: dawidd6/action-get-tag@v1
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        id: tag
-      - name: Install toolchain (${{matrix.toolchain}})
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
-
-      - name: Documentation (${{matrix.build-type}})
+      - name: Doc
         uses: actions-rs/cargo@v1
         env:
           RUSTDOCFLAGS: -Dwarnings
-        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: doc
           args: >-
             --all-features --no-deps --document-private-items
-
-      - name: Documentation (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-        if: ${{ matrix.build-type == 'release' }}
-        with:
-          command: doc
-          args: >-
-            --all-features --no-deps --document-private-items
-            --release
-
-      - name: Documentation (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-        if: >-
-          ${{ matrix.build-type == 'production' &&
-          startsWith(github.ref, 'refs/tags/') }}
-        with:
-          command: doc
-          args: >-
-            --all-features --no-deps --document-private-items
-            --profile production
+            ${{matrix.build-config.args}}
 
   build-and-test:
     name: >-
-      Build and test (${{matrix.os}} -
-      ${{matrix.build-type}} build -
-      ${{matrix.toolchain}} toolchain)
-    runs-on: ${{matrix.os}}
+      Build+Test:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}},
+      ${{matrix.toolchain}}
+    needs: setup-build-matrix
     strategy:
-      matrix:
-        os:
-          - ubuntu-20.04
-          - windows-2022
-          - macos-11
-        toolchain: [stable]
-        build-type: [debug, release, production]
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
     steps:
       - uses: actions/checkout@v3
       - uses: dawidd6/action-get-tag@v1
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        if: ${{startsWith(github.ref, 'refs/tags/')}}
         id: tag
-      - name: Install toolchain (${{matrix.toolchain}})
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
-
-      - name: Build (${{matrix.build-type}})
+      - name: Build
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: build
           args: >-
             --all-features --all-targets
-      - name: Test (${{matrix.build-type}})
+            ${{matrix.build-config.args}}
+      - name: Test
         uses: actions-rs/cargo@v1
-        if: ${{ matrix.build-type == 'debug' }}
         with:
           command: test
           args: >-
             --all-features --all-targets
+            ${{matrix.build-config.args}}
+      - name: Create tarball
+        if: ${{matrix.build-config.id == 'production'}}
+        shell: bash
+        run: |
+          export PKG=tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}
+          mkdir $PKG
+          cp target/production/tvrank $PKG/tvrank${{matrix.os.execext}}
+          cp LICENSE $PKG/LICENSE
+          cp README.md $PKG/README.md
+          ${{matrix.os.pkgcmd}}
+      - name: Upload tarball
+        if: ${{matrix.build-config.id == 'production'}}
+        uses: actions/upload-artifact@v2
+        with:
+          name: >-
+            tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}${{matrix.os.pkgext}}
+          path: >-
+            tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}${{matrix.os.pkgext}}
 
-      - name: Build (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        if: ${{ matrix.build-type == 'release' }}
-        with:
-          command: build
-          args: >-
-            --all-features --all-targets
-            --release
-      - name: Test (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        if: ${{ matrix.build-type == 'release' }}
-        with:
-          command: test
-          args: >-
-            --all-features --all-targets
-            --release
+  publish-github:
+    name: Publish to Github
+    needs:
+      - code-formatting
+      - lint
+      - documentation
+      - build-and-test
+    if: ${{startsWith(github.ref, 'refs/tags/')}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dawidd6/action-get-tag@v1
+        id: tag
 
-      - name: Build (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        if: >-
-          ${{ matrix.build-type == 'production' &&
-          startsWith(github.ref, 'refs/tags/') }}
+      - name: Download Linux tarball
+        uses: actions/download-artifact@v2
         with:
-          command: build
-          args: >-
-            --all-features --all-targets
-            --profile production
-      - name: Test (${{matrix.build-type}})
-        uses: actions-rs/cargo@v1
-        if: >-
-          ${{ matrix.build-type == 'production' &&
-          startsWith(github.ref, 'refs/tags/') }}
+          name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
+      - name: Download MacOS tarball
+        uses: actions/download-artifact@v2
         with:
-          command: test
-          args: >-
-            --all-features --all-targets
-            --profile production
+          name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
+      - name: Download Windows tarball
+        uses: actions/download-artifact@v2
+        with:
+          name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
+
+      - name: Create Release on Github
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          tag_name: ${{steps.tag.outputs.tag}}
+          release_name: tvrank-${{steps.tag.outputs.tag}}
+          body_path: changelogs/${{steps.tag.outputs.tag}}.md
+
+      - name: Upload Linux tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
+          asset_name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
+          asset_content_type: application/x-bzip2
+
+      - name: Upload MacOS tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
+          asset_name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
+          asset_content_type: application/x-bzip2
+
+      - name: Upload Windows tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: tvrank-${{steps.tag.outputs.tag}}-windows.zip
+          asset_name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
+          asset_content_type: application/zip
+
+  publish-crates-io:
+    name: Publish to Crates.io
+    needs:
+      - code-formatting
+      - lint
+      - documentation
+      - build-and-test
+    if: ${{startsWith(github.ref, 'refs/tags/')}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Publish to Crates.io
+        env:
+          CRATES_IO_TOKEN: ${{secrets.CRATES_IO_TOKEN}}
+        run: cargo publish --token ${CRATES_IO_TOKEN}
 ...
