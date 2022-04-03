@@ -6,6 +6,7 @@ use crate::imdb::title::TsvAction;
 use crate::imdb::title_id::TitleId;
 use crate::Res;
 use aho_corasick::AhoCorasickBuilder;
+use aho_corasick::MatchKind as ACMatchKind;
 use derive_more::{Display, From, Into};
 use deunicode::deunicode;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -311,7 +312,7 @@ impl<C> DbImpl<C> {
   /// # Arguments
   /// * `keywords` - Keywords to be searched in the titles
   fn cookies_by_keywords<'a, 'k>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a C> {
-    let searcher = AhoCorasickBuilder::new().build(keywords);
+    let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
     let keywords_len = keywords.len();
     self
       .by_title
@@ -333,7 +334,7 @@ impl<C> DbImpl<C> {
     keywords: &'k [&str],
     year: u16,
   ) -> impl Iterator<Item = &'a C> {
-    let searcher = AhoCorasickBuilder::new().build(keywords);
+    let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
     let keywords_len = keywords.len();
     self
       .by_title
