@@ -4,6 +4,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: '*'
   pull_request:
     branches: [main]
   workflow_call:
@@ -38,7 +39,8 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check -l
+          args: >-
+            --all -- --check -l
 
   lint:
     name: >-
@@ -54,9 +56,12 @@ jobs:
           - windows-2022
           - macos-11
         toolchain: [stable]
-        build-type: [debug, release]
+        build-type: [debug, release, production]
     steps:
       - uses: actions/checkout@v3
+      - uses: dawidd6/action-get-tag@v1
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        id: tag
       - name: Install toolchain (${{matrix.toolchain}})
         uses: actions-rs/toolchain@v1
         with:
@@ -70,14 +75,27 @@ jobs:
         if: ${{ matrix.build-type == 'debug' }}
         with:
           command: clippy
-          args: --all-targets --all-features
+          args: >-
+            --all-targets --all-features
 
       - name: Lint (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
         if: ${{ matrix.build-type == 'release' }}
         with:
           command: clippy
-          args: --all-targets --all-features --release
+          args: >-
+            --all-targets --all-features --release
+
+      - name: Lint (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        if: >-
+          ${{ matrix.build-type == 'production' &&
+          startsWith(github.ref, 'refs/tags/') }}
+        with:
+          command: clippy
+          args: >-
+            --all-targets --all-features
+            --profile production
 
   documentation:
     name: >-
@@ -93,9 +111,12 @@ jobs:
           - windows-2022
           - macos-11
         toolchain: [stable]
-        build-type: [debug, release]
+        build-type: [debug, release, production]
     steps:
       - uses: actions/checkout@v3
+      - uses: dawidd6/action-get-tag@v1
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        id: tag
       - name: Install toolchain (${{matrix.toolchain}})
         uses: actions-rs/toolchain@v1
         with:
@@ -110,7 +131,8 @@ jobs:
         if: ${{ matrix.build-type == 'debug' }}
         with:
           command: doc
-          args: --all-features --no-deps --document-private-items
+          args: >-
+            --all-features --no-deps --document-private-items
 
       - name: Documentation (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
@@ -119,7 +141,22 @@ jobs:
         if: ${{ matrix.build-type == 'release' }}
         with:
           command: doc
-          args: --all-features --no-deps --document-private-items --release
+          args: >-
+            --all-features --no-deps --document-private-items
+            --release
+
+      - name: Documentation (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        if: >-
+          ${{ matrix.build-type == 'production' &&
+          startsWith(github.ref, 'refs/tags/') }}
+        with:
+          command: doc
+          args: >-
+            --all-features --no-deps --document-private-items
+            --profile production
 
   build-and-test:
     name: >-
@@ -134,9 +171,12 @@ jobs:
           - windows-2022
           - macos-11
         toolchain: [stable]
-        build-type: [debug, release]
+        build-type: [debug, release, production]
     steps:
       - uses: actions/checkout@v3
+      - uses: dawidd6/action-get-tag@v1
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        id: tag
       - name: Install toolchain (${{matrix.toolchain}})
         uses: actions-rs/toolchain@v1
         with:
@@ -149,24 +189,51 @@ jobs:
         if: ${{ matrix.build-type == 'debug' }}
         with:
           command: build
-          args: --all-features --all-targets
+          args: >-
+            --all-features --all-targets
       - name: Test (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
         if: ${{ matrix.build-type == 'debug' }}
         with:
           command: test
-          args: --all-features --all-targets
+          args: >-
+            --all-features --all-targets
 
       - name: Build (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
         if: ${{ matrix.build-type == 'release' }}
         with:
           command: build
-          args: --all-features --all-targets --release
+          args: >-
+            --all-features --all-targets
+            --release
       - name: Test (${{matrix.build-type}})
         uses: actions-rs/cargo@v1
         if: ${{ matrix.build-type == 'release' }}
         with:
           command: test
-          args: --all-features --all-targets --release
+          args: >-
+            --all-features --all-targets
+            --release
+
+      - name: Build (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        if: >-
+          ${{ matrix.build-type == 'production' &&
+          startsWith(github.ref, 'refs/tags/') }}
+        with:
+          command: build
+          args: >-
+            --all-features --all-targets
+            --profile production
+      - name: Test (${{matrix.build-type}})
+        uses: actions-rs/cargo@v1
+        if: >-
+          ${{ matrix.build-type == 'production' &&
+          startsWith(github.ref, 'refs/tags/') }}
+        with:
+          command: test
+          args: >-
+            --all-features --all-targets
+            --profile production
 ...
