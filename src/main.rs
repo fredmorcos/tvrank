@@ -211,7 +211,7 @@ fn create_keywords_set(title: &str) -> Res<Vec<&str>> {
   Ok(keywords)
 }
 
-fn imdb_single_title<'a>(
+fn imdb_title<'a>(
   title: &str,
   imdb: &'a Imdb,
   imdb_url: &Url,
@@ -568,7 +568,7 @@ fn main() {
       let context = Context::new(general_opts, args.general_opts);
       let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
-      fail!(context.have_logger, imdb_single_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
+      fail!(context.have_logger, imdb_title(&title, &context.service, &context.imdb_url, &search_opts, exact, printer) => {
         context.destroy();
       });
       debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
