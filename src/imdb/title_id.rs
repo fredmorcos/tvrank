@@ -73,6 +73,14 @@ impl<'storage> TryFrom<&'storage [u8]> for TitleId<'storage> {
   }
 }
 
+impl<'a> TryFrom<&'a str> for TitleId<'a> {
+  type Error = Box<dyn Error>;
+
+  fn try_from(id: &'a str) -> Result<Self, Self::Error> {
+    TitleId::try_from(id.as_bytes())
+  }
+}
+
 impl fmt::Display for TitleId<'_> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{}", self.as_str())

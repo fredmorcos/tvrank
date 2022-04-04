@@ -41,11 +41,14 @@ For information on how to use the library, see below.
 The `TVrank` command-line interface has a few modes accessible through the use of
 sub-commands:
 
-* `title "KEYWORDS..."` to search by keywords.
-* `title "KEYWORDS... (YYYY)"` to search by keywords in a specific year.
-* `title "TITLE (YYYY)" --exact` to search for and exact title in a specific year.
-* `title "TITLE" --exact` to search for an exact title (`-e` also means exact).
-* `movies-dir` and `series-dir` to make batch queries based on directory scans.
+- `title "KEYWORDS..."` to search by keywords.
+- `title "KEYWORDS... (YYYY)"` to search by keywords in a specific year.
+- `title "TITLE (YYYY)" --exact` to search for and exact title in a specific year.
+- `title "TITLE" --exact` to search for an exact title (`-e` also means exact).
+- `movies-dir` and `series-dir` to make batch queries based on directory scans.
+- `mark` to mark a directory with a title information file (`tvrank.json`).
+
+### Examples
 
 To search for a specific title:
 
@@ -74,7 +77,7 @@ $ tvrank title "the great gatsby" -e
 To query a series directory:
 
 ```sh
-$ tvrank series-dir <MEDIA_DIR>
+$ tvrank series-dir <SERIES_MEDIA_DIR>
 ```
 
 Also, by default `TVrank` will sort by rating, year and title. To instead sort by year,
@@ -95,6 +98,107 @@ You can change the output format to `json` or `yaml`:
 ```sh
 $ tvrank title "the great gatsby" --output json
 ```
+
+### Batch Queries
+
+`TVrank` can recursively scan directories and print out information about titles it
+finds. This is achieved using the `movies-dir` and `series-dir` subcommands.
+
+#### Movie Batch Queries
+
+`TVrank` expects movie directories to be under a top-level movies media directory (herein
+called `movies`), as follows:
+
+```
+movies
+├── ...
+├── 127 Hours (2010)
+├── 12 Mighty Orphans (2021)
+├── 12 Monkeys (1995)
+├── 12 Years a Slave (2013)
+├── 13 Hours The Secret Soldiers of Benghazi (2016)
+├── ...
+```
+
+Movie sub-directories are expected to follow the `TITLE (YYYY)` format where the `TITLE`
+matches either the primary or original movie title.
+
+If a movie sub-directory does not adhere to this format, `TVrank` will recursively search
+it for more titles. An example of that is as follows:
+
+```
+movies
+├── ...
+├── The Naked Gun
+│   ├── The Naked Gun (1988)
+│   ├── The Naked Gun 2½ The Smell of Fear (1991)
+│   └── The Naked Gun 33 1-3 The Final Insult (1994)
+├── ...
+```
+
+#### Series Batch Queries
+
+`TVrank` also expects series directories to be under a top-level series media directory
+(herein called `series`) following either `TITLE` or `TITLE (YYYY)` format. The `TITLE
+(YYYY)` format can be used for series to easily disambiguate similarly-titled
+series. Examples:
+
+```
+series
+├── ...
+├── House of Cards (1990)
+├── Killing Eve
+├── Kingdom (2019)
+├── ...
+```
+
+#### Handling Ambiguity in Batch Queries
+
+Sometimes it is impossible to distinguish between titles just from their original/primary
+title and release year, this is due to multiple movies or series being released during the
+same year using the same exact title.
+
+To handle this issue, `TVrank` supports the ability to explicitly provide title
+information files (called `tvrank.json`) under the corresponding title directory. These
+files are detected when using the `movies-dir` and `series-dir` sub-commands and are used
+for exact identification using the title's unique ID.
+
+A `tvrank.json` file looks like this:
+
+```json
+{
+  "imdb": {
+    "id": "ttXXXXXXXX"
+  }
+}
+```
+
+where "ttXXXXXXXX" is the IMDB title id shown under the `IMDB ID` column or available as
+part of the IMDB URL of a title.
+
+You can ask `TVrank` to write the title information (`tvrank.json`) file for you by using
+the `mark` sub-command and passing it the title's directory and ID that you would like to
+write.
+
+```sh
+tvrank mark "movies/The Great Gatsby (2013)" tt1343092
+```
+
+This will results in a file called `movies/The Great Gatsby (2013)/tvrank.json` containing
+the following information:
+
+```json
+{
+  "imdb": {
+    "id": "tt1343092"
+  }
+}
+```
+
+If a `tvrank.json` file already exists, `TVrank` will refuse to overwrite it. To force
+overwriting it, the `--force` flag can be used.
+
+### Verbosity
 
 To print out more information about what the application is doing, use `-v` before any
 sub-command. Multiple occurrences of `-v` on the command-line will increase the verbosity
