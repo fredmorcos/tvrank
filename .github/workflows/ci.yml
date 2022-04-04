@@ -261,7 +261,7 @@ jobs:
           upload_url: ${{steps.create_release.outputs.upload_url}}
           asset_path: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
           asset_name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
-          asset_content_type: application/x-bzip2
+          asset_content_type: application/x-apple-diskimage
 
       - name: Upload Windows tarball
         uses: actions/upload-release-asset@v1
