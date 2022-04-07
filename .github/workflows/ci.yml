@@ -14,7 +14,8 @@ env:
 
 jobs:
   code-formatting:
-    name: Code formatting | ${{matrix.os.edition}} - ${{matrix.toolchain}}
+    name: >-
+      Code formatting: ${{matrix.toolchain}}
     strategy:
       matrix:
         toolchain: [stable]
