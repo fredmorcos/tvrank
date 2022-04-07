@@ -139,8 +139,7 @@ struct SearchOpts {
 }
 
 #[derive(Debug, clap::Parser)]
-#[clap(about = "Query information about movies and series")]
-#[clap(author = "Fred Morcos <fm@fredmorcos.com>")]
+#[clap(author, version, about, long_about = None)]
 struct Opt {
   #[clap(flatten)]
   general_opts: GeneralOpts,
