@@ -57,14 +57,18 @@ jobs:
                 'edition': 'ubuntu-20.04',
                 'execext': '',
                 'pkgext': '.tar.bz2',
-                'pkgcmd': 'tar -c -f $PKG${{matrix.os.pkgext}} $PKG',
+                'pkgcmd': ('tar -c -f '
+                           '$PKG${{steps.set-matrix.outputs.matrix.os.pkgext}} '
+                           '$PKG'),
               },
               {
                 'name': 'windows',
                 'edition': 'windows-2022',
                 'execext': '.exe',
                 'pkgext': '.zip',
-                'pkgcmd': '7z a $PKG${{matrix.os.pkgext}} $PKG',
+                'pkgcmd': ('7z a '
+                           '$PKG${{steps.set-matrix.outputs.matrix.os.pkgext}} '
+                           '$PKG'),
               },
               {
                 'name': 'macos',
@@ -72,7 +76,8 @@ jobs:
                 'execext': '',
                 'pkgext': '.dmg',
                 'pkgcmd': ('hdiutil create -format UDZO -srcfolder '
-                           '$PKG $PKG${{matrix.os.pkgext}}'),
+                           '$PKG '
+                           '$PKG${{steps.set-matrix.outputs.matrix.os.pkgext}}'),
               },
             ],
             'toolchain': [
