@@ -1,9 +1,10 @@
 ---
-name: Lint, documentation, builds and tests
+name: CI
 
 on:
   push:
     branches: [main]
+    tags: '*'
   pull_request:
     branches: [main]
 
@@ -12,77 +13,279 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
-  lint-docs-build-tests:
-    name: >-
-      Lint/Docs/Build/Tests on ${{matrix.os}}
-      with the ${{matrix.toolchain}} Toolchain
-    runs-on: ${{matrix.os}}
+  code-formatting:
+    name: Code formatting | ${{matrix.os.edition}} - ${{matrix.toolchain}}
     strategy:
       matrix:
-        os:
-          - ubuntu-20.04
-          - windows-2022
-          - macos-11
         toolchain: [stable]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Install Toolchain (${{matrix.toolchain}})
+      - uses: actions/checkout@v3
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: ${{matrix.toolchain}}
           override: true
-          components: rustfmt, clippy
-
-      - name: Code Formatting
+          components: rustfmt
+      - name: Code formatting
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check -l
+          args: >-
+            --all -- --check -l
 
-      - name: Debug Lint
+  setup-build-matrix:
+    name: Setup build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{steps.set-matrix.outputs.matrix}}
+    steps:
+      - id: set-matrix
+        shell: python
+        env:
+          ENABLE_PRODUCTION: ${{startsWith(github.ref, 'refs/tags/')}}
+        run: |
+          import os
+          import json
+
+          matrix = {
+            'os': [
+              {
+                'name': 'linux',
+                'edition': 'ubuntu-20.04',
+                'execext': '',
+                'pkgext': '.tar.bz2',
+                'pkgcmd': 'tar -c -f $PKG${{matrix.os.pkgext}} $PKG',
+              },
+              {
+                'name': 'windows',
+                'edition': 'windows-2022',
+                'execext': '.exe',
+                'pkgext': '.zip',
+                'pkgcmd': '7z a $PKG${{matrix.os.pkgext}} $PKG',
+              },
+              {
+                'name': 'macos',
+                'edition': 'macos-11',
+                'execext': '',
+                'pkgext': '.dmg',
+                'pkgcmd': ('hdiutil create -format UDZO -srcfolder '
+                           '$PKG $PKG${{matrix.os.pkgext}}'),
+              },
+            ],
+            'toolchain': [
+              'stable',
+            ],
+            'build-config': [
+              {
+                'id': 'debug',
+                'args': '',
+              },
+              {
+                'id': 'release',
+                'args': '--release',
+              },
+            ]
+          }
+
+          if os.getenv('ENABLE_PRODUCTION', default='false') == 'true':
+            matrix['build-config'].append({
+              'id': 'production',
+              'args': '--profile production',
+            })
+
+          print('::set-output name=matrix::%s' % json.dumps(matrix))
+
+  lint:
+    name: >-
+      Lint:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}},
+      ${{matrix.toolchain}}
+    needs: setup-build-matrix
+    strategy:
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{matrix.toolchain}}
+          override: true
+          components: clippy
+      - name: Lint
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --all-features
-      - name: Debug Documentation
+          args: >-
+            --all-targets --all-features
+            ${{matrix.build-config.args}}
+
+  documentation:
+    name: >-
+      Doc:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}},
+      ${{matrix.toolchain}}
+    needs: setup-build-matrix
+    strategy:
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{matrix.toolchain}}
+          override: true
+      - name: Doc
         uses: actions-rs/cargo@v1
         env:
           RUSTDOCFLAGS: -Dwarnings
         with:
           command: doc
-          args: --all-features --no-deps --document-private-items
-      - name: Debug Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-features
-      - name: Debug Tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
+          args: >-
+            --all-features --no-deps --document-private-items
+            ${{matrix.build-config.args}}
 
-      - name: Release Lint
-        uses: actions-rs/cargo@v1
+  build-and-test:
+    name: >-
+      Build+Test:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}},
+      ${{matrix.toolchain}}
+    needs: setup-build-matrix
+    strategy:
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dawidd6/action-get-tag@v1
+        if: ${{startsWith(github.ref, 'refs/tags/')}}
+        id: tag
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
-          command: clippy
-          args: --all-targets --all-features --release
-      - name: Release Documentation
-        uses: actions-rs/cargo@v1
-        env:
-          RUSTDOCFLAGS: -Dwarnings
-        with:
-          command: doc
-          args: --all-features --no-deps --document-private-items --release
-      - name: Release Build
+          profile: minimal
+          toolchain: ${{matrix.toolchain}}
+          override: true
+      - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-features --release
-      - name: Release Tests
+          args: >-
+            --all-features --all-targets
+            ${{matrix.build-config.args}}
+      - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features --release
+          args: >-
+            --all-features --all-targets
+            ${{matrix.build-config.args}}
+      - name: Create tarball
+        if: ${{matrix.build-config.id == 'production'}}
+        shell: bash
+        run: |
+          export PKG=tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}
+          mkdir $PKG
+          cp target/production/tvrank $PKG/tvrank${{matrix.os.execext}}
+          cp LICENSE $PKG/LICENSE
+          cp README.md $PKG/README.md
+          ${{matrix.os.pkgcmd}}
+      - name: Upload tarball
+        if: ${{matrix.build-config.id == 'production'}}
+        uses: actions/upload-artifact@v2
+        with:
+          name: >-
+            tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}${{matrix.os.pkgext}}
+          path: >-
+            tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}${{matrix.os.pkgext}}
+
+  publish-github:
+    name: Publish to Github
+    needs:
+      - code-formatting
+      - lint
+      - documentation
+      - build-and-test
+    if: ${{startsWith(github.ref, 'refs/tags/')}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dawidd6/action-get-tag@v1
+        id: tag
+
+      - name: Download Linux tarball
+        uses: actions/download-artifact@v2
+        with:
+          name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
+      - name: Download MacOS tarball
+        uses: actions/download-artifact@v2
+        with:
+          name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
+      - name: Download Windows tarball
+        uses: actions/download-artifact@v2
+        with:
+          name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
+
+      - name: Create Release on Github
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          tag_name: ${{steps.tag.outputs.tag}}
+          release_name: tvrank-${{steps.tag.outputs.tag}}
+          body_path: changelogs/${{steps.tag.outputs.tag}}.md
+
+      - name: Upload Linux tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
+          asset_name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
+          asset_content_type: application/x-bzip2
+
+      - name: Upload MacOS tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
+          asset_name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
+          asset_content_type: application/x-apple-diskimage
+
+      - name: Upload Windows tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: tvrank-${{steps.tag.outputs.tag}}-windows.zip
+          asset_name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
+          asset_content_type: application/zip
+
+  publish-crates-io:
+    name: Publish to Crates.io
+    needs:
+      - code-formatting
+      - lint
+      - documentation
+      - build-and-test
+    if: ${{startsWith(github.ref, 'refs/tags/')}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Publish to Crates.io
+        env:
+          CRATES_IO_TOKEN: ${{secrets.CRATES_IO_TOKEN}}
+        run: cargo publish --token ${CRATES_IO_TOKEN}
 ...
