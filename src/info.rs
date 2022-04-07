@@ -2,7 +2,7 @@
 
 use derive_more::Display;
 use log::warn;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::error::Error;
 use std::fs;
 use std::io::BufReader;
@@ -16,15 +16,20 @@ pub struct InfoErr;
 
 impl Error for InfoErr {}
 
-#[derive(Deserialize)]
-pub struct TitleInfo {
-  imdb: ImdbTitleInfo,
+#[derive(Serialize, Deserialize)]
+pub struct ImdbTitleInfo<'a> {
+  #[serde(deserialize_with = "deserialize_titleid")]
+  id: ImdbTitleId<'a>,
 }
 
-#[derive(Deserialize)]
-pub struct ImdbTitleInfo {
-  #[serde(deserialize_with = "deserialize_titleid")]
-  id: ImdbTitleId<'static>,
+impl<'a> ImdbTitleInfo<'a> {
+  pub fn new(id: ImdbTitleId<'a>) -> Self {
+    Self { id }
+  }
+
+  pub fn id(&self) -> &ImdbTitleId {
+    &self.id
+  }
 }
 
 fn deserialize_titleid<'de, D>(deserializer: D) -> Result<ImdbTitleId<'static>, D::Error>
@@ -36,13 +41,16 @@ where
   Ok(title_id)
 }
 
-impl ImdbTitleInfo {
-  pub fn id(&self) -> &ImdbTitleId<'static> {
-    &self.id
-  }
+#[derive(Serialize, Deserialize)]
+pub struct TitleInfo<'a> {
+  imdb: ImdbTitleInfo<'a>,
 }
 
-impl TitleInfo {
+impl<'a> TitleInfo<'a> {
+  pub fn new(id: ImdbTitleId<'a>) -> Self {
+    Self { imdb: ImdbTitleInfo::new(id) }
+  }
+
   pub fn from_path(path: &Path) -> Res<TitleInfo> {
     let title_info_path = path.join("tvrank.json");
     let title_info_file = fs::File::open(&title_info_path)?;

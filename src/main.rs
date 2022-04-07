@@ -23,10 +23,11 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
 use std::error::Error;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tvrank::imdb::{Imdb, ImdbQuery};
+use tvrank::imdb::{Imdb, ImdbQuery, ImdbTitleId};
 use tvrank::Res;
 use walkdir::WalkDir;
 
@@ -37,6 +38,10 @@ enum TvRankErr {
   CacheDir,
   #[display(fmt = "Empty set of keywords")]
   NoKeywords,
+  #[display(fmt = "`{}` is not a directory", "_0.display()")]
+  NotADirectory(PathBuf),
+  #[display(fmt = "Id `{}` was not found", _0)]
+  UnknownImdbId(String),
 }
 
 impl TvRankErr {
@@ -46,6 +51,14 @@ impl TvRankErr {
 
   fn no_keywords<T>() -> Res<T> {
     Err(Box::new(TvRankErr::NoKeywords))
+  }
+
+  fn not_a_directory<T>(path: PathBuf) -> Res<T> {
+    Err(Box::new(TvRankErr::NotADirectory(path)))
+  }
+
+  fn unknown_imdb_id<T>(id: String) -> Res<T> {
+    Err(Box::new(TvRankErr::UnknownImdbId(id)))
   }
 }
 
@@ -179,6 +192,24 @@ enum Command {
 
     #[clap(flatten)]
     search_opts: SearchOpts,
+  },
+
+  /// Force DIR to use IMDB-ID in case of ambiguity
+  Mark {
+    /// Directory of title in "TITLE [(YYYY)]"
+    #[clap(name = "DIR")]
+    dir: PathBuf,
+
+    /// The unique IMDB ID ("ttXXXXX" which can be found in the URL)
+    #[clap(name = "IMDB-ID")]
+    id: String,
+
+    /// Force overwriting of the title information (tvrank.json) file
+    #[clap(short, long)]
+    force: bool,
+
+    #[clap(flatten)]
+    general_opts: GeneralOpts,
   },
 }
 
@@ -335,6 +366,48 @@ fn imdb_movies_dir(
   }
 
   printer.print(Some(results), None, imdb_url, None)?;
+
+  Ok(())
+}
+
+fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res<()> {
+  // DONE 1.   Check if the directory exist.
+  // DONE 2.   If not, fail.
+  // DONE 3.   Check if tvrank.json exists in there.
+  // DONE 4.   If it exists, fail.
+  // DONE 4.1. Add a --force flag to the mark subcommand to force-overwiting the tvrank.json file
+  // DONE 5.   Check if the imdb id exists in the database.
+  // DONE 6.   If it doesn't exist, fail.
+  //      7.   Check if the imdb id matches the title and year of the directory name.
+  // DONE 8.   Create titleinfo object
+  // DONE 8.1. Serialize it into the json file
+  //      9.   Check if the directory follows the naming convention
+  //      10.  ImbdTitleID try_from should fail on trailing non-numeric characters
+
+  let title_id = ImdbTitleId::try_from(id)?;
+
+  if !dir.is_dir() {
+    return TvRankErr::not_a_directory(dir.into());
+  }
+
+  if imdb
+    .by_id(&title_id, ImdbQuery::Movies)
+    .or_else(|| imdb.by_id(&title_id, ImdbQuery::Series))
+    .is_none()
+  {
+    return TvRankErr::unknown_imdb_id(id.to_owned());
+  }
+
+  let title_info = TitleInfo::new(title_id);
+
+  let title_info_path = dir.join("tvrank.json");
+  let mut file = OpenOptions::new()
+    .create(true)
+    .truncate(true)
+    .write(true)
+    .create_new(!force)
+    .open(&title_info_path)?;
+  file.write_all(serde_json::to_string_pretty(&title_info)?.as_bytes())?;
 
   Ok(())
 }
@@ -589,6 +662,15 @@ fn main() {
       let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
       fail!(context.have_logger, imdb_series_dir(&dir, &context.service, &context.imdb_url, &search_opts, printer) => {
+        context.destroy();
+      });
+      debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
+      context.destroy();
+    }
+    Command::Mark { dir, id, general_opts, force } => {
+      let context = Context::new(general_opts, args.general_opts);
+      let start_time = Instant::now();
+      fail!(context.have_logger, imdb_mark(&dir, &id, &context.service, force) => {
         context.destroy();
       });
       debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
