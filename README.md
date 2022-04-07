@@ -11,7 +11,7 @@
 [![Github Closed Issues](https://img.shields.io/github/issues-closed-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues?q=is%3Aissue+is%3Aclosed)
 [![Github Open Pull Requests](https://img.shields.io/github/issues-pr-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/pulls)
 [![Github Closed Pull Requests](https://img.shields.io/github/issues-pr-closed-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/pulls?q=is%3Apr+is%3Aclosed)
-[![Contributors](https://img.shields.io/github/contributors/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/graphs/contributors)
+[![Contributors](https://img.shields.io/github/contributors-anon/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/graphs/contributors)
 
 [Github Repository](https://github.com/fredmorcos/tvrank)
 
