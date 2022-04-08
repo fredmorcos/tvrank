@@ -115,6 +115,24 @@ jobs:
     runs-on: ${{matrix.os.edition}}
     steps:
       - uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo
+            ~/.rustup
+          key: >-
+            lint-deps-
+            ${{matrix.os.edition}}-
+            ${{matrix.build-config.id}}-
+            ${{matrix.toolchain}}-
+            ${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            lint-deps-${{matrix.build-config.id}}-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            lint-deps-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            lint-deps-${{matrix.os.edition}}-
+            lint-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -142,6 +160,24 @@ jobs:
     runs-on: ${{matrix.os.edition}}
     steps:
       - uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo
+            ~/.rustup
+          key: >-
+            doc-deps-
+            ${{matrix.os.edition}}-
+            ${{matrix.build-config.id}}-
+            ${{matrix.toolchain}}-
+            ${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            doc-deps-${{matrix.build-config.id}}-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            doc-deps-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            doc-deps-${{matrix.os.edition}}-
+            doc-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -173,6 +209,24 @@ jobs:
       - uses: dawidd6/action-get-tag@v1
         if: ${{startsWith(github.ref, 'refs/tags/')}}
         id: tag
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo
+            ~/.rustup
+          key: >-
+            build-deps-
+            ${{matrix.os.edition}}-
+            ${{matrix.build-config.id}}-
+            ${{matrix.toolchain}}-
+            ${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            build-deps-${{matrix.build-config.id}}-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            build-deps-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            build-deps-${{matrix.os.edition}}-
+            build-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -202,6 +256,7 @@ jobs:
           cp target/production/tvrank $PKG/tvrank${{matrix.os.execext}}
           cp LICENSE $PKG/LICENSE
           cp README.md $PKG/README.md
+          cp -r changelogs $PKG/changelogs
           ${{matrix.os.pkgcmd}}
       - name: Upload tarball
         if: ${{matrix.build-config.id == 'production'}}
