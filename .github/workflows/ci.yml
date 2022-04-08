@@ -58,7 +58,7 @@ jobs:
                 'execext': '',
                 'pkgext': '.tar.bz2',
                 'pkgcmd': ('tar -c -f '
-                           '$PKG${{steps.set-matrix.outputs.matrix.os.pkgext}} '
+                           '$PKG.tar.bz2 '
                            '$PKG'),
               },
               {
@@ -67,7 +67,7 @@ jobs:
                 'execext': '.exe',
                 'pkgext': '.zip',
                 'pkgcmd': ('7z a '
-                           '$PKG${{steps.set-matrix.outputs.matrix.os.pkgext}} '
+                           '$PKG.zip '
                            '$PKG'),
               },
               {
@@ -77,7 +77,7 @@ jobs:
                 'pkgext': '.dmg',
                 'pkgcmd': ('hdiutil create -format UDZO -srcfolder '
                            '$PKG '
-                           '$PKG${{steps.set-matrix.outputs.matrix.os.pkgext}}'),
+                           '$PKG.dmg'),
               },
             ],
             'toolchain': [
