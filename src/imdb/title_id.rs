@@ -2,7 +2,7 @@
 
 use crate::imdb::error::Err;
 use crate::imdb::utils::tokens;
-use atoi::atoi;
+use atoi::FromRadix10;
 use serde::{Serialize, Serializer};
 use std::error::Error;
 use std::fmt;
@@ -63,8 +63,12 @@ impl<'storage> TryFrom<&'storage [u8]> for TitleId<'storage> {
       return Err::id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned());
     }
 
-    let num = atoi::<usize>(&bytes[2..])
-      .ok_or_else(|| Err::IdNumber(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned()))?;
+    let num = &bytes[2..];
+    let num_len = num.len();
+    let num = match usize::from_radix_10(num) {
+      (val, len) if len == num_len => val,
+      _ => return Err::id_number(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned()),
+    };
 
     Ok(TitleId { bytes, num })
   }

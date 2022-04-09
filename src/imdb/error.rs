@@ -62,7 +62,12 @@ impl Err {
     Err(Box::new(Err::Id(id)))
   }
 
-  /// Returns a Result containing a DuplicateId error with the given ID   
+  /// Returns a Result containing an ID Number error
+  pub(crate) fn id_number<T>(id: String) -> Res<T> {
+    Err(Box::new(Err::IdNumber(id)))
+  }
+
+  /// Returns a Result containing a DuplicateId error with the given ID
   pub(crate) fn duplicate_id<T>(id: String) -> Res<T> {
     Err(Box::new(Err::DuplicateId(id)))
   }
