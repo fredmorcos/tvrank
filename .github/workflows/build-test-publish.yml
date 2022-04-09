@@ -122,7 +122,6 @@ jobs:
           restore-keys: |
             lint-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
             lint-deps-${{matrix.os.name}}-
-            lint-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -164,7 +163,6 @@ jobs:
           restore-keys: |
             doc-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
             doc-deps-${{matrix.os.name}}-
-            doc-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -210,7 +208,6 @@ jobs:
           restore-keys: |
             build-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
             build-deps-${{matrix.os.name}}-
-            build-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
