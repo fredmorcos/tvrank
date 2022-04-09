@@ -32,7 +32,7 @@ impl<'a> ImdbTitleInfo<'a> {
   }
 }
 
-fn deserialize_titleid<'de, D>(deserializer: D) -> Result<ImdbTitleId<'static>, D::Error>
+fn deserialize_titleid<'a, 'de, D>(deserializer: D) -> Result<ImdbTitleId<'a>, D::Error>
 where
   D: Deserializer<'de>,
 {
