@@ -1,9 +1,9 @@
 #![warn(clippy::all)]
 
 use crate::imdb::db::{Db, Query};
-use crate::imdb::progress::Progress;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
+use crate::imdb::utils::io::Progress;
 use crate::Res;
 use flate2::bufread::GzDecoder;
 use fnv::FnvHashSet;
