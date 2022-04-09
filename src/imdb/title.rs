@@ -40,9 +40,7 @@ pub struct Title<'storage> {
   #[serde(flatten)]
   header: TitleHeader,
 
-  #[serde(flatten)]
   title_id: TitleId<'storage>,
-
   primary_title: &'storage str,
   original_title: Option<&'storage str>,
 }

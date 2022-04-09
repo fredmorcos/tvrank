@@ -9,22 +9,19 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 /// The ID corresponding to a title as u8 and usize
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct TitleId<'storage> {
-  #[serde(serialize_with = "bytes_serializer", rename = "title_id")]
   bytes: &'storage [u8],
-
-  #[serde(skip_serializing)]
   num: usize,
 }
 
-fn bytes_serializer<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-where
-  S: Serializer,
-{
-  let s = unsafe { std::str::from_utf8_unchecked(bytes) };
-
-  serializer.serialize_str(s)
+impl<'storage> Serialize for TitleId<'storage> {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    serializer.serialize_str(unsafe { std::str::from_utf8_unchecked(self.bytes) })
+  }
 }
 
 impl PartialEq for TitleId<'_> {
