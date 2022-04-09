@@ -37,8 +37,8 @@ where
   D: Deserializer<'de>,
 {
   let s = Box::leak(String::deserialize(deserializer)?.into_boxed_str());
-  let title_id = ImdbTitleId::try_from(s.as_bytes()).map_err(serde::de::Error::custom)?;
-  Ok(title_id)
+  let id = ImdbTitleId::try_from(s.as_bytes()).map_err(serde::de::Error::custom)?;
+  Ok(id)
 }
 
 #[derive(Serialize, Deserialize)]
