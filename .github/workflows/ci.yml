@@ -13,29 +13,6 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
-  code-formatting:
-    name: >-
-      Code formatting: ${{matrix.toolchain}}
-    strategy:
-      matrix:
-        toolchain: [stable]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{matrix.toolchain}}
-          override: true
-          components: rustfmt
-      - name: Code formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: >-
-            --all -- --check -l
-
   setup-build-matrix:
     name: Setup build matrix
     runs-on: ubuntu-latest
@@ -80,9 +57,6 @@ jobs:
                            '$PKG.dmg'),
               },
             ],
-            'toolchain': [
-              'stable',
-            ],
             'build-config': [
               {
                 'id': 'debug',
@@ -103,12 +77,30 @@ jobs:
 
           print('::set-output name=matrix::%s' % json.dumps(matrix))
 
+  code-formatting:
+    name: Code formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt
+      - name: Code formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: >-
+            --all -- --check -l
+
   lint:
     name: >-
       Lint:
       ${{matrix.os.edition}},
-      ${{matrix.build-config.id}},
-      ${{matrix.toolchain}}
+      ${{matrix.build-config.id}}
     needs: setup-build-matrix
     strategy:
       matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
@@ -126,18 +118,16 @@ jobs:
             lint-deps-
             ${{matrix.os.edition}}-
             ${{matrix.build-config.id}}-
-            ${{matrix.toolchain}}-
             ${{hashFiles('Cargo.lock')}}
           restore-keys: |
-            lint-deps-${{matrix.build-config.id}}-${{matrix.os.edition}}-${{matrix.toolchain}}-
-            lint-deps-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            lint-deps-${{matrix.os.edition}}-${{matrix.build-config.id}}-
             lint-deps-${{matrix.os.edition}}-
             lint-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{matrix.toolchain}}
+          toolchain: stable
           override: true
           components: clippy
       - name: Lint
@@ -152,8 +142,7 @@ jobs:
     name: >-
       Doc:
       ${{matrix.os.edition}},
-      ${{matrix.build-config.id}},
-      ${{matrix.toolchain}}
+      ${{matrix.build-config.id}}
     needs: setup-build-matrix
     strategy:
       matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
@@ -171,18 +160,16 @@ jobs:
             doc-deps-
             ${{matrix.os.edition}}-
             ${{matrix.build-config.id}}-
-            ${{matrix.toolchain}}-
             ${{hashFiles('Cargo.lock')}}
           restore-keys: |
-            doc-deps-${{matrix.build-config.id}}-${{matrix.os.edition}}-${{matrix.toolchain}}-
-            doc-deps-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            doc-deps-${{matrix.os.edition}}-${{matrix.build-config.id}}-
             doc-deps-${{matrix.os.edition}}-
             doc-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{matrix.toolchain}}
+          toolchain: stable
           override: true
       - name: Doc
         uses: actions-rs/cargo@v1
@@ -198,8 +185,7 @@ jobs:
     name: >-
       Build+Test:
       ${{matrix.os.edition}},
-      ${{matrix.build-config.id}},
-      ${{matrix.toolchain}}
+      ${{matrix.build-config.id}}
     needs: setup-build-matrix
     strategy:
       matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
@@ -220,18 +206,16 @@ jobs:
             build-deps-
             ${{matrix.os.edition}}-
             ${{matrix.build-config.id}}-
-            ${{matrix.toolchain}}-
             ${{hashFiles('Cargo.lock')}}
           restore-keys: |
-            build-deps-${{matrix.build-config.id}}-${{matrix.os.edition}}-${{matrix.toolchain}}-
-            build-deps-${{matrix.os.edition}}-${{matrix.toolchain}}-
+            build-deps-${{matrix.os.edition}}-${{matrix.build-config.id}}-
             build-deps-${{matrix.os.edition}}-
             build-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{matrix.toolchain}}
+          toolchain: stable
           override: true
       - name: Build
         uses: actions-rs/cargo@v1
