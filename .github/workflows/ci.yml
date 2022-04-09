@@ -116,12 +116,12 @@ jobs:
             ~/.rustup
           key: >-
             lint-deps-
-            ${{matrix.os.edition}}-
+            ${{matrix.os.name}}-
             ${{matrix.build-config.id}}-
             ${{hashFiles('Cargo.lock')}}
           restore-keys: |
-            lint-deps-${{matrix.os.edition}}-${{matrix.build-config.id}}-
-            lint-deps-${{matrix.os.edition}}-
+            lint-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
+            lint-deps-${{matrix.os.name}}-
             lint-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -158,12 +158,12 @@ jobs:
             ~/.rustup
           key: >-
             doc-deps-
-            ${{matrix.os.edition}}-
+            ${{matrix.os.name}}-
             ${{matrix.build-config.id}}-
             ${{hashFiles('Cargo.lock')}}
           restore-keys: |
-            doc-deps-${{matrix.os.edition}}-${{matrix.build-config.id}}-
-            doc-deps-${{matrix.os.edition}}-
+            doc-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
+            doc-deps-${{matrix.os.name}}-
             doc-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -204,12 +204,12 @@ jobs:
             ~/.rustup
           key: >-
             build-deps-
-            ${{matrix.os.edition}}-
+            ${{matrix.os.name}}-
             ${{matrix.build-config.id}}-
             ${{hashFiles('Cargo.lock')}}
           restore-keys: |
-            build-deps-${{matrix.os.edition}}-${{matrix.build-config.id}}-
-            build-deps-${{matrix.os.edition}}-
+            build-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
+            build-deps-${{matrix.os.name}}-
             build-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
