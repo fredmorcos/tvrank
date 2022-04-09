@@ -1,5 +1,5 @@
 ---
-name: CI
+name: Build+Test+Publish
 
 on:
   push:
@@ -13,29 +13,6 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
-  code-formatting:
-    name: >-
-      Code formatting: ${{matrix.toolchain}}
-    strategy:
-      matrix:
-        toolchain: [stable]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{matrix.toolchain}}
-          override: true
-          components: rustfmt
-      - name: Code formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: >-
-            --all -- --check -l
-
   setup-build-matrix:
     name: Setup build matrix
     runs-on: ubuntu-latest
@@ -80,9 +57,6 @@ jobs:
                            '$PKG.dmg'),
               },
             ],
-            'toolchain': [
-              'stable',
-            ],
             'build-config': [
               {
                 'id': 'debug',
@@ -103,23 +77,57 @@ jobs:
 
           print('::set-output name=matrix::%s' % json.dumps(matrix))
 
-  lint:
-    name: >-
-      Lint:
-      ${{matrix.os.edition}},
-      ${{matrix.build-config.id}},
-      ${{matrix.toolchain}}
-    needs: setup-build-matrix
-    strategy:
-      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
-    runs-on: ${{matrix.os.edition}}
+  code-formatting:
+    name: Code formatting
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{matrix.toolchain}}
+          toolchain: stable
+          override: true
+          components: rustfmt
+      - name: Code formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: >-
+            --all -- --check -l
+
+  lint:
+    name: >-
+      Lint:
+      ${{matrix.os.edition}},
+      ${{matrix.build-config.id}}
+    needs: setup-build-matrix
+    strategy:
+      matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
+    runs-on: ${{matrix.os.edition}}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo
+            ~/.rustup
+          key: >-
+            lint-deps-
+            ${{matrix.os.name}}-
+            ${{matrix.build-config.id}}-
+            ${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            lint-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
+            lint-deps-${{matrix.os.name}}-
+            lint-deps-
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
           override: true
           components: clippy
       - name: Lint
@@ -134,19 +142,34 @@ jobs:
     name: >-
       Doc:
       ${{matrix.os.edition}},
-      ${{matrix.build-config.id}},
-      ${{matrix.toolchain}}
+      ${{matrix.build-config.id}}
     needs: setup-build-matrix
     strategy:
       matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
     runs-on: ${{matrix.os.edition}}
     steps:
       - uses: actions/checkout@v3
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo
+            ~/.rustup
+          key: >-
+            doc-deps-
+            ${{matrix.os.name}}-
+            ${{matrix.build-config.id}}-
+            ${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            doc-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
+            doc-deps-${{matrix.os.name}}-
+            doc-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{matrix.toolchain}}
+          toolchain: stable
           override: true
       - name: Doc
         uses: actions-rs/cargo@v1
@@ -162,8 +185,7 @@ jobs:
     name: >-
       Build+Test:
       ${{matrix.os.edition}},
-      ${{matrix.build-config.id}},
-      ${{matrix.toolchain}}
+      ${{matrix.build-config.id}}
     needs: setup-build-matrix
     strategy:
       matrix: ${{fromJSON(needs.setup-build-matrix.outputs.matrix)}}
@@ -173,11 +195,27 @@ jobs:
       - uses: dawidd6/action-get-tag@v1
         if: ${{startsWith(github.ref, 'refs/tags/')}}
         id: tag
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            target
+            ~/.cargo
+            ~/.rustup
+          key: >-
+            build-deps-
+            ${{matrix.os.name}}-
+            ${{matrix.build-config.id}}-
+            ${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            build-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
+            build-deps-${{matrix.os.name}}-
+            build-deps-
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{matrix.toolchain}}
+          toolchain: stable
           override: true
       - name: Build
         uses: actions-rs/cargo@v1
@@ -202,6 +240,7 @@ jobs:
           cp target/production/tvrank $PKG/tvrank${{matrix.os.execext}}
           cp LICENSE $PKG/LICENSE
           cp README.md $PKG/README.md
+          cp -r changelogs $PKG/changelogs
           ${{matrix.os.pkgcmd}}
       - name: Upload tarball
         if: ${{matrix.build-config.id == 'production'}}
