@@ -168,7 +168,7 @@ enum Command {
   },
 
   /// Lookup movie titles from a directory
-  MoviesDir {
+  ScanMovies {
     /// Directory of movie folders named "TITLE (YYYY)"
     #[clap(name = "DIR")]
     dir: PathBuf,
@@ -181,7 +181,7 @@ enum Command {
   },
 
   /// Lookup series titles from a directory
-  SeriesDir {
+  ScanSeries {
     /// Directory of series folders named "TITLE [(YYYY)]"
     #[clap(name = "DIR")]
     dir: PathBuf,
@@ -646,7 +646,7 @@ fn main() {
       debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
       context.destroy();
     }
-    Command::MoviesDir { dir, general_opts, search_opts } => {
+    Command::ScanMovies { dir, general_opts, search_opts } => {
       let context = Context::new(general_opts, args.general_opts);
       let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
@@ -656,7 +656,7 @@ fn main() {
       debug!("IMDB query took {}", format_duration(Instant::now().duration_since(start_time)));
       context.destroy();
     }
-    Command::SeriesDir { dir, general_opts, search_opts } => {
+    Command::ScanSeries { dir, general_opts, search_opts } => {
       let context = Context::new(general_opts, args.general_opts);
       let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
