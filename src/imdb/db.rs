@@ -11,26 +11,20 @@ use derive_more::{Display, From, Into};
 use deunicode::deunicode;
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashMap;
-use std::fmt;
 use std::io::{BufRead, Write};
 use std::ops::Index;
 
 /// Specifies the type of title a query is for. E.g. Movies or Series.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Display)]
+#[display(fmt = "{}")]
 pub enum Query {
   /// Query the database of Movies.
+  #[display(fmt = "movie")]
   Movies,
-  /// Query the database of Series.
-  Series,
-}
 
-impl fmt::Display for Query {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Query::Movies => write!(f, "movie"),
-      Query::Series => write!(f, "series"),
-    }
-  }
+  /// Query the database of Series.
+  #[display(fmt = "series")]
+  Series,
 }
 
 /// A special object (i.e. a handle) that is used to refer to a movie in the database.
