@@ -151,7 +151,7 @@ struct Opt {
 #[derive(Debug, clap::Subcommand)]
 enum Command {
   /// Lookup a single title using "KEYWORDS" or "TITLE (YYYY)"
-  Title {
+  Search {
     /// Search terms, as "KEYWORDS" or "TITLE (YYYY)"
     #[clap(name = "TITLE")]
     title: String,
@@ -636,7 +636,7 @@ fn main() {
   let args = Opt::parse();
 
   match args.command {
-    Command::Title { title, exact, general_opts, search_opts } => {
+    Command::Search { title, exact, general_opts, search_opts } => {
       let context = Context::new(general_opts, args.general_opts);
       let printer = create_output_printer(&search_opts.output, &context.general_opts);
       let start_time = Instant::now();
