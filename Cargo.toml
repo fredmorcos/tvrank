@@ -58,12 +58,11 @@ indoc = "1.0"
 truncatable = "0.1"
 
 [profile.release]
-debug = true
+debug = false
+lto = true
 
 [profile.production]
 inherits = "release"
-debug = false
-lto = true
 codegen-units = 1
 opt-level = 3
 incremental = false
