@@ -21,8 +21,8 @@ jobs:
     steps:
       - id: set-matrix
         shell: python
-        env:
-          ENABLE_PRODUCTION: ${{startsWith(github.ref, 'refs/tags/')}}
+        # env:
+        #   ENABLE_PRODUCTION: ${{startsWith(github.ref, 'refs/tags/')}}
         run: |
           import os
           import json
@@ -69,11 +69,11 @@ jobs:
             ]
           }
 
-          if os.getenv('ENABLE_PRODUCTION', default='false') == 'true':
-            matrix['build-config'].append({
-              'id': 'production',
-              'args': '--profile production',
-            })
+          # if os.getenv('ENABLE_PRODUCTION', default='false') == 'true':
+          #   matrix['build-config'].append({
+          #     'id': 'production',
+          #     'args': '--profile production',
+          #   })
 
           print('::set-output name=matrix::%s' % json.dumps(matrix))
 
@@ -229,18 +229,22 @@ jobs:
             --all-features --all-targets
             ${{matrix.build-config.args}}
       - name: Create tarball
-        if: ${{matrix.build-config.id == 'production'}}
+        if: >-
+          ${{matrix.build-config.id == 'release' &&
+          startsWith(github.ref, 'refs/tags/')}}
         shell: bash
         run: |
           export PKG=tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}
           mkdir $PKG
-          cp target/production/tvrank $PKG/tvrank${{matrix.os.execext}}
+          cp target/release/tvrank $PKG/tvrank${{matrix.os.execext}}
           cp LICENSE $PKG/LICENSE
           cp README.md $PKG/README.md
           cp -r changelogs $PKG/changelogs
           ${{matrix.os.pkgcmd}}
       - name: Upload tarball
-        if: ${{matrix.build-config.id == 'production'}}
+        if: >-
+          ${{matrix.build-config.id == 'release' &&
+          startsWith(github.ref, 'refs/tags/')}}
         uses: actions/upload-artifact@v2
         with:
           name: >-
