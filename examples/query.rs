@@ -1,8 +1,9 @@
 #![warn(clippy::all)]
 
-use tvrank::imdb::{Imdb, ImdbQuery};
+use tvrank_imdb::{Imdb, ImdbQuery};
+use tvrank_utils::result::Res;
 
-fn main() -> tvrank::Res<()> {
+fn main() -> Res<()> {
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
   let imdb = Imdb::new(cache_dir.path(), false, &|_, _| {})?;
 

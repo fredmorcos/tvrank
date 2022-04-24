@@ -299,7 +299,7 @@ $ cargo add tvrank
 Include the `Imdb` type:
 
 ```rust
-use tvrank::imdb::{Imdb, ImdbQuery};
+use tvrank_imdb::{Imdb, ImdbQuery};
 ```
 
 Create a directory for the cache using the `tempfile` crate then create the database
