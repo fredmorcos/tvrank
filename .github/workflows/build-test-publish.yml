@@ -115,10 +115,7 @@ jobs:
             ~/.cargo
             ~/.rustup
           key: >-
-            lint-deps-
-            ${{matrix.os.name}}-
-            ${{matrix.build-config.id}}-
-            ${{hashFiles('Cargo.lock')}}
+            lint-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-${{hashFiles('Cargo.lock')}}
           restore-keys: |
             lint-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
             lint-deps-${{matrix.os.name}}-
@@ -156,10 +153,7 @@ jobs:
             ~/.cargo
             ~/.rustup
           key: >-
-            doc-deps-
-            ${{matrix.os.name}}-
-            ${{matrix.build-config.id}}-
-            ${{hashFiles('Cargo.lock')}}
+            doc-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-${{hashFiles('Cargo.lock')}}
           restore-keys: |
             doc-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
             doc-deps-${{matrix.os.name}}-
@@ -201,10 +195,7 @@ jobs:
             ~/.cargo
             ~/.rustup
           key: >-
-            build-deps-
-            ${{matrix.os.name}}-
-            ${{matrix.build-config.id}}-
-            ${{hashFiles('Cargo.lock')}}
+            build-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-${{hashFiles('Cargo.lock')}}
           restore-keys: |
             build-deps-${{matrix.os.name}}-${{matrix.build-config.id}}-
             build-deps-${{matrix.os.name}}-
