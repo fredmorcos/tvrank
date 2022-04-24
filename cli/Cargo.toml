@@ -1,0 +1,28 @@
+[package]
+name = "tvrank-cli"
+version = "0.8.0"
+edition = "2021"
+
+[[bin]]
+name = "tvrank"
+path = "src/main.rs"
+
+[dependencies]
+tvrank-utils = { path = "../utils" }
+tvrank-imdb = { path = "../imdb" }
+indicatif = "0.16"
+log = "0.4"
+env_logger = "0.8"
+atoi = "1.0"
+clap = { version = "3.1", features = ["derive"] }
+derive_more = "0.99"
+reqwest = { version = "0.11", features = ["blocking"] }
+walkdir = "2.3"
+regex = "1.5"
+humantime = "2.1"
+directories = "3.0"
+truncatable = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.8"
+prettytable-rs = "0.8"
