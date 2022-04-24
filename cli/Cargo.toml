@@ -2,6 +2,15 @@
 name = "tvrank-cli"
 version = "0.8.1"
 edition = "2021"
+description = "Query and sort information about movies and series"
+authors = ["Fred Morcos <fm@fredmorcos.com>"]
+license = "MIT"
+homepage = "https://github.com/fredmorcos/tvrank"
+repository = "https://github.com/fredmorcos/tvrank"
+readme = "README.md"
+keywords = ["tv", "series", "movies", "imdb", "rank"]
+categories = ["caching", "command-line-utilities", "filesystem", "multimedia::video", "parsing"]
+exclude = ["/attic", "/.github", "/.gitignore", "/screencasts", "/screenshots"]
 
 [[bin]]
 name = "tvrank"
