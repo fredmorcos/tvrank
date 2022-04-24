@@ -1,0 +1,11 @@
+[package]
+name = "query"
+version = "0.8.2"
+edition = "2021"
+publish = false
+
+[dependencies]
+tvrank-utils = { path = "../../utils", version = "0.8.2" }
+tvrank-imdb = { path = "../../imdb", version = "0.8.2" }
+humantime = "2.1"
+tempfile = "3.3"

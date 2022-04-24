@@ -349,5 +349,5 @@ for title in imdb.by_title_and_year(title, year, ImdbQuery::Movies)? {
 }
 ```
 
-See the `query` example under the `examples/` directory for a fully-functioning version of
-the above.
+See the `query` example under the `examples/query` directory for a fully-functioning
+version of the above.

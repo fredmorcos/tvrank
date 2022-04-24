@@ -1037,6 +1037,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "query"
+version = "0.8.2"
+dependencies = [
+ "humantime",
+ "tempfile",
+ "tvrank-imdb",
+ "tvrank-utils",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

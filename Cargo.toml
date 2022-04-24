@@ -13,14 +13,8 @@ categories = ["caching", "command-line-utilities", "filesystem", "multimedia::vi
 exclude = ["/attic", "/.github", "/.gitignore", "/screencasts", "/screenshots"]
 
 [workspace]
-members = ["utils", "imdb", "cli"]
+members = ["utils", "imdb", "cli", "examples/*"]
 default-members = ["utils", "imdb", "cli"]
-
-[dev-dependencies]
-tvrank-utils = { path = "utils" }
-tvrank-imdb = { path = "imdb" }
-humantime = "2.1"
-tempfile = "3.3"
 
 [profile.release]
 debug = false
