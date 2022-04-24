@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/Release?label=Release&style=for-the-badge)](https://github.com/fredmorcos/tvrank/releases)
 [![CI](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/CI?label=Master&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
-[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.7.8/tvrank/)
+[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.8.0/tvrank/)
 [![Github Open Issues](https://img.shields.io/github/issues-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues)
 [![Github Closed Issues](https://img.shields.io/github/issues-closed-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues?q=is%3Aissue+is%3Aclosed)
 [![Github Open Pull Requests](https://img.shields.io/github/issues-pr-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/pulls)
@@ -288,7 +288,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-tvrank = "0.7"
+tvrank = "0.8"
 ```
 
 Or, using `cargo add`:
