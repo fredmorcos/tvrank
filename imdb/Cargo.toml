@@ -1,6 +1,6 @@
 [package]
 name = "tvrank-imdb"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 description = "Query and sort information about movies and series"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
@@ -16,7 +16,7 @@ exclude = ["/attic", "/.github", "/.gitignore", "/screencasts", "/screenshots"]
 path = "src/lib.rs"
 
 [dependencies]
-tvrank-utils = { path = "../utils" }
+tvrank-utils = { path = "../utils", version = "0.8.2" }
 aho-corasick = "0.7"
 derive_more = "0.99"
 deunicode = "1.3"

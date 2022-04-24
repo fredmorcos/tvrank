@@ -1553,7 +1553,7 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
 name = "tvrank-cli"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "atoi",
  "clap",
@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "tvrank-imdb"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "aho-corasick",
  "atoi",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "tvrank-utils"
-version = "0.8.1"
+version = "0.8.2"
 
 [[package]]
 name = "unicode-bidi"

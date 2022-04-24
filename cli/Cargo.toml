@@ -1,6 +1,6 @@
 [package]
 name = "tvrank-cli"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 description = "Query and sort information about movies and series"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
@@ -17,8 +17,8 @@ name = "tvrank"
 path = "src/main.rs"
 
 [dependencies]
-tvrank-utils = { path = "../utils" }
-tvrank-imdb = { path = "../imdb" }
+tvrank-utils = { path = "../utils", version = "0.8.2" }
+tvrank-imdb = { path = "../imdb", version = "0.8.2" }
 indicatif = "0.16"
 log = "0.4"
 env_logger = "0.9"
