@@ -46,11 +46,11 @@ For information on how to use the library, see below.
 The `TVrank` command-line interface has a few modes accessible through the use of
 sub-commands:
 
-- `title "KEYWORDS..."` to search by keywords.
-- `title "KEYWORDS... (YYYY)"` to search by keywords in a specific year.
-- `title "TITLE (YYYY)" --exact` to search for and exact title in a specific year.
-- `title "TITLE" --exact` to search for an exact title (`-e` also means exact).
-- `movies-dir` and `series-dir` to make batch queries based on directory scans.
+- `search "KEYWORDS..."` to search by keywords.
+- `search "KEYWORDS... (YYYY)"` to search by keywords in a specific year.
+- `search "TITLE (YYYY)" --exact` to search for and exact title in a specific year.
+- `search "TITLE" --exact` to search for an exact title (`-e` also means exact).
+- `scan-movies` and `scan-series` to make batch queries based on directory scans.
 - `mark` to mark a directory with a title information file (`tvrank.json`).
 
 ### Examples
@@ -58,56 +58,56 @@ sub-commands:
 To search for a specific title:
 
 ```sh
-$ tvrank title "the great gatsby (2013)" -e
+$ tvrank search "the great gatsby (2013)" -e
 ```
 
 To search for all titles containing "the", "great" and "gatsby" in the year 2013:
 
 ```sh
-$ tvrank title "the great gatsby (2013)"
+$ tvrank search "the great gatsby (2013)"
 ```
 
 To search based on keywords:
 
 ```sh
-$ tvrank title "the great gatsby"
+$ tvrank search "the great gatsby"
 ```
 
 To search based on an exact title:
 
 ```sh
-$ tvrank title "the great gatsby" -e
+$ tvrank search "the great gatsby" -e
 ```
 
 To query a series directory:
 
 ```sh
-$ tvrank series-dir <SERIES_MEDIA_DIR>
+$ tvrank scan-series <SERIES_MEDIA_DIR>
 ```
 
 Also, by default `TVrank` will sort by rating, year and title. To instead sort by year,
 rating and title, `--sort-by-year` can be passed before any sub-command:
 
 ```sh
-$ tvrank --sort-by-year title "house of cards"
+$ tvrank --sort-by-year search "house of cards"
 ```
 
 You can also limit the output of movies and series to the top N entries:
 
 ```sh
-$ tvrank title "the great gatsby" --top 2
+$ tvrank search "the great gatsby" --top 2
 ```
 
 You can change the output format to `json` or `yaml`:
 
 ```sh
-$ tvrank title "the great gatsby" --output json
+$ tvrank search "the great gatsby" --output json
 ```
 
 ### Batch Queries
 
 `TVrank` can recursively scan directories and print out information about titles it
-finds. This is achieved using the `movies-dir` and `series-dir` subcommands.
+finds. This is achieved using the `scan-movies` and `scan-series` subcommands.
 
 #### Movie Batch Queries
 
@@ -145,8 +145,7 @@ movies
 
 `TVrank` also expects series directories to be under a top-level series media directory
 (herein called `series`) following either `TITLE` or `TITLE (YYYY)` format. The `TITLE
-(YYYY)` format can be used for series to easily disambiguate similarly-titled
-series. Examples:
+(YYYY)` format can be used to easily disambiguate similarly-titled series. Examples:
 
 ```
 series
@@ -165,8 +164,8 @@ same year using the same exact title.
 
 To handle this issue, `TVrank` supports the ability to explicitly provide title
 information files (called `tvrank.json`) under the corresponding title directory. These
-files are detected when using the `movies-dir` and `series-dir` sub-commands and are used
-for exact identification using the title's unique ID.
+files are detected when using the `scan-movies` and `scan-series` sub-commands and are
+used for exact identification using the title's unique ID.
 
 A `tvrank.json` file looks like this:
 
@@ -210,7 +209,7 @@ sub-command. Multiple occurrences of `-v` on the command-line will increase the 
 level:
 
 ```sh
-$ tvrank -vvv --sort-by-year title "city of god"
+$ tvrank -vvv --sort-by-year search "city of god"
 ```
 
 The following options can come before or after the sub-command. The latter have precedence
@@ -229,9 +228,9 @@ To find help, see the `help` sub-command:
 
 ```sh
 $ tvrank help
-$ tvrank help title
-$ tvrank help series-dir
-$ tvrank help movies-dir
+$ tvrank help search
+$ tvrank help scan-series
+$ tvrank help scan-movies
 ```
 
 ### Screencast
@@ -251,8 +250,8 @@ its output. This can also be overridden by passing the `--color` argument on the
 command-line:
 
 ```sh
-NO_COLOR=1 tvrank title "the great gatsby"           # Without colors
-NO_COLOR=1 tvrank title "the great gatsby" --color   # With colors
+NO_COLOR=1 tvrank search "the great gatsby"           # Without colors
+NO_COLOR=1 tvrank search "the great gatsby" --color   # With colors
 ```
 
 ## Installation
