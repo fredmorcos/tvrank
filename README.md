@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/Release?label=Release&style=for-the-badge)](https://github.com/fredmorcos/tvrank/releases)
 [![CI](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/CI?label=Master&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
-[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.8.2/tvrank/)
+[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.8.3/tvrank/)
 [![Github Open Issues](https://img.shields.io/github/issues-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues)
 [![Github Closed Issues](https://img.shields.io/github/issues-closed-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues?q=is%3Aissue+is%3Aclosed)
 [![Github Open Pull Requests](https://img.shields.io/github/issues-pr-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/pulls)
@@ -268,7 +268,7 @@ a simple build and install through cargo should suffice:
 ```sh
 $ git clone https://github.com/fredmorcos/tvrank
 $ cd tvrank
-$ cargo install --profile production --path .
+$ cargo install --path cli
 ```
 
 ### From Crates.io
@@ -278,7 +278,7 @@ compiler and a toolchain to be available. Once those are ready, a simple build a
 using cargo should suffice:
 
 ```sh
-$ cargo install --profile production tvrank`
+$ cargo install tvrank-cli`
 ```
 
 ## Using the library
@@ -299,7 +299,7 @@ $ cargo add tvrank
 Include the `Imdb` type:
 
 ```rust
-use tvrank_imdb::{Imdb, ImdbQuery};
+use tvrank::imdb::{Imdb, ImdbQuery};
 ```
 
 Create a directory for the cache using the `tempfile` crate then create the database
@@ -349,5 +349,5 @@ for title in imdb.by_title_and_year(title, year, ImdbQuery::Movies)? {
 }
 ```
 
-See the `query` example under the `examples/query` directory for a fully-functioning
-version of the above.
+See the `query.rs` example under the `lib/examples/query` directory for a
+fully-functioning version of the above.
