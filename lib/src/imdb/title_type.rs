@@ -115,7 +115,7 @@ impl TitleType {
 
 #[cfg(test)]
 mod tests {
-  use super::TitleType;
+  use crate::imdb::title_type::TitleType;
 
   #[test]
   fn test_title_type_value() {

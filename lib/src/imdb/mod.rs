@@ -1,8 +1,7 @@
 #![warn(clippy::all)]
 #![warn(missing_docs)]
 
-//! TVrank-imdb is a library for querying and ranking information about movies and series
-//! using the IMDB dataset (TSV dumps) as a source.
+//! Module for TVrank to use the IMDB dataset (TSV dumps) as a source.
 
 mod db;
 mod error;

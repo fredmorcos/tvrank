@@ -1,6 +1,6 @@
 [workspace]
-members = ["utils", "imdb", "cli", "examples/*"]
-default-members = ["utils", "imdb", "cli"]
+members = ["lib", "cli"]
+default-members = ["lib", "cli"]
 
 [profile.release]
 debug = false

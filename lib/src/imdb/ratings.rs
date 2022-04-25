@@ -1,8 +1,10 @@
 #![warn(clippy::all)]
 
-use crate::error::Err;
-use crate::title_id::TitleId;
-use crate::tokens;
+use crate::imdb::error::Err;
+use crate::imdb::title_id::TitleId;
+use crate::imdb::tokens;
+use crate::iter_next;
+use crate::utils::result::Res;
 use atoi::atoi;
 use fnv::FnvHashMap;
 use serde::Serialize;
@@ -12,8 +14,6 @@ use std::cmp::Ordering;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
-use tvrank_utils::iter_next;
-use tvrank_utils::result::Res;
 
 /// Average user rating of a title together with the number of votes
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
@@ -157,9 +157,9 @@ impl Ratings {
 
 #[cfg(test)]
 mod tests_ratings {
-  use super::Rating;
-  use super::Ratings;
-  use super::TitleId;
+  use crate::imdb::ratings::Rating;
+  use crate::imdb::ratings::Ratings;
+  use crate::imdb::title_id::TitleId;
   use indoc::indoc;
   use std::io::BufRead;
 

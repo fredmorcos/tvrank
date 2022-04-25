@@ -1,11 +1,9 @@
 #![warn(clippy::all)]
 
-mod info;
 mod print;
 mod search;
 mod ui;
 
-use crate::info::TitleInfo;
 use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter};
 use crate::search::SearchRes;
 use crate::ui::{create_progress_bar, create_progress_spinner};
@@ -27,8 +25,9 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tvrank_imdb::{Imdb, ImdbQuery, ImdbTitleId};
-use tvrank_utils::result::Res;
+use tvrank::imdb::{Imdb, ImdbQuery, ImdbTitleId};
+use tvrank::title_info::TitleInfo;
+use tvrank::utils::result::Res;
 use walkdir::WalkDir;
 
 #[derive(Debug, Display)]

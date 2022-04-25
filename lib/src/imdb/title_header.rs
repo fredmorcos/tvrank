@@ -1,8 +1,8 @@
 #![warn(clippy::all)]
 
-use crate::genre::Genres;
-use crate::ratings::Rating;
-use crate::title_type::TitleType;
+use crate::imdb::genre::Genres;
+use crate::imdb::ratings::Rating;
+use crate::imdb::title_type::TitleType;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 use std::ops::Deref;
@@ -189,8 +189,11 @@ impl TitleHeader {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use crate::genre::Genre;
+  use crate::imdb::genre::Genre;
+  use crate::imdb::genre::Genres;
+  use crate::imdb::ratings::Rating;
+  use crate::imdb::title_header::TitleHeader;
+  use crate::imdb::title_type::TitleType;
 
   #[test]
   fn test() {

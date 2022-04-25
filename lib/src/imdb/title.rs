@@ -1,20 +1,20 @@
 #![warn(clippy::all)]
 
-use crate::error::Err;
-use crate::genre::{Genre, Genres};
-use crate::ratings::{Rating, Ratings};
-use crate::title_header::TitleHeader;
-use crate::title_id::TitleId;
-use crate::title_type::TitleType;
-use crate::tokens;
+use crate::imdb::error::Err;
+use crate::imdb::genre::{Genre, Genres};
+use crate::imdb::ratings::{Rating, Ratings};
+use crate::imdb::title_header::TitleHeader;
+use crate::imdb::title_id::TitleId;
+use crate::imdb::title_type::TitleType;
+use crate::imdb::tokens;
+use crate::iter_next;
+use crate::utils::result::Res;
 use atoi::atoi;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::str::FromStr;
 use std::time::Duration;
-use tvrank_utils::iter_next;
-use tvrank_utils::result::Res;
 
 /// Wraps a title based on its type
 #[derive(Debug, Clone, Copy)]
@@ -299,11 +299,11 @@ impl<'storage> Title<'storage> {
 
 #[cfg(test)]
 mod test_title {
-  use super::Genre;
-  use super::Rating;
-  use super::Ratings;
-  use super::Title;
-  use super::TitleType;
+  use crate::imdb::genre::Genre;
+  use crate::imdb::ratings::Rating;
+  use crate::imdb::ratings::Ratings;
+  use crate::imdb::title::Title;
+  use crate::imdb::title_type::TitleType;
 
   #[test]
   fn test_title() {

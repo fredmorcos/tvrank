@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 use std::ops::{Deref, DerefMut};
-use tvrank_imdb::ImdbTitle;
+use tvrank::imdb::ImdbTitle;
 
 pub struct SearchRes<'a, 'storage> {
   results: Vec<&'a ImdbTitle<'storage>>,

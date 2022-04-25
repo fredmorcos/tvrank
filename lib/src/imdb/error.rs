@@ -1,9 +1,9 @@
 #![warn(clippy::all)]
 
-use crate::title_type::TitleType;
+use crate::imdb::title_type::TitleType;
+use crate::utils::result::Res;
 use derive_more::Display;
 use std::error::Error;
-use tvrank_utils::result::Res;
 
 /// Error types of the TvRank library
 #[derive(Debug, Display)]

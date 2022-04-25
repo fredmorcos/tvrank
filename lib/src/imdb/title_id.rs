@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
-use crate::error::Err;
-use crate::tokens;
+use crate::imdb::error::Err;
+use crate::imdb::tokens;
 use atoi::FromRadix10;
 use serde::{Serialize, Serializer};
 use std::error::Error;
@@ -90,7 +90,7 @@ impl fmt::Display for TitleId<'_> {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use crate::imdb::title_id::TitleId;
 
   #[test]
   fn test() {

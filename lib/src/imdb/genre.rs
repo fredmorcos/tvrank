@@ -216,8 +216,8 @@ impl Iterator for GenresIter {
 
 #[cfg(test)]
 mod tests {
-  use super::Genre;
-  use super::Genres;
+  use crate::imdb::genre::Genre;
+  use crate::imdb::genre::Genres;
 
   #[test]
   fn test_genre_value() {

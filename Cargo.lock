@@ -1037,16 +1037,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "query"
-version = "0.8.2"
-dependencies = [
- "humantime",
- "tempfile",
- "tvrank-imdb",
- "tvrank-utils",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1552,6 +1542,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
+name = "tvrank"
+version = "0.8.2"
+dependencies = [
+ "aho-corasick",
+ "atoi",
+ "derive_more",
+ "deunicode",
+ "enum-utils",
+ "flate2",
+ "fnv",
+ "humantime",
+ "indoc",
+ "log",
+ "parking_lot",
+ "rayon",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "tvrank-cli"
 version = "0.8.2"
 dependencies = [
@@ -1570,35 +1582,9 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "truncatable",
- "tvrank-imdb",
- "tvrank-utils",
+ "tvrank",
  "walkdir",
 ]
-
-[[package]]
-name = "tvrank-imdb"
-version = "0.8.2"
-dependencies = [
- "aho-corasick",
- "atoi",
- "derive_more",
- "deunicode",
- "enum-utils",
- "flate2",
- "fnv",
- "humantime",
- "indoc",
- "log",
- "parking_lot",
- "rayon",
- "reqwest",
- "serde",
- "tvrank-utils",
-]
-
-[[package]]
-name = "tvrank-utils"
-version = "0.8.2"
 
 [[package]]
 name = "unicode-bidi"

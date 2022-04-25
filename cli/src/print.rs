@@ -6,8 +6,8 @@ use prettytable::{color, format, Attr, Cell, Row, Table};
 use reqwest::Url;
 use serde::Serialize;
 use truncatable::Truncatable;
-use tvrank_imdb::{ImdbQuery, ImdbTitle};
-use tvrank_utils::result::Res;
+use tvrank::imdb::{ImdbQuery, ImdbTitle};
+use tvrank::utils::result::Res;
 
 #[derive(Debug, Clone, clap::ArgEnum)]
 pub enum OutputFormat {

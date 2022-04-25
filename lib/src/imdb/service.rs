@@ -1,8 +1,10 @@
 #![warn(clippy::all)]
 
-use crate::db::{Db, Query};
-use crate::title::Title;
-use crate::title_id::TitleId;
+use crate::imdb::db::{Db, Query};
+use crate::imdb::title::Title;
+use crate::imdb::title_id::TitleId;
+use crate::utils::io::Progress;
+use crate::utils::result::Res;
 use flate2::bufread::GzDecoder;
 use fnv::FnvHashSet;
 use humantime::format_duration;
@@ -15,8 +17,6 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter};
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
-use tvrank_utils::io::Progress;
-use tvrank_utils::result::Res;
 
 /// Struct providing the movies and series databases and the related services
 pub struct Service {

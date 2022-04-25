@@ -1,9 +1,10 @@
 #![warn(clippy::all)]
 
-use crate::ratings::Ratings;
-use crate::title::Title;
-use crate::title::TsvAction;
-use crate::title_id::TitleId;
+use crate::imdb::ratings::Ratings;
+use crate::imdb::title::Title;
+use crate::imdb::title::TsvAction;
+use crate::imdb::title_id::TitleId;
+use crate::utils::result::Res;
 use aho_corasick::AhoCorasickBuilder;
 use aho_corasick::MatchKind as ACMatchKind;
 use derive_more::{Display, From, Into};
@@ -12,7 +13,6 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::ops::Index;
-use tvrank_utils::result::Res;
 
 /// Specifies the type of title a query is for. E.g. Movies or Series.
 #[derive(Clone, Copy, Display)]
@@ -465,9 +465,9 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
 
 #[cfg(test)]
 mod test_db {
-  use super::Db;
-  use super::Ratings;
-  use super::Title;
+  use crate::imdb::db::Db;
+  use crate::imdb::ratings::Ratings;
+  use crate::imdb::title::Title;
   use indoc::indoc;
   use std::io::BufRead;
   use std::io::Read;
