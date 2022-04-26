@@ -324,6 +324,7 @@ jobs:
       - name: Publish to Crates.io
         env:
           CRATES_IO_TOKEN: ${{secrets.CRATES_IO_TOKEN}}
-        run: cargo publish -p tvrank --token ${CRATES_IO_TOKEN}
-        run: cargo publish -p tvrank-cli --token ${CRATES_IO_TOKEN}
+        run: |
+          cargo publish -p tvrank --token ${CRATES_IO_TOKEN}
+          cargo publish -p tvrank-cli --token ${CRATES_IO_TOKEN}
 ...
