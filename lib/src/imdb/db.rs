@@ -10,6 +10,9 @@ use aho_corasick::MatchKind as ACMatchKind;
 use derive_more::{Display, From, Into};
 use deunicode::deunicode;
 use fnv::{FnvHashMap, FnvHashSet};
+use log::debug;
+use parking_lot::{const_mutex, Mutex};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::ops::Index;
@@ -25,6 +28,228 @@ pub enum Query {
   /// Query the database of Series.
   #[display(fmt = "series")]
   Series,
+}
+
+pub struct ServiceDb {
+  dbs: Vec<Db>,
+}
+
+impl ServiceDb {
+  /// Import title data from tab separated values (TSVs).
+  ///
+  /// This parses TSV data from the provided `ratings_reader` and `basics_reader` and
+  /// write them out in binary to the provided writers `movies_db_writer` and
+  /// `series_db_writer`.
+  ///
+  /// # Arguments
+  ///
+  /// * `ratings_reader` - TSV reader for ratings.
+  /// * `basics_reader` - TSV reader for title data.
+  /// * `movies_db_writer` - Binary writer to store movies.
+  /// * `series_db_writer` - Binary writer to store series.
+  pub(crate) fn import<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
+    ratings_reader: R1,
+    mut basics_reader: R2,
+    mut movies_db_writer: W1,
+    mut series_db_writer: W2,
+  ) -> Res<()> {
+    let ratings = Ratings::from_tsv(ratings_reader)?;
+
+    let mut line = String::new();
+
+    // Skip the first line.
+    basics_reader.read_line(&mut line)?;
+    line.clear();
+
+    loop {
+      let bytes = basics_reader.read_line(&mut line)?;
+
+      if bytes == 0 {
+        break;
+      }
+
+      let trimmed = line.trim_end();
+
+      if trimmed.is_empty() {
+        continue;
+      }
+
+      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
+        TsvAction::Movie(title) => title.write_binary(&mut movies_db_writer)?,
+        TsvAction::Series(title) => title.write_binary(&mut series_db_writer)?,
+        TsvAction::Skip => {
+          line.clear();
+          continue;
+        }
+      }
+
+      line.clear();
+    }
+
+    Ok(())
+  }
+
+  /// Load titles from the given binary data.
+  ///
+  /// Loads titles from the provided binary content buffers (`movies_data` and
+  /// `series_data`) into one of the thread-handled databases.
+  ///
+  /// # Arguments
+  ///
+  /// * `movies_data` - Binary movies data.
+  /// * `series_data` - Binary series data.
+  pub fn load(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
+    let nthreads = rayon::current_num_threads();
+    let dbs = const_mutex(Vec::with_capacity(nthreads));
+    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
+    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
+
+    rayon::scope(|scope| {
+      for _ in 0..nthreads {
+        let dbs = &dbs;
+        let movies_cursor = &movies_cursor;
+        let series_cursor = &series_cursor;
+
+        scope.spawn(move |_| {
+          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
+          let mut titles = Vec::with_capacity(100);
+          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+          dbs.lock().push(db);
+        });
+      }
+    });
+
+    Self { dbs: dbs.into_inner() }
+  }
+
+  /// Loads titles from the provided binary content buffers into the thread-handled
+  /// databases.
+  ///
+  /// # Arguments
+  ///
+  /// * `cursor` - Cursor at the binary to read the titles from.
+  /// * `titles` - Vector to store the titles temporarily before writing to the database.
+  /// * `db` - Database to store movies or series.
+  fn titles_from_binary<const IS_MOVIE: bool>(
+    cursor: &Mutex<&mut &'static [u8]>,
+    titles: &mut Vec<Title<'static>>,
+    db: &mut Db,
+  ) {
+    loop {
+      let mut cursor = cursor.lock();
+
+      if (*cursor).is_empty() {
+        break;
+      }
+
+      for _ in 0..100 {
+        if (*cursor).is_empty() {
+          break;
+        }
+
+        let title = match Title::from_binary(&mut cursor) {
+          Ok(title) => title,
+          Err(e) => panic!("Error parsing title: {}", e),
+        };
+
+        titles.push(title);
+      }
+
+      drop(cursor);
+
+      for &title in titles.iter() {
+        if IS_MOVIE {
+          db.store_movie(title);
+        } else {
+          db.store_series(title);
+        }
+      }
+
+      titles.clear();
+    }
+  }
+
+  /// Calculate the total number of series and movies entries.
+  ///
+  /// # Return
+  ///
+  /// Returns a tuple containing two numbers, the first one is the number of movies and
+  /// the second on the number of series contained in the database.
+  pub fn n_entries(&self) -> (usize, usize) {
+    let mut total_movies = 0;
+    let mut total_series = 0;
+
+    for (i, db) in self.dbs.iter().enumerate() {
+      let movies = db.n_movies();
+      let series = db.n_series();
+      let entries = db.n_entries();
+
+      total_movies += movies;
+      total_series += series;
+
+      debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
+    }
+
+    (total_movies, total_series)
+  }
+
+  pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
+    let res = self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_id(id, query))
+      .filter(|res| res.is_some())
+      .flatten()
+      .collect::<Vec<_>>();
+
+    if res.is_empty() {
+      None
+    } else {
+      Some(unsafe { res.get_unchecked(0) })
+    }
+  }
+
+  pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_title(title, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
+
+  pub fn by_title_and_year(&self, title: &str, year: u16, query: Query) -> Vec<&Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_title_and_year(title, year, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
+
+  pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str], query: Query) -> FnvHashSet<&'a Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_keywords(keywords, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
+
+  pub fn by_keywords_and_year<'a, 'k>(
+    &'a self,
+    keywords: &'k [&str],
+    year: u16,
+    query: Query,
+  ) -> FnvHashSet<&'a Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_keywords_and_year(keywords, year, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
 }
 
 /// A special object (i.e. a handle) that is used to refer to a movie in the database.
@@ -85,56 +310,6 @@ impl Db {
   /// * `title` - The title to be inserted.
   pub(crate) fn store_series(&mut self, title: Title<'static>) {
     self.series.store_title(title)
-  }
-
-  /// Convert title data from tab separated values (TSVs) to binary.
-  ///
-  /// # Arguments
-  ///
-  /// * `ratings_reader` - TSV reader for ratings.
-  /// * `basics_reader` - TSV reader for title data.
-  /// * `movies_db_writer` - Binary writer to store movies.
-  /// * `series_db_writer` - Binary writer to store series.
-  pub(crate) fn to_binary<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
-    ratings_reader: R1,
-    mut basics_reader: R2,
-    mut movies_db_writer: W1,
-    mut series_db_writer: W2,
-  ) -> Res<()> {
-    let ratings = Ratings::from_tsv(ratings_reader)?;
-
-    let mut line = String::new();
-
-    // Skip the first line.
-    basics_reader.read_line(&mut line)?;
-    line.clear();
-
-    loop {
-      let bytes = basics_reader.read_line(&mut line)?;
-
-      if bytes == 0 {
-        break;
-      }
-
-      let trimmed = line.trim_end();
-
-      if trimmed.is_empty() {
-        continue;
-      }
-
-      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
-        TsvAction::Movie(title) => title.write_binary(&mut movies_db_writer)?,
-        TsvAction::Series(title) => title.write_binary(&mut series_db_writer)?,
-        TsvAction::Skip => {
-          line.clear();
-          continue;
-        }
-      }
-
-      line.clear();
-    }
-
-    Ok(())
   }
 
   /// Return the title with the given ID from the database.
@@ -465,7 +640,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
 
 #[cfg(test)]
 mod test_db {
-  use crate::imdb::db::Db;
+  use crate::imdb::db::ServiceDb;
   use crate::imdb::ratings::Ratings;
   use crate::imdb::title::Title;
   use indoc::indoc;
@@ -512,7 +687,7 @@ mod test_db {
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    Db::to_binary(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
+    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
     let mut basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
