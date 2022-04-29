@@ -1,6 +1,6 @@
 #![warn(clippy::all)]
 
-use crate::imdb::db::{Db, Query};
+use crate::imdb::db::{Query, ServiceDb};
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::utils::io::Progress;
@@ -9,8 +9,6 @@ use flate2::bufread::GzDecoder;
 use fnv::FnvHashSet;
 use humantime::format_duration;
 use log::{debug, log_enabled};
-use parking_lot::{const_mutex, Mutex};
-use rayon::prelude::*;
 use reqwest::blocking::{Client, Response};
 use reqwest::Url;
 use std::fs::{self, File};
@@ -20,7 +18,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Struct providing the movies and series databases and the related services
 pub struct Service {
-  dbs: Vec<Db>,
+  service_db: ServiceDb,
 }
 
 const IMDB: &str = "https://datasets.imdbws.com/";
@@ -54,105 +52,18 @@ impl Service {
     debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
-    let service = Self::from_binary(movies_data, series_data);
+    let service = Self { service_db: ServiceDb::load(movies_data, series_data) };
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     if log_enabled!(log::Level::Debug) {
-      let mut total_movies = 0;
-      let mut total_series = 0;
-      let mut total_entries = 0;
-
-      for (i, db) in service.dbs.iter().enumerate() {
-        let movies = db.n_movies();
-        let series = db.n_series();
-        let entries = db.n_entries();
-
-        total_movies += movies;
-        total_series += series;
-        total_entries += entries;
-
-        debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
-      }
-
+      let (total_movies, total_series) = service.service_db.n_entries();
+      let total_entries = total_movies + total_series;
       debug!(
         "IMDB database contains {total_movies} movies and {total_series} series ({total_entries} entries)"
       );
     }
 
     Ok(service)
-  }
-
-  /// Parses titles from the given binary and pushes them into the given vector of titles and the movies/series databases
-  /// # Arguments
-  /// * `cursor` - Cursor at the binary to read the titles from
-  /// * `titles` - Vector to store the titles temporarily before writing to the database
-  /// * `db` - Database to store movies or series
-  fn titles_from_binary<const IS_MOVIE: bool>(
-    cursor: &Mutex<&mut &'static [u8]>,
-    titles: &mut Vec<Title<'static>>,
-    db: &mut Db,
-  ) {
-    loop {
-      let mut cursor = cursor.lock();
-
-      if (*cursor).is_empty() {
-        break;
-      }
-
-      for _ in 0..100 {
-        if (*cursor).is_empty() {
-          break;
-        }
-
-        let title = match Title::from_binary(&mut cursor) {
-          Ok(title) => title,
-          Err(e) => panic!("Error parsing title: {}", e),
-        };
-
-        titles.push(title);
-      }
-
-      drop(cursor);
-
-      for &title in titles.iter() {
-        if IS_MOVIE {
-          db.store_movie(title);
-        } else {
-          db.store_series(title);
-        }
-      }
-
-      titles.clear();
-    }
-  }
-
-  /// Parses titles from the given binary and inserts them into the movies/series databases
-  /// # Arguments
-  /// * `movies_data` - Binary movies data
-  /// * `series_data` - Binary series data
-  fn from_binary(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
-    let nthreads = rayon::current_num_threads();
-    let dbs = const_mutex(Vec::with_capacity(nthreads));
-    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
-    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
-
-    rayon::scope(|scope| {
-      for _ in 0..nthreads {
-        let dbs = &dbs;
-        let movies_cursor = &movies_cursor;
-        let series_cursor = &series_cursor;
-
-        scope.spawn(move |_| {
-          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
-          let mut titles = Vec::with_capacity(100);
-          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-          dbs.lock().push(db);
-        });
-      }
-    });
-
-    Self { dbs: dbs.into_inner() }
   }
 
   /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
@@ -267,7 +178,7 @@ impl Service {
       let series_db_file = File::create(series_db_filename)?;
       let series_db_writer = BufWriter::new(series_db_file);
 
-      Db::to_binary(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
+      ServiceDb::import(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
@@ -280,19 +191,7 @@ impl Service {
   /// * `id` - ID of the title to be queried
   /// * `query` - Specifies if movies or series are queried
   pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
-    let res = self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_id(id, query))
-      .filter(|res| res.is_some())
-      .flatten()
-      .collect::<Vec<_>>();
-
-    if res.is_empty() {
-      None
-    } else {
-      Some(unsafe { res.get_unchecked(0) })
-    }
+    self.service_db.by_id(id, query)
   }
 
   /// Query titles by title
@@ -300,12 +199,7 @@ impl Service {
   /// * `title` - Title to be queried
   /// * `query` - Specifies if movies or series are queried
   pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_title(title, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
+    self.service_db.by_title(title, query)
   }
 
   /// Query titles by title and year
@@ -314,12 +208,7 @@ impl Service {
   /// * `year` - Release year of the title
   /// * `query` - Specifies if movies or series are queried
   pub fn by_title_and_year(&self, title: &str, year: u16, query: Query) -> Vec<&Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_title_and_year(title, year, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
+    self.service_db.by_title_and_year(title, year, query)
   }
 
   /// Query titles by keywords
@@ -327,12 +216,7 @@ impl Service {
   /// * `keywords` - List of keywords to search in titles
   /// * `query` - Specifies if movies or series are queried
   pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str], query: Query) -> FnvHashSet<&'a Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_keywords(keywords, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
+    self.service_db.by_keywords(keywords, query)
   }
 
   /// Query titles by keywords and year
@@ -346,11 +230,6 @@ impl Service {
     year: u16,
     query: Query,
   ) -> FnvHashSet<&'a Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_keywords_and_year(keywords, year, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
+    self.service_db.by_keywords_and_year(keywords, year, query)
   }
 }
