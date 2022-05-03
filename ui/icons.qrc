@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="search">icons/loupe-symbolic.svg</file>
+        <file alias="quit">icons/application-exit-symbolic.svg</file>
+        <file alias="tvrank">icons/tv-symbolic.svg</file>
+    </qresource>
+</RCC>
