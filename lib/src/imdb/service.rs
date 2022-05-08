@@ -58,7 +58,7 @@ impl Service {
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     if log_enabled!(log::Level::Debug) {
-      let (total_movies, total_series) = service.service_db.n_entries();
+      let (total_movies, total_series) = service.n_entries();
       let total_entries = total_movies + total_series;
       debug!(
         "IMDB database contains {total_movies} movies and {total_series} series ({total_entries} entries)"
@@ -66,6 +66,16 @@ impl Service {
     }
 
     Ok(service)
+  }
+
+  /// Calculate the total number of series and movies entries.
+  ///
+  /// # Return
+  ///
+  /// Returns a tuple containing two numbers, the first one is the number of movies and
+  /// the second on the number of series contained in the database.
+  pub fn n_entries(&self) -> (usize, usize) {
+    self.service_db.n_entries()
   }
 
   /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
