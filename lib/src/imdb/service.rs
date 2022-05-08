@@ -47,8 +47,10 @@ impl Service {
     Self::ensure_db_files(&movies_db_filename, &series_db_filename, force_db_update, progress_fn)?;
 
     let start = Instant::now();
-    let movies_data = fs::read(movies_db_filename)?;
-    let series_data = fs::read(series_db_filename)?;
+    let mut movies_data = fs::read(movies_db_filename)?;
+    let mut series_data = fs::read(series_db_filename)?;
+    movies_data.shrink_to_fit();
+    series_data.shrink_to_fit();
     let movies_data = Box::leak(movies_data.into_boxed_slice());
     let series_data = Box::leak(series_data.into_boxed_slice());
     debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
