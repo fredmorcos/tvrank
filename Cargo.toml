@@ -1,6 +1,6 @@
 [workspace]
-members = ["lib", "cli"]
-default-members = ["lib", "cli"]
+members = ["lib", "cli", "cpp"]
+default-members = ["lib", "cli", "cpp"]
 
 [profile.release]
 debug = false
