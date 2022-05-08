@@ -26,11 +26,13 @@ const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 
 impl Service {
-  /// Returns a Service struct holding movies/series databases
+  /// Construct a service object holding movies/series databases.
+  ///
   /// # Arguments
-  /// * `cache_dir` - Directory path of the database files
-  /// * `force_db_update` - True if the databases should be updated regardless of their age
-  /// * `progress_fn` - Function that keeps track of the download progress
+  ///
+  /// * `cache_dir` - Directory path of the database files.
+  /// * `force_db_update` - Update the databases regardless of age.
+  /// * `progress_fn` - Callback for download progress.
   pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: &dyn Fn(Option<u64>, u64)) -> Res<Self> {
     // Delete old imdb cache directory.
     let old_cache_dir = cache_dir.join("imdb");
