@@ -194,7 +194,7 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
     }
   }
 
-  /// Calculate the total number of series and movies entries.
+  /// Calculate the total number of movies and series entries.
   ///
   /// # Return
   ///
@@ -763,5 +763,7 @@ mod test_db {
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
     service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
+
+    assert_eq!(service_db.n_entries(), (10, 0));
   }
 }
