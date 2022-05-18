@@ -130,7 +130,9 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
       }
     });
 
-    Self { dbs: dbs.into_inner(), vec![], vec![] }
+    let movies_db_writer: Vec<u8> = Vec::new();
+    let series_db_writer: Vec<u8> = Vec::new();
+    Self { dbs: dbs.into_inner(), movies_db_writer, series_db_writer }
   }
 
   /// Loads titles from the provided binary content buffers into the thread-handled
