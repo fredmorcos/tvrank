@@ -46,40 +46,12 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
   }
 
   fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
-    let ratings = Ratings::from_tsv(ratings_reader)?;
-
-    let mut line = String::new();
-
-    // Skip the first line.
-    basics_reader.read_line(&mut line)?;
-    line.clear();
-
-    loop {
-      let bytes = basics_reader.read_line(&mut line)?;
-
-      if bytes == 0 {
-        break;
-      }
-
-      let trimmed = line.trim_end();
-
-      if trimmed.is_empty() {
-        continue;
-      }
-
-      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
-        TsvAction::Movie(title) => title.write_binary(&mut self.movies_db_writer.as_mut().unwrap())?,
-        TsvAction::Series(title) => title.write_binary(&mut self.series_db_writer.as_mut().unwrap())?,
-        TsvAction::Skip => {
-          line.clear();
-          continue;
-        }
-      }
-
-      line.clear();
-    }
-
-    Ok(())
+    Self::import_impl(
+      ratings_reader,
+      &mut basics_reader,
+      self.movies_db_writer.as_mut().unwrap(),
+      self.series_db_writer.as_mut().unwrap(),
+    )
   }
 
   /// Import title data from tab separated values (TSVs).
@@ -100,11 +72,11 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
     mut movies_db_writer: W1,
     mut series_db_writer: W2,
   ) -> Res<()> {
-    Self::import_impl(&ratings_reader, &mut basics_reader, &mut movies_db_writer, &mut series_db_writer)
+    Self::import_impl(ratings_reader, &mut basics_reader, &mut movies_db_writer, &mut series_db_writer)
   }
 
   fn import_impl<R1: BufRead, R2: BufRead>(
-    ratings_reader: &R1,
+    ratings_reader: R1,
     basics_reader: &mut R2,
     movies_db_writer: &mut W1,
     series_db_writer: &mut W2,
@@ -128,8 +100,8 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
       }
 
       match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
-        TsvAction::Movie(title) => title.write_binary(&mut movies_db_writer)?,
-        TsvAction::Series(title) => title.write_binary(&mut series_db_writer)?,
+        TsvAction::Movie(title) => title.write_binary(movies_db_writer)?,
+        TsvAction::Series(title) => title.write_binary(series_db_writer)?,
         TsvAction::Skip => {
           line.clear();
           continue;
