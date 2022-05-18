@@ -30,14 +30,19 @@ pub enum Query {
   Series,
 }
 
-pub struct ServiceDb {
+pub struct ServiceDb<W1: Write, W2: Write> {
   dbs: Vec<Db>,
+  movies_db_writer: W1,
+  series_db_writer: W2,
 }
 
-impl ServiceDb {
+impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
+  pub fn new(mut movies_db_writer: W1, mut series_db_writer: W2) -> Self {
+    Self { dbs: Vec::new(), movies_db_writer, series_db_writer }
+  }
 
-  pub fn new<W1: Write, W2: Write>(mut movies_db_writer: W1, mut series_db_writer: W2) -> Self {
-    Self { dbs: Vec::new() }
+  fn import_from_imdb(&self, ratings_reader: impl BufRead, basics_reader: impl BufRead) -> _ {
+    self.import(ratings_reader, basics_reader, self.movies_db_writer, self.series_db_writer)
   }
 
   /// Import title data from tab separated values (TSVs).
@@ -737,15 +742,12 @@ mod test_db {
 
   #[test]
   fn test_service_db_import() {
-    // Create configuration kind of thing from this:
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
     let service_db = ServiceDb::new(movies_storage, series_storage);
 
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
-
-
-    // service_db.import(ratings_reader, basics_reader);
+    service_db.import_from_imdb(ratings_reader, basics_reader);
   }
 }
