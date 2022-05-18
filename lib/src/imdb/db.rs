@@ -781,7 +781,7 @@ mod test_db {
   fn test_service_db_import() {
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    let service_db = ServiceDb::new(movies_storage, series_storage);
+    let mut service_db = ServiceDb::new(movies_storage, series_storage);
 
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
