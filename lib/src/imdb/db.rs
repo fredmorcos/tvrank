@@ -725,6 +725,11 @@ mod test_db {
     assert_eq!(titles_from_tsv, titles_from_binary);
   }
 
+  // Goal: 
+  //  1. API for service DB / storage backend.
+  //  2. "ServiceDB" is one backend. using local binary files.
+  //  3. Test Service DB through this API.
+
   #[test]
   fn test_service_db_import() {
     let basics_reader = make_basics_reader();
@@ -733,7 +738,7 @@ mod test_db {
     // Create configuration kind of thing from this:
     // let mut movies_storage = Vec::new();
     // let mut series_storage = Vec::new();
-
+    
     // Set up ServiceDb to use previously created configuration.
     ServiceDb::import(ratings_reader, basics_reader);
   }
