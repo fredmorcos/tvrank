@@ -51,7 +51,32 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
       &mut basics_reader,
       self.movies_db_writer.as_mut().unwrap(),
       self.series_db_writer.as_mut().unwrap(),
-    )
+    )?;
+
+    let nthreads = rayon::current_num_threads();
+    let dbs = const_mutex(Vec::with_capacity(nthreads));
+    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.movies_db_writer.as_mut().unwrap());
+    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.series_db_writer.as_mut().unwrap());
+
+    rayon::scope(|scope| {
+      for _ in 0..nthreads {
+        let dbs = &dbs;
+        let movies_cursor = &movies_cursor;
+        let series_cursor = &series_cursor;
+
+        scope.spawn(move |_| {
+          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
+          let mut titles = Vec::with_capacity(100);
+          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+          dbs.lock().push(db);
+        });
+      }
+    });
+
+    // Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
+    self.dbs = dbs.into_inner();
+    Ok(())
   }
 
   /// Import title data from tab separated values (TSVs).
