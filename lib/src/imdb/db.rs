@@ -32,17 +32,54 @@ pub enum Query {
 
 pub struct ServiceDb<W1: Write, W2: Write> {
   dbs: Vec<Db>,
-  movies_db_writer: W1,
-  series_db_writer: W2,
+  movies_db_writer: Option<W1>,
+  series_db_writer: Option<W2>,
 }
 
 impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
   pub fn new(mut movies_db_writer: W1, mut series_db_writer: W2) -> Self {
-    Self { dbs: Vec::new(), movies_db_writer, series_db_writer }
+    Self {
+      dbs: Vec::new(),
+      movies_db_writer: Some(movies_db_writer),
+      series_db_writer: Some(series_db_writer),
+    }
   }
 
-  fn import_from_imdb(&self, ratings_reader: impl BufRead, basics_reader: impl BufRead) -> Res<()> {
-    Self::import(ratings_reader, basics_reader, self.movies_db_writer, self.series_db_writer)
+  fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
+    let ratings = Ratings::from_tsv(ratings_reader)?;
+
+    let mut line = String::new();
+
+    // Skip the first line.
+    basics_reader.read_line(&mut line)?;
+    line.clear();
+
+    loop {
+      let bytes = basics_reader.read_line(&mut line)?;
+
+      if bytes == 0 {
+        break;
+      }
+
+      let trimmed = line.trim_end();
+
+      if trimmed.is_empty() {
+        continue;
+      }
+
+      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
+        TsvAction::Movie(title) => title.write_binary(&mut self.movies_db_writer.as_mut().unwrap())?,
+        TsvAction::Series(title) => title.write_binary(&mut self.series_db_writer.as_mut().unwrap())?,
+        TsvAction::Skip => {
+          line.clear();
+          continue;
+        }
+      }
+
+      line.clear();
+    }
+
+    Ok(())
   }
 
   /// Import title data from tab separated values (TSVs).
@@ -130,10 +167,7 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
       }
     });
 
-    // let movies_db_writer: Vec<u8> = Vec::new();
-    // let series_db_writer: Vec<u8> = Vec::new();
-    let movies_db_writer = W1::new();
-    Self { dbs: dbs.into_inner(), movies_db_writer, series_db_writer }
+    Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
   }
 
   /// Loads titles from the provided binary content buffers into the thread-handled
