@@ -100,14 +100,20 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
     mut movies_db_writer: W1,
     mut series_db_writer: W2,
   ) -> Res<()> {
+    Self::import_impl(&ratings_reader, &mut basics_reader, &mut movies_db_writer, &mut series_db_writer)
+  }
+
+  fn import_impl<R1: BufRead, R2: BufRead>(
+    ratings_reader: &R1,
+    basics_reader: &mut R2,
+    movies_db_writer: &mut W1,
+    series_db_writer: &mut W2,
+  ) -> Res<()> {
     let ratings = Ratings::from_tsv(ratings_reader)?;
-
     let mut line = String::new();
-
     // Skip the first line.
     basics_reader.read_line(&mut line)?;
     line.clear();
-
     loop {
       let bytes = basics_reader.read_line(&mut line)?;
 
@@ -132,7 +138,6 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
 
       line.clear();
     }
-
     Ok(())
   }
 
