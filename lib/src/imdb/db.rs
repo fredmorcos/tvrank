@@ -724,4 +724,7 @@ mod test_db {
 
     assert_eq!(titles_from_tsv, titles_from_binary);
   }
+
+  #[test]
+  fn test_service_db_import()
 }
