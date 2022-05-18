@@ -250,6 +250,10 @@ impl ServiceDb {
       .flatten()
       .collect()
   }
+
+  pub fn new(movies_storage: Vec<_>, series_storage: Vec<_>) -> _ {
+    todo!()
+  }
 }
 
 /// A special object (i.e. a handle) that is used to refer to a movie in the database.
@@ -725,7 +729,7 @@ mod test_db {
     assert_eq!(titles_from_tsv, titles_from_binary);
   }
 
-  // Goal: 
+  // Goal:
   //  1. API for service DB / storage backend.
   //  2. "ServiceDB" is one backend. using local binary files.
   //  3. Test Service DB through this API.
@@ -736,10 +740,11 @@ mod test_db {
     let ratings_reader = make_ratings_reader();
 
     // Create configuration kind of thing from this:
-    // let mut movies_storage = Vec::new();
-    // let mut series_storage = Vec::new();
-    
+    let mut movies_storage = Vec::new();
+    let mut series_storage = Vec::new();
+
     // Set up ServiceDb to use previously created configuration.
-    ServiceDb::import(ratings_reader, basics_reader);
+    let service_db = ServiceDb::new(movies_storage, series_storage);
+    // service_db.import(ratings_reader, basics_reader);
   }
 }
