@@ -788,7 +788,23 @@ mod test_db {
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
     service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
+    // service_db.load2().unwrap();
 
     assert_eq!(service_db.n_entries(), (10, 0));
   }
+
+  // #[test]
+  // fn test_service_db_import_use_existing() {
+  //   let movies_storage = Vec::new();
+  //   let series_storage = Vec::new();
+  //   let mut service_db = ServiceDb::new(movies_storage, series_storage);
+
+  //   let basics_reader = make_basics_reader();
+  //   let ratings_reader = make_ratings_reader();
+  //   service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
+
+  //   let mut service_db2 = ServiceDb::new(movies_storage, series_storage);
+  //   service_db2.load2().unwrap();
+  //   assert_eq!(service_db2.n_entries(), (10, 0));
+  // }
 }
