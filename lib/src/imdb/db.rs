@@ -37,7 +37,7 @@ pub struct ServiceDb<W1: Write, W2: Write> {
 }
 
 impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
-  pub fn new(mut movies_db_writer: W1, mut series_db_writer: W2) -> Self {
+  pub fn new(movies_db_writer: W1, series_db_writer: W2) -> Self {
     Self {
       dbs: Vec::new(),
       movies_db_writer: Some(movies_db_writer),
@@ -779,12 +779,12 @@ mod test_db {
 
   #[test]
   fn test_service_db_import() {
-    let mut movies_storage = Vec::new();
-    let mut series_storage = Vec::new();
+    let movies_storage = Vec::new();
+    let series_storage = Vec::new();
     let mut service_db = ServiceDb::new(movies_storage, series_storage);
 
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
-    service_db.import_from_imdb(ratings_reader, basics_reader);
+    service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
   }
 }
