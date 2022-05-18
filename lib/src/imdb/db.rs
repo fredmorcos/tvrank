@@ -35,6 +35,11 @@ pub struct ServiceDb {
 }
 
 impl ServiceDb {
+
+  pub fn new<W1: Write, W2: Write>(mut movies_db_writer: W1, mut series_db_writer: W2) -> Self {
+    Self { dbs: Vec::new() }
+  }
+
   /// Import title data from tab separated values (TSVs).
   ///
   /// This parses TSV data from the provided `ratings_reader` and `basics_reader` and
@@ -249,10 +254,6 @@ impl ServiceDb {
       .map(|db| db.by_keywords_and_year(keywords, year, query).collect::<Vec<_>>())
       .flatten()
       .collect()
-  }
-
-  pub fn new(movies_storage: Vec<_>, series_storage: Vec<_>) -> _ {
-    todo!()
   }
 }
 
@@ -736,15 +737,15 @@ mod test_db {
 
   #[test]
   fn test_service_db_import() {
-    let basics_reader = make_basics_reader();
-    let ratings_reader = make_ratings_reader();
-
     // Create configuration kind of thing from this:
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-
-    // Set up ServiceDb to use previously created configuration.
     let service_db = ServiceDb::new(movies_storage, series_storage);
+
+    let basics_reader = make_basics_reader();
+    let ratings_reader = make_ratings_reader();
+
+
     // service_db.import(ratings_reader, basics_reader);
   }
 }
