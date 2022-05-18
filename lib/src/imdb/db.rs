@@ -41,8 +41,8 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
     Self { dbs: Vec::new(), movies_db_writer, series_db_writer }
   }
 
-  fn import_from_imdb(&self, ratings_reader: impl BufRead, basics_reader: impl BufRead) -> _ {
-    self.import(ratings_reader, basics_reader, self.movies_db_writer, self.series_db_writer)
+  fn import_from_imdb(&self, ratings_reader: impl BufRead, basics_reader: impl BufRead) -> Res<()> {
+    Self::import(ratings_reader, basics_reader, self.movies_db_writer, self.series_db_writer)
   }
 
   /// Import title data from tab separated values (TSVs).
@@ -57,7 +57,7 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
   /// * `basics_reader` - TSV reader for title data.
   /// * `movies_db_writer` - Binary writer to store movies.
   /// * `series_db_writer` - Binary writer to store series.
-  pub(crate) fn import<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
+  pub(crate) fn import<R1: BufRead, R2: BufRead>(
     ratings_reader: R1,
     mut basics_reader: R2,
     mut movies_db_writer: W1,
@@ -130,7 +130,7 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
       }
     });
 
-    Self { dbs: dbs.into_inner() }
+    Self { dbs: dbs.into_inner(), vec![], vec![] }
   }
 
   /// Loads titles from the provided binary content buffers into the thread-handled
