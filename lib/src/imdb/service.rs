@@ -12,20 +12,20 @@ use log::{debug, log_enabled};
 use reqwest::blocking::{Client, Response};
 use reqwest::Url;
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{self, BufReader, BufWriter};
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 /// Struct providing the movies and series databases and the related services
-pub struct Service<W1: Write, W2: Write> {
-  service_db: ServiceDb<W1, W2>,
+pub struct Service {
+  service_db: ServiceDb<File, File>,
 }
 
 const IMDB: &str = "https://datasets.imdbws.com/";
 const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 
-impl<W1: Write, W2: Write> Service<W1, W2> {
+impl Service {
   /// Returns a Service struct holding movies/series databases
   /// # Arguments
   /// * `cache_dir` - Directory path of the database files
