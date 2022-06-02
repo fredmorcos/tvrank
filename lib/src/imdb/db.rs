@@ -35,44 +35,43 @@ pub struct ServiceDb {
 }
 
 impl ServiceDb {
-  // pub fn new() -> Self {
-  //   Self { dbs: Vec::new() }
-  // }
+  pub fn new() -> Self {
+    Self { dbs: Vec::new() }
+  }
 
-  // fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
-  //   Self::import_impl(
-  //     ratings_reader,
-  //     &mut basics_reader,
-  //     self.movies_db_writer.as_mut().unwrap(),
-  //     self.series_db_writer.as_mut().unwrap(),
-  //   )?;
+  fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
+    let ratings = Ratings::from_tsv(ratings_reader)?;
+    let mut line = String::new();
+    // Skip the first line.
+    basics_reader.read_line(&mut line)?;
+    line.clear();
+    loop {
+      let bytes = basics_reader.read_line(&mut line)?;
 
-  //   // let nthreads = rayon::current_num_threads();
-  //   // let dbs = const_mutex(Vec::with_capacity(nthreads));
-  //   // let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.movies_db_writer.as_mut().unwrap());
-  //   // let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.series_db_writer.as_mut().unwrap());
+      if bytes == 0 {
+        break;
+      }
 
-  //   // rayon::scope(|scope| {
-  //   //   for _ in 0..nthreads {
-  //   //     let dbs = &dbs;
-  //   //     let movies_cursor = &movies_cursor;
-  //   //     let series_cursor = &series_cursor;
+      let trimmed = line.trim_end();
 
-  //   //     scope.spawn(move |_| {
-  //   //       let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
-  //   //       let mut titles = Vec::with_capacity(100);
-  //   //       Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-  //   //       Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-  //   //       dbs.lock().push(db);
-  //   //     });
-  //   //   }
-  //   // });
+      if trimmed.is_empty() {
+        continue;
+      }
 
-  //   // // Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
-  //   // self.dbs = dbs.into_inner();
+      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
+        TsvAction::Movie(title) => title.write_binary(movies_db_writer)?,
+        TsvAction::Series(title) => title.write_binary(series_db_writer)?,
+        TsvAction::Skip => {
+          line.clear();
+          continue;
+        }
+      }
 
-  //   Ok(())
-  // }
+      line.clear();
+    }
+
+    Ok(())
+  }
 
   /// Import title data from tab separated values (TSVs).
   ///
@@ -777,13 +776,14 @@ mod test_db {
   #[test]
   fn test_service_db_import() {
     let mut service_db = ServiceDb::new();
-    let movies_storage = Vec::new();
-    let series_storage = Vec::new();
 
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
     service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
-    // service_db.load2().unwrap();
+
+    // let movies_storage = Vec::new();
+    // let series_storage = Vec::new();
+    // service_db.write_to_binary(movies_storage, series_storage).unwrap();
 
     assert_eq!(service_db.n_entries(), (10, 0));
   }
