@@ -31,13 +31,13 @@ pub enum Query {
   Series,
 }
 
-pub struct ServiceDb<S1: Write, S2: Write> {
+pub struct ServiceDb<S1: Read + Write, S2: Read + Write> {
   dbs: Vec<Db>,
   movies_db_writer: Option<S1>,
   series_db_writer: Option<S2>,
 }
 
-impl<S1: Write, S2: Write> ServiceDb<S1, S2> {
+impl<S1: Read + Write, S2: Read + Write> ServiceDb<S1, S2> {
   pub fn new(movies_db_writer: S1, series_db_writer: S2) -> Self {
     Self {
       dbs: Vec::new(),

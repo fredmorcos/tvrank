@@ -173,12 +173,12 @@ impl Service {
       let ratings_downloader = Self::create_downloader(ratings_resp, progress_fn)?;
 
       let movies_db_file = File::create(movies_db_filename)?;
-      let movies_db_writer = BufWriter::new(movies_db_file);
+      // let movies_db_writer = BufWriter::new(movies_db_file);
 
       let series_db_file = File::create(series_db_filename)?;
-      let series_db_writer = BufWriter::new(series_db_file);
+      // let series_db_writer = BufWriter::new(series_db_file);
 
-      ServiceDb::import(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
+      ServiceDb::import(ratings_downloader, basics_downloader, movies_db_file, series_db_file)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
