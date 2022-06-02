@@ -58,6 +58,12 @@ impl ServiceDb {
         continue;
       }
 
+      // let mut db = Db::with_capacities(1_900_000, 270_000);
+      // let mut titles = Vec::with_capacity(100);
+      // Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+      // Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+      // dbs.lock().push(db);
+
       match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
         TsvAction::Movie(title) => title.write_binary(movies_db_writer)?,
         TsvAction::Series(title) => title.write_binary(series_db_writer)?,
@@ -180,18 +186,18 @@ impl ServiceDb {
     db: &mut Db,
   ) {
     loop {
-      let mut cursor = cursor.lock();
+      let mut cursor_guard = cursor.lock();
 
-      if (*cursor).is_empty() {
+      if (*cursor_guard).is_empty() {
         break;
       }
 
       for _ in 0..100 {
-        if (*cursor).is_empty() {
+        if (*cursor_guard).is_empty() {
           break;
         }
 
-        let title = match Title::from_binary(&mut cursor) {
+        let title = match Title::from_binary(&mut cursor_guard) {
           Ok(title) => title,
           Err(e) => panic!("Error parsing title: {}", e),
         };
@@ -199,7 +205,7 @@ impl ServiceDb {
         titles.push(title);
       }
 
-      drop(cursor);
+      drop(cursor_guard);
 
       for &title in titles.iter() {
         if IS_MOVIE {
