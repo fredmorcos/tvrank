@@ -14,7 +14,6 @@ use log::debug;
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::io::Read;
 use std::io::{BufRead, Write};
 use std::ops::Index;
 
@@ -31,55 +30,49 @@ pub enum Query {
   Series,
 }
 
-pub struct ServiceDb<S1: Read + Write, S2: Read + Write> {
+pub struct ServiceDb {
   dbs: Vec<Db>,
-  movies_db_writer: Option<S1>,
-  series_db_writer: Option<S2>,
 }
 
-impl<S1: Read + Write, S2: Read + Write> ServiceDb<S1, S2> {
-  pub fn new(movies_db_writer: S1, series_db_writer: S2) -> Self {
-    Self {
-      dbs: Vec::new(),
-      movies_db_writer: Some(movies_db_writer),
-      series_db_writer: Some(series_db_writer),
-    }
-  }
+impl ServiceDb {
+  // pub fn new() -> Self {
+  //   Self { dbs: Vec::new() }
+  // }
 
-  fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
-    Self::import_impl(
-      ratings_reader,
-      &mut basics_reader,
-      self.movies_db_writer.as_mut().unwrap(),
-      self.series_db_writer.as_mut().unwrap(),
-    )?;
+  // fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
+  //   Self::import_impl(
+  //     ratings_reader,
+  //     &mut basics_reader,
+  //     self.movies_db_writer.as_mut().unwrap(),
+  //     self.series_db_writer.as_mut().unwrap(),
+  //   )?;
 
-    // let nthreads = rayon::current_num_threads();
-    // let dbs = const_mutex(Vec::with_capacity(nthreads));
-    // let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.movies_db_writer.as_mut().unwrap());
-    // let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.series_db_writer.as_mut().unwrap());
+  //   // let nthreads = rayon::current_num_threads();
+  //   // let dbs = const_mutex(Vec::with_capacity(nthreads));
+  //   // let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.movies_db_writer.as_mut().unwrap());
+  //   // let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.series_db_writer.as_mut().unwrap());
 
-    // rayon::scope(|scope| {
-    //   for _ in 0..nthreads {
-    //     let dbs = &dbs;
-    //     let movies_cursor = &movies_cursor;
-    //     let series_cursor = &series_cursor;
+  //   // rayon::scope(|scope| {
+  //   //   for _ in 0..nthreads {
+  //   //     let dbs = &dbs;
+  //   //     let movies_cursor = &movies_cursor;
+  //   //     let series_cursor = &series_cursor;
 
-    //     scope.spawn(move |_| {
-    //       let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
-    //       let mut titles = Vec::with_capacity(100);
-    //       Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-    //       Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-    //       dbs.lock().push(db);
-    //     });
-    //   }
-    // });
+  //   //     scope.spawn(move |_| {
+  //   //       let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
+  //   //       let mut titles = Vec::with_capacity(100);
+  //   //       Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+  //   //       Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+  //   //       dbs.lock().push(db);
+  //   //     });
+  //   //   }
+  //   // });
 
-    // // Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
-    // self.dbs = dbs.into_inner();
+  //   // // Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
+  //   // self.dbs = dbs.into_inner();
 
-    Ok(())
-  }
+  //   Ok(())
+  // }
 
   /// Import title data from tab separated values (TSVs).
   ///
@@ -93,20 +86,20 @@ impl<S1: Read + Write, S2: Read + Write> ServiceDb<S1, S2> {
   /// * `basics_reader` - TSV reader for title data.
   /// * `movies_db_writer` - Binary writer to store movies.
   /// * `series_db_writer` - Binary writer to store series.
-  pub(crate) fn import<R1: BufRead, R2: BufRead>(
+  pub(crate) fn import<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
     ratings_reader: R1,
     mut basics_reader: R2,
-    mut movies_db_writer: S1,
-    mut series_db_writer: S2,
+    mut movies_db_writer: W1,
+    mut series_db_writer: W2,
   ) -> Res<()> {
     Self::import_impl(ratings_reader, &mut basics_reader, &mut movies_db_writer, &mut series_db_writer)
   }
 
-  fn import_impl<R1: BufRead, R2: BufRead>(
+  fn import_impl<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
     ratings_reader: R1,
     basics_reader: &mut R2,
-    movies_db_writer: &mut S1,
-    series_db_writer: &mut S2,
+    movies_db_writer: &mut W1,
+    series_db_writer: &mut W2,
   ) -> Res<()> {
     let ratings = Ratings::from_tsv(ratings_reader)?;
     let mut line = String::new();
@@ -171,7 +164,7 @@ impl<S1: Read + Write, S2: Read + Write> ServiceDb<S1, S2> {
       }
     });
 
-    Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
+    Self { dbs: dbs.into_inner() }
   }
 
   /// Loads titles from the provided binary content buffers into the thread-handled
@@ -738,7 +731,7 @@ mod test_db {
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage.as_mut_slice(), &mut series_storage).unwrap();
+    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
     let mut basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
@@ -783,9 +776,9 @@ mod test_db {
 
   #[test]
   fn test_service_db_import() {
+    let mut service_db = ServiceDb::new();
     let movies_storage = Vec::new();
     let series_storage = Vec::new();
-    let mut service_db = ServiceDb::new(movies_storage, series_storage);
 
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
