@@ -14,6 +14,7 @@ use log::debug;
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::io::Read;
 use std::io::{BufRead, Write};
 use std::ops::Index;
 
@@ -30,14 +31,14 @@ pub enum Query {
   Series,
 }
 
-pub struct ServiceDb<W1: Write, W2: Write> {
+pub struct ServiceDb<S1: Write, S2: Write> {
   dbs: Vec<Db>,
-  movies_db_writer: Option<W1>,
-  series_db_writer: Option<W2>,
+  movies_db_writer: Option<S1>,
+  series_db_writer: Option<S2>,
 }
 
-impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
-  pub fn new(movies_db_writer: W1, series_db_writer: W2) -> Self {
+impl<S1: Write, S2: Write> ServiceDb<S1, S2> {
+  pub fn new(movies_db_writer: S1, series_db_writer: S2) -> Self {
     Self {
       dbs: Vec::new(),
       movies_db_writer: Some(movies_db_writer),
@@ -53,29 +54,30 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
       self.series_db_writer.as_mut().unwrap(),
     )?;
 
-    let nthreads = rayon::current_num_threads();
-    let dbs = const_mutex(Vec::with_capacity(nthreads));
-    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.movies_db_writer.as_mut().unwrap());
-    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.series_db_writer.as_mut().unwrap());
+    // let nthreads = rayon::current_num_threads();
+    // let dbs = const_mutex(Vec::with_capacity(nthreads));
+    // let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.movies_db_writer.as_mut().unwrap());
+    // let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(self.series_db_writer.as_mut().unwrap());
 
-    rayon::scope(|scope| {
-      for _ in 0..nthreads {
-        let dbs = &dbs;
-        let movies_cursor = &movies_cursor;
-        let series_cursor = &series_cursor;
+    // rayon::scope(|scope| {
+    //   for _ in 0..nthreads {
+    //     let dbs = &dbs;
+    //     let movies_cursor = &movies_cursor;
+    //     let series_cursor = &series_cursor;
 
-        scope.spawn(move |_| {
-          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
-          let mut titles = Vec::with_capacity(100);
-          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-          dbs.lock().push(db);
-        });
-      }
-    });
+    //     scope.spawn(move |_| {
+    //       let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
+    //       let mut titles = Vec::with_capacity(100);
+    //       Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+    //       Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+    //       dbs.lock().push(db);
+    //     });
+    //   }
+    // });
 
-    // Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
-    self.dbs = dbs.into_inner();
+    // // Self { dbs: dbs.into_inner(), movies_db_writer: None, series_db_writer: None }
+    // self.dbs = dbs.into_inner();
+
     Ok(())
   }
 
@@ -94,8 +96,8 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
   pub(crate) fn import<R1: BufRead, R2: BufRead>(
     ratings_reader: R1,
     mut basics_reader: R2,
-    mut movies_db_writer: W1,
-    mut series_db_writer: W2,
+    mut movies_db_writer: S1,
+    mut series_db_writer: S2,
   ) -> Res<()> {
     Self::import_impl(ratings_reader, &mut basics_reader, &mut movies_db_writer, &mut series_db_writer)
   }
@@ -103,8 +105,8 @@ impl<W1: Write, W2: Write> ServiceDb<W1, W2> {
   fn import_impl<R1: BufRead, R2: BufRead>(
     ratings_reader: R1,
     basics_reader: &mut R2,
-    movies_db_writer: &mut W1,
-    series_db_writer: &mut W2,
+    movies_db_writer: &mut S1,
+    series_db_writer: &mut S2,
   ) -> Res<()> {
     let ratings = Ratings::from_tsv(ratings_reader)?;
     let mut line = String::new();
