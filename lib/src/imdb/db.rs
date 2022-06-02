@@ -738,7 +738,7 @@ mod test_db {
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
+    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage.as_mut_slice(), &mut series_storage).unwrap();
 
     let mut basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
