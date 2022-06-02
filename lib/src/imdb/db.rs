@@ -39,15 +39,21 @@ impl ServiceDb {
     Self { dbs: Vec::new() }
   }
 
+  // fn import_impl<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
+  //   ratings_reader: R1,
+  //   basics_reader: &mut R2,
+  //   movies_db_writer: &mut W1,
+  //   series_db_writer: &mut W2,
+  // ) -> Res<()> {
   fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
     let ratings = Ratings::from_tsv(ratings_reader)?;
     let mut line = String::new();
     // Skip the first line.
     basics_reader.read_line(&mut line)?;
     line.clear();
+    let mut db = Db::with_capacities(1_900_000, 270_000);
     loop {
       let bytes = basics_reader.read_line(&mut line)?;
-
       if bytes == 0 {
         break;
       }
@@ -58,15 +64,13 @@ impl ServiceDb {
         continue;
       }
 
-      // let mut db = Db::with_capacities(1_900_000, 270_000);
       // let mut titles = Vec::with_capacity(100);
       // Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
       // Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-      // dbs.lock().push(db);
 
       match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
-        TsvAction::Movie(title) => title.write_binary(movies_db_writer)?,
-        TsvAction::Series(title) => title.write_binary(series_db_writer)?,
+        TsvAction::Movie(title) => db.store_movie(title),
+        TsvAction::Series(title) => db.store_series(title),
         TsvAction::Skip => {
           line.clear();
           continue;
@@ -75,7 +79,7 @@ impl ServiceDb {
 
       line.clear();
     }
-
+    self.dbs.push(db);
     Ok(())
   }
 
