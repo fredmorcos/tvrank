@@ -1,6 +1,7 @@
 #![warn(clippy::all)]
 
 use crate::imdb::db::{Query, ServiceDb};
+use crate::imdb::db_new;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::utils::io::Progress;

@@ -35,54 +35,6 @@ pub struct ServiceDb {
 }
 
 impl ServiceDb {
-  pub fn new() -> Self {
-    Self { dbs: Vec::new() }
-  }
-
-  // fn import_impl<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
-  //   ratings_reader: R1,
-  //   basics_reader: &mut R2,
-  //   movies_db_writer: &mut W1,
-  //   series_db_writer: &mut W2,
-  // ) -> Res<()> {
-  fn import_from_imdb(&mut self, ratings_reader: impl BufRead, mut basics_reader: impl BufRead) -> Res<()> {
-    let ratings = Ratings::from_tsv(ratings_reader)?;
-    let mut line = String::new();
-    // Skip the first line.
-    basics_reader.read_line(&mut line)?;
-    line.clear();
-    let mut db = Db::with_capacities(1_900_000, 270_000);
-    loop {
-      let bytes = basics_reader.read_line(&mut line)?;
-      if bytes == 0 {
-        break;
-      }
-
-      let trimmed = line.trim_end();
-
-      if trimmed.is_empty() {
-        continue;
-      }
-
-      // let mut titles = Vec::with_capacity(100);
-      // Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-      // Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-
-      match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
-        TsvAction::Movie(title) => db.store_movie(title),
-        TsvAction::Series(title) => db.store_series(title),
-        TsvAction::Skip => {
-          line.clear();
-          continue;
-        }
-      }
-
-      line.clear();
-    }
-    self.dbs.push(db);
-    Ok(())
-  }
-
   /// Import title data from tab separated values (TSVs).
   ///
   /// This parses TSV data from the provided `ratings_reader` and `basics_reader` and
@@ -101,20 +53,14 @@ impl ServiceDb {
     mut movies_db_writer: W1,
     mut series_db_writer: W2,
   ) -> Res<()> {
-    Self::import_impl(ratings_reader, &mut basics_reader, &mut movies_db_writer, &mut series_db_writer)
-  }
-
-  fn import_impl<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
-    ratings_reader: R1,
-    basics_reader: &mut R2,
-    movies_db_writer: &mut W1,
-    series_db_writer: &mut W2,
-  ) -> Res<()> {
     let ratings = Ratings::from_tsv(ratings_reader)?;
+
     let mut line = String::new();
+
     // Skip the first line.
     basics_reader.read_line(&mut line)?;
     line.clear();
+
     loop {
       let bytes = basics_reader.read_line(&mut line)?;
 
@@ -129,8 +75,8 @@ impl ServiceDb {
       }
 
       match Title::from_tsv(trimmed.as_bytes(), &ratings)? {
-        TsvAction::Movie(title) => title.write_binary(movies_db_writer)?,
-        TsvAction::Series(title) => title.write_binary(series_db_writer)?,
+        TsvAction::Movie(title) => title.write_binary(&mut movies_db_writer)?,
+        TsvAction::Series(title) => title.write_binary(&mut series_db_writer)?,
         TsvAction::Skip => {
           line.clear();
           continue;
@@ -139,6 +85,7 @@ impl ServiceDb {
 
       line.clear();
     }
+
     Ok(())
   }
 
@@ -777,39 +724,4 @@ mod test_db {
 
     assert_eq!(titles_from_tsv, titles_from_binary);
   }
-
-  // Goal:
-  //  1. API for service DB / storage backend.
-  //  2. "ServiceDB" is one backend. using local binary files.
-  //  3. Test Service DB through this API.
-
-  #[test]
-  fn test_service_db_import() {
-    let mut service_db = ServiceDb::new();
-
-    let basics_reader = make_basics_reader();
-    let ratings_reader = make_ratings_reader();
-    service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
-
-    // let movies_storage = Vec::new();
-    // let series_storage = Vec::new();
-    // service_db.write_to_binary(movies_storage, series_storage).unwrap();
-
-    assert_eq!(service_db.n_entries(), (10, 0));
-  }
-
-  // #[test]
-  // fn test_service_db_import_use_existing() {
-  //   let movies_storage = Vec::new();
-  //   let series_storage = Vec::new();
-  //   let mut service_db = ServiceDb::new(movies_storage, series_storage);
-
-  //   let basics_reader = make_basics_reader();
-  //   let ratings_reader = make_ratings_reader();
-  //   service_db.import_from_imdb(ratings_reader, basics_reader).unwrap();
-
-  //   let mut service_db2 = ServiceDb::new(movies_storage, series_storage);
-  //   service_db2.load2().unwrap();
-  //   assert_eq!(service_db2.n_entries(), (10, 0));
-  // }
 }

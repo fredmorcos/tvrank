@@ -14,7 +14,7 @@
 Backing store:: Thing that is dealing with reading content and writing content to/from disk and to/from vector.
 ServiceDB (Current implementation):: Thing that provides the query API and contacts the backing store.
 ServiceDB (Future Interface goal):: Generic trait supporting different backing stores.
-Database:: 
+Database::
 
 Separate import of TSV into a separate class.
 Separate loading of binary file into a separate class.
