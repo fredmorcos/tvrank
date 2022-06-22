@@ -1,6 +1,10 @@
 use super::db::Db;
-use parking_lot::{const_mutex, Mutex};
+use crate::imdb::db::Query;
 use crate::imdb::title::Title;
+use crate::imdb::title_id::TitleId;
+use log::debug;
+use parking_lot::{const_mutex, Mutex};
+use rayon::prelude::*;
 
 pub struct ServiceDbFromBinary {
   dbs: Vec<Db>,
@@ -88,15 +92,53 @@ impl ServiceDbFromBinary {
     }
   }
 
+  /// Calculate the total number of movies and series entries.
+  ///
+  /// # Return
+  ///
+  /// Returns a tuple containing two numbers, the first one is the number of movies and
+  /// the second on the number of series contained in the database.
   pub fn n_entries(&self) -> (usize, usize) {
-    (10, 0)
+    let mut total_movies = 0;
+    let mut total_series = 0;
+
+    for (i, db) in self.dbs.iter().enumerate() {
+      let movies = db.n_movies();
+      let series = db.n_series();
+      let entries = db.n_entries();
+
+      total_movies += movies;
+      total_series += series;
+
+      debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
+    }
+
+    (total_movies, total_series)
+  }
+
+  pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
+    let res = self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_id(id, query))
+      .filter(|res| res.is_some())
+      .flatten()
+      .collect::<Vec<_>>();
+
+    if res.is_empty() {
+      None
+    } else {
+      Some(unsafe { res.get_unchecked(0) })
+    }
   }
 }
 
 #[cfg(test)]
 mod tests {
+  use crate::imdb::db::Query;
   use crate::imdb::db::ServiceDb;
   use crate::imdb::db_new::ServiceDbFromBinary;
+  use crate::imdb::title_id::TitleId;
   use indoc::indoc;
   use std::io::BufRead;
 
@@ -133,19 +175,31 @@ mod tests {
     .as_bytes()
   }
 
-  #[test]
-  fn service_db_from_binary() {
+  fn make_service_db_from_binary() -> ServiceDbFromBinary {
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-
     ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
     let movies_storage = Box::leak(movies_storage.into_boxed_slice());
     let series_storage = Box::leak(series_storage.into_boxed_slice());
-    let service_db = ServiceDbFromBinary::new(movies_storage, series_storage);
+    ServiceDbFromBinary::new(movies_storage, series_storage)
+  }
+
+  #[test]
+  fn test_n_entries() {
+    let service_db = make_service_db_from_binary();
     assert_eq!(service_db.n_entries(), (10, 0));
+  }
+
+  #[test]
+  fn test_by_id() {
+    let service_db = make_service_db_from_binary();
+    let title = service_db
+      .by_id(&TitleId::try_from("tt0000007").unwrap(), Query::Movies)
+      .unwrap();
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
   }
 }
