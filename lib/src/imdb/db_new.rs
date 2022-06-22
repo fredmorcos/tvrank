@@ -1,10 +1,43 @@
-use std::io::Read;
+use super::db::Db;
+use parking_lot::{const_mutex, Mutex};
 
-pub struct ServiceDbFromBinary;
+pub struct ServiceDbFromBinary {
+  dbs: Vec<Db>,
+}
 
 impl ServiceDbFromBinary {
-  pub fn new<R1: Read, R2: Read>(ratings_reader: R1, mut basics_reader: R2) -> Self {
-    ServiceDbFromBinary
+  /// Load titles from the given binary data.
+  ///
+  /// Loads titles from the provided binary content buffers (`movies_data` and
+  /// `series_data`) into one of the thread-handled databases.
+  ///
+  /// # Arguments
+  ///
+  /// * `movies_data` - Binary movies data.
+  /// * `series_data` - Binary series data.
+  pub fn new(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
+    let nthreads = rayon::current_num_threads();
+    let dbs = const_mutex(Vec::with_capacity(nthreads));
+    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
+    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
+
+    rayon::scope(|scope| {
+      for _ in 0..nthreads {
+        let dbs = &dbs;
+        let movies_cursor = &movies_cursor;
+        let series_cursor = &series_cursor;
+
+        scope.spawn(move |_| {
+          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
+          let mut titles = Vec::with_capacity(100);
+          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
+          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+          dbs.lock().push(db);
+        });
+      }
+    });
+
+    Self { dbs: dbs.into_inner() }
   }
 
   pub fn n_entries(&self) -> (usize, usize) {
