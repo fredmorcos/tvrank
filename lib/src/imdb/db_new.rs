@@ -1,5 +1,6 @@
 use super::db::Db;
 use parking_lot::{const_mutex, Mutex};
+use crate::imdb::title::Title;
 
 pub struct ServiceDbFromBinary {
   dbs: Vec<Db>,
@@ -38,6 +39,53 @@ impl ServiceDbFromBinary {
     });
 
     Self { dbs: dbs.into_inner() }
+  }
+
+  /// Loads titles from the provided binary content buffers into the thread-handled
+  /// databases.
+  ///
+  /// # Arguments
+  ///
+  /// * `cursor` - Cursor at the binary to read the titles from.
+  /// * `titles` - Vector to store the titles temporarily before writing to the database.
+  /// * `db` - Database to store movies or series.
+  fn titles_from_binary<const IS_MOVIE: bool>(
+    cursor: &Mutex<&mut &'static [u8]>,
+    titles: &mut Vec<Title<'static>>,
+    db: &mut Db,
+  ) {
+    loop {
+      let mut cursor_guard = cursor.lock();
+
+      if (*cursor_guard).is_empty() {
+        break;
+      }
+
+      for _ in 0..100 {
+        if (*cursor_guard).is_empty() {
+          break;
+        }
+
+        let title = match Title::from_binary(&mut cursor_guard) {
+          Ok(title) => title,
+          Err(e) => panic!("Error parsing title: {}", e),
+        };
+
+        titles.push(title);
+      }
+
+      drop(cursor_guard);
+
+      for &title in titles.iter() {
+        if IS_MOVIE {
+          db.store_movie(title);
+        } else {
+          db.store_series(title);
+        }
+      }
+
+      titles.clear();
+    }
   }
 
   pub fn n_entries(&self) -> (usize, usize) {
@@ -95,7 +143,9 @@ mod tests {
 
     ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
-    let service_db = ServiceDbFromBinary::new(movies_storage.as_slice(), series_storage.as_slice());
+    let movies_storage = Box::leak(movies_storage.into_boxed_slice());
+    let series_storage = Box::leak(series_storage.into_boxed_slice());
+    let service_db = ServiceDbFromBinary::new(movies_storage, series_storage);
     assert_eq!(service_db.n_entries(), (10, 0));
   }
 }
