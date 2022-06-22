@@ -4,6 +4,7 @@
 //! Module for TVrank to use the IMDB dataset (TSV dumps) as a source.
 
 mod db;
+mod db_new;
 mod error;
 mod genre;
 mod ratings;

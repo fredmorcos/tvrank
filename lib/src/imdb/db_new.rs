@@ -1,6 +1,15 @@
+use std::io::Read;
+
+struct ServiceDbFromBinary;
+
+impl ServiceDbFromBinary {
+  fn new<R1: Read, R2: Read>(ratings_reader: R1, mut basics_reader: R2) -> Self {}
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::imdb::db::ServiceDb;
 
   fn make_basics_reader() -> impl BufRead {
     indoc! {"
@@ -44,5 +53,7 @@ mod tests {
     let mut series_storage = Vec::new();
 
     ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
+
+    let _service_db = ServiceDbFromBinary::new(&movies_storage, &series_storage);
   }
 }
