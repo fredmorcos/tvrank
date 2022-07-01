@@ -138,7 +138,7 @@ impl ServiceDbFromBinary {
     }
     dbg!(self
       .dbs
-      .iter()  // TODO: Change back to par_iter
+      .iter() // TODO: Change back to par_iter
       .map(|db| dbg!(db.by_title(title, query).collect::<Vec<_>>()))
       .flatten()
       .collect())

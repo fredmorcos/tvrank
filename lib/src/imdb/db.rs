@@ -598,7 +598,7 @@ impl<C: Into<usize> + Copy + std::fmt::Debug> DbImpl<C> {
   /// * `title` - Title name to search for.
   pub(crate) fn by_title<'a>(&'a self, title: &str) -> Box<dyn Iterator<Item = &Title> + 'a> {
     dbg!(title);
-    if let Some(by_year) = dbg!(self.by_title.get(title)) {
+    if let Some(by_year) = dbg!(&self.by_title).get(title) {
       return Box::new(by_year.values().flatten().map(|&cookie| dbg!(&self[cookie])));
     }
 
