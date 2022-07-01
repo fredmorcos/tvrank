@@ -399,7 +399,7 @@ impl Db {
 }
 
 type ById<C> = FnvHashMap<usize, C>;
-type ByYear<C: std::fmt::Debug> = FnvHashMap<u16, Vec<C>>;
+type ByYear<C> = FnvHashMap<u16, Vec<C>>;
 type ByTitle<C> = HashMap<String, ByYear<C>>;
 
 struct DbImpl<C> {
@@ -581,7 +581,7 @@ impl<C> DbImpl<C> {
   }
 }
 
-impl<C: Into<usize> + Copy + std::fmt::Debug> DbImpl<C> {
+impl<C: Into<usize> + Copy> DbImpl<C> {
   /// Find title by IMDB ID.
   ///
   /// # Arguments
@@ -597,9 +597,8 @@ impl<C: Into<usize> + Copy + std::fmt::Debug> DbImpl<C> {
   ///
   /// * `title` - Title name to search for.
   pub(crate) fn by_title<'a>(&'a self, title: &str) -> Box<dyn Iterator<Item = &Title> + 'a> {
-    dbg!(title);
-    if let Some(by_year) = dbg!(&self.by_title).get(title) {
-      return Box::new(by_year.values().flatten().map(|&cookie| dbg!(&self[cookie])));
+    if let Some(by_year) = &self.by_title.get(title) {
+      return Box::new(by_year.values().flatten().map(|&cookie| &self[cookie]));
     }
 
     Box::new(std::iter::empty())
