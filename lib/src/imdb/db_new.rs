@@ -131,6 +131,15 @@ impl ServiceDbFromBinary {
       Some(unsafe { res.get_unchecked(0) })
     }
   }
+
+  pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_title(title, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
 }
 
 #[cfg(test)]
@@ -200,6 +209,17 @@ mod tests {
     let title = service_db
       .by_id(&TitleId::try_from("tt0000007").unwrap(), Query::Movies)
       .unwrap();
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+
+  #[test]
+  fn test_by_title() {
+    let service_db = make_service_db_from_binary();
+    let title = service_db
+      .by_title("Corbett and Courtney Before the Kinetograph", Query::Movies)
+      .unwrap();
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
     assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
   }
 }
