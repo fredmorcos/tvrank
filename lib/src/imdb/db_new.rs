@@ -133,10 +133,13 @@ impl ServiceDbFromBinary {
   }
 
   pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
+    // for db in &self.dbs {
+    //   dbg!(db.n_entries());
+    // }
     dbg!(self
       .dbs
       .par_iter()
-      .map(|db| db.by_title(title, query).collect::<Vec<_>>())
+      .map(|db| dbg!(db.by_title(title, query).collect::<Vec<_>>()))
       .flatten()
       .collect())
   }
