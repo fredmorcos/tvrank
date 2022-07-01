@@ -21,7 +21,7 @@ impl ServiceDbFromBinary {
   /// * `movies_data` - Binary movies data.
   /// * `series_data` - Binary series data.
   pub fn new(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
-    let nthreads = rayon::current_num_threads();
+    let nthreads = 1; // rayon::current_num_threads();
     let dbs = const_mutex(Vec::with_capacity(nthreads));
     let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
     let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
@@ -133,12 +133,12 @@ impl ServiceDbFromBinary {
   }
 
   pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
-    // for db in &self.dbs {
-    //   dbg!(db.n_entries());
-    // }
+    for db in &self.dbs {
+      dbg!(db.n_entries());
+    }
     dbg!(self
       .dbs
-      .par_iter()
+      .iter()  // TODO: Change back to par_iter
       .map(|db| dbg!(db.by_title(title, query).collect::<Vec<_>>()))
       .flatten()
       .collect())
