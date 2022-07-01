@@ -140,6 +140,16 @@ impl ServiceDbFromBinary {
       .flat_map(|db| db.by_title(&title, query).collect::<Vec<_>>())
       .collect()
   }
+
+  pub fn by_title_and_year(&self, title: &str, year: u16, query: Query) -> Vec<&Title> {
+    let title = title.to_lowercase();
+    self
+      .dbs
+      .par_iter()
+      .map(|db| db.by_title_and_year(&title, year, query).collect::<Vec<_>>())
+      .flatten()
+      .collect()
+  }
 }
 
 #[cfg(test)]
@@ -216,8 +226,28 @@ mod tests {
   #[test]
   fn test_by_title() {
     let service_db = make_service_db_from_binary();
-    assert_eq!(service_db.n_entries(), (10, 0));
     let titles = service_db.by_title("Corbett and Courtney Before the Kinetograph", Query::Movies);
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+
+  #[test]
+  fn test_by_title_and_year() {
+    let service_db = make_service_db_from_binary();
+    let titles =
+      service_db.by_title_and_year("Corbett and Courtney Before the Kinetograph", 1894, Query::Movies);
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+
+  #[test]
+  fn test_by_keywords() {
+    let service_db = make_service_db_from_binary();
+    let titles = service_db.by_keywords(["Corbett"], Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
