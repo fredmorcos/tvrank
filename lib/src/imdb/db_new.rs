@@ -133,12 +133,12 @@ impl ServiceDbFromBinary {
   }
 
   pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
-    self
+    dbg!(self
       .dbs
       .par_iter()
       .map(|db| db.by_title(title, query).collect::<Vec<_>>())
       .flatten()
-      .collect()
+      .collect())
   }
 }
 
@@ -216,8 +216,8 @@ mod tests {
   #[test]
   fn test_by_title() {
     let service_db = make_service_db_from_binary();
-    let titles = service_db
-      .by_title("Corbett and Courtney Before the Kinetograph", Query::Movies);
+    assert_eq!(service_db.n_entries(), (10, 0));
+    let titles = service_db.by_title("Corbett and Courtney Before the Kinetograph", Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
