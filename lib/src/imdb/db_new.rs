@@ -2,6 +2,7 @@ use super::db::Db;
 use crate::imdb::db::Query;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
+use fnv::FnvHashSet;
 use log::debug;
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
@@ -146,8 +147,16 @@ impl ServiceDbFromBinary {
     self
       .dbs
       .par_iter()
-      .map(|db| db.by_title_and_year(&title, year, query).collect::<Vec<_>>())
-      .flatten()
+      .flat_map(|db| db.by_title_and_year(&title, year, query).collect::<Vec<_>>())
+      .collect()
+  }
+
+  pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str], query: Query) -> Vec<&'a Title> {
+    // TODO: Make keywords lowercase
+    self
+      .dbs
+      .par_iter()
+      .flat_map(|db| db.by_keywords(keywords, query).collect::<Vec<_>>())
       .collect()
   }
 }
@@ -247,7 +256,7 @@ mod tests {
   #[test]
   fn test_by_keywords() {
     let service_db = make_service_db_from_binary();
-    let titles = service_db.by_keywords(["Corbett"], Query::Movies);
+    let titles = service_db.by_keywords(&["Corbett"], Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
