@@ -216,9 +216,10 @@ mod tests {
   #[test]
   fn test_by_title() {
     let service_db = make_service_db_from_binary();
-    let title = service_db
-      .by_title("Corbett and Courtney Before the Kinetograph", Query::Movies)
-      .unwrap();
+    let titles = service_db
+      .by_title("Corbett and Courtney Before the Kinetograph", Query::Movies);
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
     assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
   }
