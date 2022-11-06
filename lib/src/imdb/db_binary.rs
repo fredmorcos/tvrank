@@ -173,10 +173,10 @@ impl ServiceDbFromBinary {
 #[cfg(test)]
 mod tests {
   use crate::imdb::db::Query;
-  use crate::imdb::db::ServiceDb;
   use crate::imdb::db_binary::ServiceDbFromBinary;
   use crate::imdb::testdata::{make_basics_reader, make_ratings_reader};
   use crate::imdb::title_id::TitleId;
+  use crate::imdb::tsv_import::tsv_import;
   use crate::utils::search::SearchString;
 
   fn make_service_db_from_binary() -> ServiceDbFromBinary {
@@ -185,7 +185,7 @@ mod tests {
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
+    tsv_import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
     let movies_storage = Box::leak(movies_storage.into_boxed_slice());
     let series_storage = Box::leak(series_storage.into_boxed_slice());

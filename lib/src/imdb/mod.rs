@@ -15,6 +15,7 @@ mod title_header;
 mod title_id;
 mod title_type;
 mod tokens;
+mod tsv_import;
 
 #[cfg(test)]
 mod testdata;

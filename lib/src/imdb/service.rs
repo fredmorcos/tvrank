@@ -1,21 +1,24 @@
 #![warn(clippy::all)]
 
-use crate::imdb::db::{Query, ServiceDb};
+use std::fs::{self, File};
+use std::io::{self, BufReader, BufWriter};
+use std::path::Path;
+use std::time::{Duration, Instant, SystemTime};
+
+use crate::imdb::db::Query;
 use crate::imdb::db_binary::ServiceDbFromBinary;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
+use crate::imdb::tsv_import::tsv_import;
 use crate::utils::io::Progress;
 use crate::utils::result::Res;
 use crate::utils::search::SearchString;
+
 use flate2::bufread::GzDecoder;
 use humantime::format_duration;
 use log::{debug, log_enabled};
 use reqwest::blocking::{Client, Response};
 use reqwest::Url;
-use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter};
-use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
 
 /// Struct providing the movies and series databases and the related services
 pub struct Service {
@@ -179,7 +182,7 @@ impl Service {
       let series_db_file = File::create(series_db_filename)?;
       let series_db_writer = BufWriter::new(series_db_file);
 
-      ServiceDb::import(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
+      tsv_import(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
