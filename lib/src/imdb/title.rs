@@ -217,20 +217,20 @@ impl<'storage> Title<'storage> {
   /// # Arguments
   /// `writer` - Writer to write the title to
   pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res<()> {
-    let _ = writer.write_all(&self.header.to_le_bytes())?;
+    writer.write_all(&self.header.to_le_bytes())?;
 
     let title_id = self.title_id.as_bytes();
-    let _ = writer.write_all(&(title_id.len() as u8).to_le_bytes());
-    let _ = writer.write_all(title_id)?;
+    writer.write_all(&(title_id.len() as u8).to_le_bytes())?;
+    writer.write_all(title_id)?;
 
     let primary_title = self.primary_title.as_bytes();
-    let _ = writer.write_all(&(primary_title.len() as u16).to_le_bytes());
-    let _ = writer.write_all(primary_title)?;
+    writer.write_all(&(primary_title.len() as u16).to_le_bytes())?;
+    writer.write_all(primary_title)?;
 
     if let Some(original_title) = self.original_title {
       let original_title = original_title.as_bytes();
-      let _ = writer.write_all(&(original_title.len() as u16).to_le_bytes())?;
-      let _ = writer.write_all(original_title)?;
+      writer.write_all(&(original_title.len() as u16).to_le_bytes())?;
+      writer.write_all(original_title)?;
     }
 
     Ok(())
