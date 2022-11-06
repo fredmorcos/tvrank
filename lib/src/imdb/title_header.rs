@@ -73,16 +73,8 @@ impl TitleHeader {
     genres: Genres,
   ) -> Self {
     let version = 0;
-    let has_original_title = if has_original_title {
-      1
-    } else {
-      0
-    };
-    let is_adult = if is_adult {
-      1
-    } else {
-      0
-    };
+    let has_original_title = u128::from(has_original_title);
+    let is_adult = u128::from(is_adult);
 
     let runtime = if let Some(runtime) = runtime_minutes {
       u128::from(runtime)
