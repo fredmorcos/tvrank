@@ -4,6 +4,7 @@
 //! Module for TVrank to use the IMDB dataset (TSV dumps) as a source.
 
 mod db;
+mod db_binary;
 mod error;
 mod genre;
 mod ratings;
@@ -13,6 +14,9 @@ mod title_header;
 mod title_id;
 mod title_type;
 mod tokens;
+
+#[cfg(test)]
+mod testdata;
 
 pub use db::Query as ImdbQuery;
 pub use error::Err as ImdbErr;

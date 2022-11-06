@@ -1,12 +1,13 @@
 #![warn(clippy::all)]
 
 use crate::imdb::db::{Query, ServiceDb};
+use crate::imdb::db_binary::ServiceDbFromBinary;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::utils::io::Progress;
 use crate::utils::result::Res;
+use crate::utils::search::SearchString;
 use flate2::bufread::GzDecoder;
-use fnv::FnvHashSet;
 use humantime::format_duration;
 use log::{debug, log_enabled};
 use reqwest::blocking::{Client, Response};
@@ -18,7 +19,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// Struct providing the movies and series databases and the related services
 pub struct Service {
-  service_db: ServiceDb,
+  service_db: ServiceDbFromBinary,
 }
 
 const IMDB: &str = "https://datasets.imdbws.com/";
@@ -52,7 +53,7 @@ impl Service {
     debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
-    let service = Self { service_db: ServiceDb::load(movies_data, series_data) };
+    let service = Self { service_db: ServiceDbFromBinary::new(movies_data, series_data) };
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     if log_enabled!(log::Level::Debug) {
@@ -198,7 +199,7 @@ impl Service {
   /// # Arguments
   /// * `title` - Title to be queried
   /// * `query` - Specifies if movies or series are queried
-  pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
+  pub fn by_title(&self, title: &SearchString, query: Query) -> Vec<&Title> {
     self.service_db.by_title(title, query)
   }
 
@@ -207,7 +208,7 @@ impl Service {
   /// * `title` - Title to be queried
   /// * `year` - Release year of the title
   /// * `query` - Specifies if movies or series are queried
-  pub fn by_title_and_year(&self, title: &str, year: u16, query: Query) -> Vec<&Title> {
+  pub fn by_title_and_year(&self, title: &SearchString, year: u16, query: Query) -> Vec<&Title> {
     self.service_db.by_title_and_year(title, year, query)
   }
 
@@ -215,7 +216,7 @@ impl Service {
   /// # Arguments
   /// * `keywords` - List of keywords to search in titles
   /// * `query` - Specifies if movies or series are queried
-  pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str], query: Query) -> FnvHashSet<&'a Title> {
+  pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [SearchString], query: Query) -> Vec<&'a Title> {
     self.service_db.by_keywords(keywords, query)
   }
 
@@ -226,10 +227,10 @@ impl Service {
   /// * `query` - Specifies if movies or series are queried
   pub fn by_keywords_and_year<'a, 'k>(
     &'a self,
-    keywords: &'k [&str],
+    keywords: &'k [SearchString],
     year: u16,
     query: Query,
-  ) -> FnvHashSet<&'a Title> {
+  ) -> Vec<&'a Title> {
     self.service_db.by_keywords_and_year(keywords, year, query)
   }
 }

@@ -2,6 +2,7 @@
 
 use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::utils::result::Res;
+use tvrank::utils::search::SearchString;
 
 fn main() -> Res<()> {
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
@@ -12,7 +13,8 @@ fn main() -> Res<()> {
 
   println!("Matches for {} and {:?}:", title, year);
 
-  for title in imdb.by_title_and_year(title, year, ImdbQuery::Movies) {
+  let search_string = SearchString::try_from(title)?;
+  for title in imdb.by_title_and_year(&search_string, year, ImdbQuery::Movies) {
     let id = title.title_id();
 
     println!("ID: {}", id);
