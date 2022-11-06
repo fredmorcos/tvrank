@@ -5,4 +5,5 @@
 
 pub mod io;
 pub mod result;
+pub mod search;
 pub mod tokens;

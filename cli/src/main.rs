@@ -28,6 +28,7 @@ use std::time::Instant;
 use tvrank::imdb::{Imdb, ImdbQuery, ImdbTitleId};
 use tvrank::title_info::TitleInfo;
 use tvrank::utils::result::Res;
+use tvrank::utils::search::{SearchString, SearchStringErr};
 use walkdir::WalkDir;
 
 #[derive(Debug, Display)]
@@ -215,11 +216,11 @@ fn display_title_and_year(title: &str, year: u16) -> String {
   format!("{} ({})", title, year)
 }
 
-fn display_keywords(keywords: &[&str]) -> String {
-  keywords.join(", ")
+fn display_keywords(keywords: &[SearchString]) -> String {
+  keywords.iter().map(|kw| kw.as_str()).collect::<Vec<_>>().join(", ")
 }
 
-fn create_keywords_set(title: &str) -> Res<Vec<&str>> {
+fn create_keywords_set(title: &str) -> Res<Vec<SearchString>> {
   debug!("Going to use `{}` as keywords for search query", title);
 
   let set: HashSet<_> = title.split_whitespace().collect();
@@ -231,7 +232,10 @@ fn create_keywords_set(title: &str) -> Res<Vec<&str>> {
     set
   };
 
-  let keywords: Vec<&str> = set.into_iter().collect();
+  let keywords: Vec<SearchString> = set
+    .into_iter()
+    .map(SearchString::try_from)
+    .collect::<Result<Vec<_>, SearchStringErr>>()?;
 
   if log_enabled!(log::Level::Debug) {
     debug!("Keywords: {}", display_keywords(&keywords));
@@ -252,29 +256,27 @@ fn imdb_title<'a>(
   let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
   let search_terms = if let Some((title, year)) = parse_title_and_year(title) {
-    let lc_title = title.to_lowercase();
     if exact {
-      movies_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Movies));
-      series_results.extend(imdb.by_title_and_year(&lc_title, year, ImdbQuery::Series));
+      let search_string = SearchString::try_from(title)?;
+      movies_results.extend(imdb.by_title_and_year(&search_string, year, ImdbQuery::Movies));
+      series_results.extend(imdb.by_title_and_year(&search_string, year, ImdbQuery::Series));
     } else {
-      let keywords = create_keywords_set(&lc_title)?;
+      let keywords = create_keywords_set(title)?;
       movies_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Movies));
       series_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Series));
     }
 
     Some(display_title_and_year(title, year))
+  } else if exact {
+    let search_string = SearchString::try_from(title)?;
+    movies_results.extend(imdb.by_title(&search_string, ImdbQuery::Movies));
+    series_results.extend(imdb.by_title(&search_string, ImdbQuery::Series));
+    Some(search_string.into())
   } else {
-    let lc_title = title.to_lowercase();
-    if exact {
-      movies_results.extend(imdb.by_title(&lc_title, ImdbQuery::Movies));
-      series_results.extend(imdb.by_title(&lc_title, ImdbQuery::Series));
-      Some(lc_title)
-    } else {
-      let keywords = create_keywords_set(&lc_title)?;
-      movies_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Movies));
-      series_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Series));
-      Some(display_keywords(&keywords))
-    }
+    let keywords = create_keywords_set(title)?;
+    movies_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Movies));
+    series_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Series));
+    Some(display_keywords(&keywords))
   };
 
   printer.print(Some(movies_results), Some(series_results), imdb_url, search_terms.as_deref())?;
@@ -319,7 +321,8 @@ fn imdb_movies_dir(
           at_least_one = true;
 
           let mut local_results = SearchRes::new(search_opts.sort_by_year, None);
-          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Movies));
+          let search_string = SearchString::try_from(title)?;
+          local_results.extend(imdb.by_title_and_year(&search_string, year, ImdbQuery::Movies));
 
           if local_results.is_empty() || local_results.len() > 1 {
             if local_results.len() > 1 {
@@ -447,10 +450,11 @@ fn imdb_series_dir(
         let mut local_results = SearchRes::new(search_opts.sort_by_year, None);
 
         let search_terms = if let Some((title, year)) = parse_title_and_year(&filename) {
-          local_results.extend(imdb.by_title_and_year(&title.to_lowercase(), year, ImdbQuery::Series));
+          let search_string = SearchString::try_from(title)?;
+          local_results.extend(imdb.by_title_and_year(&search_string, year, ImdbQuery::Series));
           Cow::from(display_title_and_year(title, year))
         } else {
-          local_results.extend(imdb.by_title(&filename.to_lowercase(), ImdbQuery::Series));
+          local_results.extend(imdb.by_title(&SearchString::try_from(filename.as_ref())?, ImdbQuery::Series));
           filename
         };
 

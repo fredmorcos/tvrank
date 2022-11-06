@@ -5,14 +5,12 @@ use crate::imdb::title::Title;
 use crate::imdb::title::TsvAction;
 use crate::imdb::title_id::TitleId;
 use crate::utils::result::Res;
+use crate::utils::search::SearchString;
 use aho_corasick::AhoCorasickBuilder;
 use aho_corasick::MatchKind as ACMatchKind;
 use derive_more::{Display, From, Into};
 use deunicode::deunicode;
 use fnv::{FnvHashMap, FnvHashSet};
-use log::debug;
-use parking_lot::{const_mutex, Mutex};
-use rayon::prelude::*;
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::ops::Index;
@@ -30,9 +28,7 @@ pub enum Query {
   Series,
 }
 
-pub struct ServiceDb {
-  dbs: Vec<Db>,
-}
+pub struct ServiceDb;
 
 impl ServiceDb {
   /// Import title data from tab separated values (TSVs).
@@ -87,168 +83,6 @@ impl ServiceDb {
     }
 
     Ok(())
-  }
-
-  /// Load titles from the given binary data.
-  ///
-  /// Loads titles from the provided binary content buffers (`movies_data` and
-  /// `series_data`) into one of the thread-handled databases.
-  ///
-  /// # Arguments
-  ///
-  /// * `movies_data` - Binary movies data.
-  /// * `series_data` - Binary series data.
-  pub fn load(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
-    let nthreads = rayon::current_num_threads();
-    let dbs = const_mutex(Vec::with_capacity(nthreads));
-    let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
-    let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
-
-    rayon::scope(|scope| {
-      for _ in 0..nthreads {
-        let dbs = &dbs;
-        let movies_cursor = &movies_cursor;
-        let series_cursor = &series_cursor;
-
-        scope.spawn(move |_| {
-          let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
-          let mut titles = Vec::with_capacity(100);
-          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
-          dbs.lock().push(db);
-        });
-      }
-    });
-
-    Self { dbs: dbs.into_inner() }
-  }
-
-  /// Loads titles from the provided binary content buffers into the thread-handled
-  /// databases.
-  ///
-  /// # Arguments
-  ///
-  /// * `cursor` - Cursor at the binary to read the titles from.
-  /// * `titles` - Vector to store the titles temporarily before writing to the database.
-  /// * `db` - Database to store movies or series.
-  fn titles_from_binary<const IS_MOVIE: bool>(
-    cursor: &Mutex<&mut &'static [u8]>,
-    titles: &mut Vec<Title<'static>>,
-    db: &mut Db,
-  ) {
-    loop {
-      let mut cursor = cursor.lock();
-
-      if (*cursor).is_empty() {
-        break;
-      }
-
-      for _ in 0..100 {
-        if (*cursor).is_empty() {
-          break;
-        }
-
-        let title = match Title::from_binary(&mut cursor) {
-          Ok(title) => title,
-          Err(e) => panic!("Error parsing title: {}", e),
-        };
-
-        titles.push(title);
-      }
-
-      drop(cursor);
-
-      for &title in titles.iter() {
-        if IS_MOVIE {
-          db.store_movie(title);
-        } else {
-          db.store_series(title);
-        }
-      }
-
-      titles.clear();
-    }
-  }
-
-  /// Calculate the total number of series and movies entries.
-  ///
-  /// # Return
-  ///
-  /// Returns a tuple containing two numbers, the first one is the number of movies and
-  /// the second on the number of series contained in the database.
-  pub fn n_entries(&self) -> (usize, usize) {
-    let mut total_movies = 0;
-    let mut total_series = 0;
-
-    for (i, db) in self.dbs.iter().enumerate() {
-      let movies = db.n_movies();
-      let series = db.n_series();
-      let entries = db.n_entries();
-
-      total_movies += movies;
-      total_series += series;
-
-      debug!("IMDB database (thread {i}) contains {movies} movies and {series} series ({entries} entries)");
-    }
-
-    (total_movies, total_series)
-  }
-
-  pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
-    let res = self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_id(id, query))
-      .filter(|res| res.is_some())
-      .flatten()
-      .collect::<Vec<_>>();
-
-    if res.is_empty() {
-      None
-    } else {
-      Some(unsafe { res.get_unchecked(0) })
-    }
-  }
-
-  pub fn by_title(&self, title: &str, query: Query) -> Vec<&Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_title(title, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
-  }
-
-  pub fn by_title_and_year(&self, title: &str, year: u16, query: Query) -> Vec<&Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_title_and_year(title, year, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
-  }
-
-  pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str], query: Query) -> FnvHashSet<&'a Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_keywords(keywords, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
-  }
-
-  pub fn by_keywords_and_year<'a, 'k>(
-    &'a self,
-    keywords: &'k [&str],
-    year: u16,
-    query: Query,
-  ) -> FnvHashSet<&'a Title> {
-    self
-      .dbs
-      .par_iter()
-      .map(|db| db.by_keywords_and_year(keywords, year, query).collect::<Vec<_>>())
-      .flatten()
-      .collect()
   }
 }
 
@@ -333,7 +167,7 @@ impl Db {
   /// * `query` - Whether to query movies or series.
   pub(crate) fn by_title<'a>(
     &'a self,
-    title: &str,
+    title: &SearchString,
     query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
     match query {
@@ -351,7 +185,7 @@ impl Db {
   /// * `query` - Whether to query movies or series.
   pub(crate) fn by_title_and_year<'a>(
     &'a self,
-    title: &str,
+    title: &SearchString,
     year: u16,
     query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
@@ -369,7 +203,7 @@ impl Db {
   /// * `query` - Whether to query movies or series.
   pub(crate) fn by_keywords<'a, 'k>(
     &'a self,
-    keywords: &'k [&str],
+    keywords: &'k [SearchString],
     query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
     match query {
@@ -387,7 +221,7 @@ impl Db {
   /// * `query` - Whether to query movies or series.
   pub(crate) fn by_keywords_and_year<'a, 'k>(
     &'a self,
-    keywords: &'k [&str],
+    keywords: &'k [SearchString],
     year: u16,
     query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
@@ -496,14 +330,26 @@ impl<C> DbImpl<C> {
     self.by_id.get(&id.as_usize())
   }
 
+  /// Search for titles with the given title.
+  ///
+  /// # Arguments
+  ///
+  /// * `title` - Title name to search for.
+  pub(crate) fn cookies_by_title<'a>(
+    &'a self,
+    title: &SearchString,
+  ) -> Option<impl Iterator<Item = &C> + 'a> {
+    self.by_title.get(title.as_str()).map(|by_year| by_year.values().flatten())
+  }
+
   /// Search for titles with the given title and year.
   ///
   /// # Arguments
   ///
   /// * `title` - The title name to search for.
   /// * `year` - The year to search for titles in.
-  fn cookies_by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &C> {
-    if let Some(by_year) = self.by_title.get(title) {
+  fn cookies_by_title_and_year(&self, title: &SearchString, year: u16) -> impl Iterator<Item = &C> {
+    if let Some(by_year) = self.by_title.get(title.as_str()) {
       if let Some(cookies) = by_year.get(&year) {
         return cookies.iter();
       }
@@ -517,7 +363,7 @@ impl<C> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for in title names.
-  fn cookies_by_keywords<'a, 'k>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a C> {
+  fn cookies_by_keywords<'a, 'k>(&'a self, keywords: &'k [SearchString]) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
     let keywords_len = keywords.len();
     self
@@ -539,7 +385,7 @@ impl<C> DbImpl<C> {
   /// * `year` - The year to search for titles in.
   fn cookies_by_keywords_and_year<'a, 'k>(
     &'a self,
-    keywords: &'k [&str],
+    keywords: &'k [SearchString],
     year: u16,
   ) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
@@ -596,9 +442,9 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `title` - Title name to search for.
-  pub(crate) fn by_title<'a>(&'a self, title: &str) -> Box<dyn Iterator<Item = &Title> + 'a> {
-    if let Some(by_year) = self.by_title.get(title) {
-      return Box::new(by_year.values().flatten().map(|&cookie| &self[cookie]));
+  pub(crate) fn by_title<'a>(&'a self, title: &SearchString) -> Box<dyn Iterator<Item = &Title> + 'a> {
+    if let Some(cookies) = self.cookies_by_title(title) {
+      return Box::new(cookies.map(|&cookie| &self[cookie]));
     }
 
     Box::new(std::iter::empty())
@@ -610,7 +456,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   ///
   /// * `title` - Title name to search for.
   /// * `year` - The year to search for titles in.
-  pub(crate) fn by_title_and_year(&self, title: &str, year: u16) -> impl Iterator<Item = &Title> {
+  pub(crate) fn by_title_and_year(&self, title: &SearchString, year: u16) -> impl Iterator<Item = &Title> {
     self.cookies_by_title_and_year(title, year).map(|&cookie| &self[cookie])
   }
 
@@ -619,7 +465,10 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for.
-  pub(crate) fn by_keywords<'a, 'k>(&'a self, keywords: &'k [&str]) -> impl Iterator<Item = &'a Title> {
+  pub(crate) fn by_keywords<'a, 'k>(
+    &'a self,
+    keywords: &'k [SearchString],
+  ) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 
@@ -631,7 +480,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// * `year` - The year to search for titles in.
   pub(crate) fn by_keywords_and_year<'a, 'k>(
     &'a self,
-    keywords: &'k [&str],
+    keywords: &'k [SearchString],
     year: u16,
   ) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords_and_year(keywords, year).map(|&cookie| &self[cookie])
@@ -639,46 +488,84 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
 }
 
 #[cfg(test)]
+mod test_db_impl {
+  use super::*;
+  use crate::{
+    imdb::testdata::{make_basics_reader, make_ratings_reader},
+    utils::search::SearchString,
+  };
+
+  fn make_db_impl() -> DbImpl<MoviesCookie> {
+    let mut db_impl = DbImpl::with_capacity(10);
+    let ratings = Ratings::from_tsv(make_ratings_reader()).unwrap();
+    for line in make_basics_reader().lines().skip(1) {
+      let line = Box::leak(line.unwrap().into_boxed_str());
+      match Title::from_tsv(line.as_bytes(), &ratings).unwrap() {
+        TsvAction::Skip => {}
+        TsvAction::Movie(title) => db_impl.store_title(title),
+        TsvAction::Series(_) => panic!("Invalid test contents"),
+      }
+    }
+    db_impl
+  }
+
+  #[test]
+  fn test_by_title() {
+    let db_impl = make_db_impl();
+    let title = SearchString::try_from("Corbett and Courtney Before the Kinetograph").unwrap();
+    let titles: Vec<_> = db_impl.by_title(&title).collect();
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+
+  #[test]
+  fn test_by_title_and_year() {
+    let db_impl = make_db_impl();
+    let title = SearchString::try_from("Corbett and Courtney Before the Kinetograph").unwrap();
+    let titles: Vec<_> = db_impl.by_title_and_year(&title, 1894).collect();
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+
+  #[test]
+  fn test_by_keywords() {
+    let db_impl = make_db_impl();
+    let titles: Vec<_> = db_impl
+      .by_keywords(&[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()])
+      .collect();
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+
+  #[test]
+  fn test_by_keywords_and_year() {
+    let db_impl = make_db_impl();
+    let titles: Vec<_> = db_impl
+      .by_keywords_and_year(
+        &[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()],
+        1894,
+      )
+      .collect();
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
+    assert_eq!(title.primary_title(), "Corbett and Courtney Before the Kinetograph");
+  }
+}
+
+#[cfg(test)]
 mod test_db {
   use crate::imdb::db::ServiceDb;
   use crate::imdb::ratings::Ratings;
+  use crate::imdb::testdata::{make_basics_reader, make_ratings_reader};
   use crate::imdb::title::Title;
-  use indoc::indoc;
-  use std::io::BufRead;
   use std::io::Read;
-
-  fn make_basics_reader() -> impl BufRead {
-    indoc! {"
-      tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres
-      tt0000001\tshort\tCarmencita\tCarmencita\t0\t1894\t\\N\t1\tDocumentary,Short
-      tt0000002\tshort\tLe clown et ses chiens\tLe clown et ses chiens\t0\t1892\t\\N\t5\tAnimation,Short
-      tt0000003\tshort\tPauvre Pierrot\tPauvre Pierrot\t0\t1892\t\\N\t4\tAnimation,Comedy,Romance
-      tt0000004\tshort\tUn bon bock\tUn bon bock\t0\t1892\t\\N\t12\tAnimation,Short
-      tt0000005\tshort\tBlacksmith Scene\tBlacksmith Scene\t0\t1893\t\\N\t1\tComedy,Short
-      tt0000006\tshort\tChinese Opium Den\tChinese Opium Den\t0\t1894\t\\N\t1\tShort
-      tt0000007\tshort\tCorbett and Courtney Before the Kinetograph\tCorbett and Courtney Before the Kinetograph\t0\t1894\t\\N\t1\tShort,Sport
-      tt0000008\tshort\tEdison Kinetoscopic Record of a Sneeze\tEdison Kinetoscopic Record of a Sneeze\t0\t1894\t\\N\t1\tDocumentary,Short
-      tt0000009\tshort\tMiss Jerry\tMiss Jerry\t0\t1894\t\\N\t40\tRomance,Short
-      tt0000010\tshort\tLeaving the Factory\tLa sortie de l'usine Lumière à Lyon\t0\t1895\t\\N\t1\tDocumentary,Short
-    "}.as_bytes()
-  }
-
-  fn make_ratings_reader() -> impl BufRead {
-    indoc! {"
-      tconst\taverageRating\tnumVotes
-      tt0000001\t5.7\t1845
-      tt0000002\t6.0\t236
-      tt0000003\t6.5\t1603
-      tt0000004\t6.0\t153
-      tt0000005\t6.2\t2424
-      tt0000006\t5.2\t158
-      tt0000007\t5.4\t758
-      tt0000008\t5.5\t1988
-      tt0000009\t5.9\t191
-      tt0000010\t6.9\t6636
-    "}
-    .as_bytes()
-  }
 
   #[test]
   fn test_to_binary() {
