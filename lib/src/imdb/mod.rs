@@ -5,6 +5,7 @@
 
 mod db;
 mod db_binary;
+mod db_impl;
 mod error;
 mod genre;
 mod ratings;
