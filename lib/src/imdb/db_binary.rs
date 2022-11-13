@@ -48,6 +48,10 @@ impl ServiceDbFromBinary {
   /// Loads titles from the provided binary content buffers into the thread-handled
   /// databases.
   ///
+  /// # Const Arguments
+  ///
+  /// * `IS_MOVIE` - Whether the title is a movie or a series entry.
+  ///
   /// # Arguments
   ///
   /// * `cursor` - Cursor at the binary to read the titles from.
