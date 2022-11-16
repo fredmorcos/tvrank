@@ -6,7 +6,7 @@ use tvrank::utils::search::SearchString;
 
 fn main() -> Res<()> {
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
-  let imdb = Imdb::new(cache_dir.path(), false, &|_, _| {})?;
+  let imdb = Imdb::new(cache_dir.path(), false, |_, _| {})?;
 
   let title = "city of god";
   let year = 2002;
