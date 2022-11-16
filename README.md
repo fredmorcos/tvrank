@@ -300,6 +300,7 @@ Include the `Imdb` type:
 
 ```rust
 use tvrank::imdb::{Imdb, ImdbQuery};
+use tvrank::utils::search::SearchString;
 ```
 
 Create a directory for the cache using the `tempfile` crate then create the database
@@ -321,7 +322,8 @@ let year = 2002;
 
 println!("Matches for {} and {:?}:", title, year);
 
-for title in imdb.by_title_and_year(title, year, ImdbQuery::Movies)? {
+let search_string = SearchString::try_from(title)?;
+for title in imdb.by_title_and_year(&search_string, year, ImdbQuery::Movies)? {
   let id = title.title_id();
 
   println!("ID: {}", id);

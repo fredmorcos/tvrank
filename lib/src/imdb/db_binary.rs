@@ -35,8 +35,8 @@ impl ServiceDbFromBinary {
         scope.spawn(move |_| {
           let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
           let mut titles = Vec::with_capacity(100);
-          Self::titles_from_binary::<true>(movies_cursor, &mut titles, &mut db);
-          Self::titles_from_binary::<false>(series_cursor, &mut titles, &mut db);
+          Self::movies_from_binary(movies_cursor, &mut titles, &mut db);
+          Self::series_from_binary(series_cursor, &mut titles, &mut db);
           dbs.lock().push(db);
         });
       }
@@ -45,8 +45,34 @@ impl ServiceDbFromBinary {
     Self { dbs: dbs.into_inner() }
   }
 
+  /// Loads movies from the provided binary content buffers.
+  ///
+  /// # Arguments
+  ///
+  /// * `cursor` - Cursor at the binary to read the titles from.
+  /// * `titles` - Vector to store the titles temporarily before writing to the database.
+  /// * `db` - Database to store movies in.
+  fn movies_from_binary(cursor: &Mutex<&mut &'static [u8]>, titles: &mut Vec<Title<'static>>, db: &mut Db) {
+    Self::titles_from_binary::<true>(cursor, titles, db)
+  }
+
+  /// Loads series from the provided binary content buffers.
+  ///
+  /// # Arguments
+  ///
+  /// * `cursor` - Cursor at the binary to read the titles from.
+  /// * `titles` - Vector to store the titles temporarily before writing to the database.
+  /// * `db` - Database to store series in.
+  fn series_from_binary(cursor: &Mutex<&mut &'static [u8]>, titles: &mut Vec<Title<'static>>, db: &mut Db) {
+    Self::titles_from_binary::<false>(cursor, titles, db)
+  }
+
   /// Loads titles from the provided binary content buffers into the thread-handled
   /// databases.
+  ///
+  /// # Const Arguments
+  ///
+  /// * `IS_MOVIE` - Whether the title is a movie or a series entry.
   ///
   /// # Arguments
   ///
@@ -173,10 +199,10 @@ impl ServiceDbFromBinary {
 #[cfg(test)]
 mod tests {
   use crate::imdb::db::Query;
-  use crate::imdb::db::ServiceDb;
   use crate::imdb::db_binary::ServiceDbFromBinary;
   use crate::imdb::testdata::{make_basics_reader, make_ratings_reader};
   use crate::imdb::title_id::TitleId;
+  use crate::imdb::tsv_import::tsv_import;
   use crate::utils::search::SearchString;
 
   fn make_service_db_from_binary() -> ServiceDbFromBinary {
@@ -185,7 +211,7 @@ mod tests {
 
     let mut movies_storage = Vec::new();
     let mut series_storage = Vec::new();
-    ServiceDb::import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
+    tsv_import(ratings_reader, basics_reader, &mut movies_storage, &mut series_storage).unwrap();
 
     let movies_storage = Box::leak(movies_storage.into_boxed_slice());
     let series_storage = Box::leak(series_storage.into_boxed_slice());
