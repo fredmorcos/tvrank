@@ -524,7 +524,7 @@ fn create_output_printer(output_format: &OutputFormat, general_opts: &GeneralOpt
 fn create_imdb_service(app_cache_dir: &Path, force_update: bool) -> Res<Imdb> {
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
-  let imdb = Imdb::new(app_cache_dir, force_update, &|content_len: Option<u64>, delta| {
+  let imdb = Imdb::new(app_cache_dir, force_update, |content_len: Option<u64>, delta| {
     let mut progress_bar_mut = progress_bar.borrow_mut();
     match &*progress_bar_mut {
       Some(bar) => bar.inc(delta),
