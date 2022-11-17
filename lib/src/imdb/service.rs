@@ -31,10 +31,12 @@ const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 
 impl Service {
   /// Returns a Service struct holding movies/series databases
+  ///
   /// # Arguments
-  /// * `cache_dir` - Directory path of the database files
-  /// * `force_db_update` - True if the databases should be updated regardless of their age
-  /// * `progress_fn` - Function that keeps track of the download progress
+  ///
+  /// * `cache_dir` - Directory path of the database files.
+  /// * `force_db_update` - True if the databases should be updated regardless of their age.
+  /// * `progress_fn` - Function that keeps track of the download progress.
   pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: impl Fn(Option<u64>, u64)) -> Res<Self> {
     // Delete old imdb cache directory.
     let old_cache_dir = cache_dir.join("imdb");
@@ -71,9 +73,12 @@ impl Service {
   }
 
   /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
+  ///
   /// Only returns an error if a problem occurs while opening an existing file.
+  ///
   /// # Arguments
-  /// * `path` - Path of the file to be opened
+  ///
+  /// * `path` - Path of the file to be opened.
   fn file_exists(path: &Path) -> Res<Option<File>> {
     match File::open(path) {
       Ok(f) => Ok(Some(f)),
@@ -84,11 +89,15 @@ impl Service {
     }
   }
 
-  /// Determines if the given database needs to be updated. Returns true if the force_db_update parameter is true or if the database
-  /// have not been updated for longer than one month.
+  /// Determines if the given database needs to be updated.
+  ///
+  /// Returns true if the force_db_update parameter is true or if the database have not
+  /// been updated for longer than one month.
+  ///
   /// # Arguments
-  /// * `file` - Database file to be checked
-  /// * `force_db_update` - True if the database should be updated regardless of its age
+  ///
+  /// * `file` - Database file to be checked.
+  /// * `force_db_update` - True if the database should be updated regardless of its age.
   fn file_needs_update(file: &Option<File>) -> Res<bool> {
     if let Some(f) = file {
       let md = f.metadata()?;
@@ -106,10 +115,12 @@ impl Service {
     }
   }
 
-  /// Sends a GET request to the given URL and returns the response
+  /// Sends a GET request to the given URL and returns the response.
+  ///
   /// # Arguments
-  /// * `imdb_url` - The base URL to send the GET request to
-  /// * `path` - Endpoint path
+  ///
+  /// * `imdb_url` - The base URL to send the GET request to.
+  /// * `path` - Endpoint path.
   fn get_response(imdb_url: &Url, path: &str) -> Res<Response> {
     let url = imdb_url.join(path)?;
     let client = Client::builder().build()?;
@@ -117,10 +128,12 @@ impl Service {
     Ok(resp)
   }
 
-  /// Returns a reader for the given response
+  /// Returns a reader for the given response.
+  ///
   /// # Arguments
-  /// * `resp` - Response returned for the GET request
-  /// * `progress_fn` - Function to keep track of the download progress
+  ///
+  /// * `resp` - Response returned for the GET request.
+  /// * `progress_fn` - Function to keep track of the download progress.
   fn create_downloader(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
     let progress = ProgressPipe::new(resp, progress_fn);
     let reader = BufReader::new(progress);
@@ -128,13 +141,17 @@ impl Service {
     BufReader::new(decoder)
   }
 
-  /// Ensures that the movies and series databases exist and are up-to-date. The databases are created if they don't exist, and updated if they
-  /// are outdated or if the force_db_update parameter is set to true.
+  /// Ensures that the movies and series databases exist and are up-to-date.
+  ///
+  /// The databases are created if they don't exist, and updated if they are outdated or
+  /// if the force_db_update parameter is set to true.
+  ///
   /// # Arguments
-  /// * `movies_db_filename` - Path to the movies database
-  /// * `series_db_filename` - Path to the series database
-  /// * `force_db_update` - True if the databases should be updated regardless of their age
-  /// * `progress_fn` - Function that keeps track of the download progress
+  ///
+  /// * `movies_db_filename` - Path to the movies database.
+  /// * `series_db_filename` - Path to the series database.
+  /// * `force_db_update` - True if the databases should be updated regardless of their age.
+  /// * `progress_fn` - Function that keeps track of the download progress.
   fn ensure_db_files(
     movies_db_filename: &Path,
     series_db_filename: &Path,
@@ -185,44 +202,54 @@ impl Service {
     Ok(())
   }
 
-  /// Query titles by ID
+  /// Query titles by ID.
+  ///
   /// # Arguments
-  /// * `id` - ID of the title to be queried
-  /// * `query` - Specifies if movies or series are queried
+  ///
+  /// * `id` - ID of the title to be queried.
+  /// * `query` - Specifies if movies or series are queried.
   pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
     self.service_db.by_id(id, query)
   }
 
-  /// Query titles by title
+  /// Query titles by title.
+  ///
   /// # Arguments
-  /// * `title` - Title to be queried
-  /// * `query` - Specifies if movies or series are queried
+  ///
+  /// * `title` - Title to be queried.
+  /// * `query` - Specifies if movies or series are queried.
   pub fn by_title(&self, title: &SearchString, query: Query) -> Vec<&Title> {
     self.service_db.by_title(title, query)
   }
 
-  /// Query titles by title and year
+  /// Query titles by title and year.
+  ///
   /// # Arguments
-  /// * `title` - Title to be queried
-  /// * `year` - Release year of the title
-  /// * `query` - Specifies if movies or series are queried
+  ///
+  /// * `title` - Title to be queried.
+  /// * `year` - Release year of the title.
+  /// * `query` - Specifies if movies or series are queried.
   pub fn by_title_and_year(&self, title: &SearchString, year: u16, query: Query) -> Vec<&Title> {
     self.service_db.by_title_and_year(title, year, query)
   }
 
-  /// Query titles by keywords
+  /// Query titles by keywords.
+  ///
   /// # Arguments
-  /// * `keywords` - List of keywords to search in titles
-  /// * `query` - Specifies if movies or series are queried
+  ///
+  /// * `keywords` - List of keywords to search in titles.
+  /// * `query` - Specifies if movies or series are queried.
   pub fn by_keywords<'a, 'k>(&'a self, keywords: &'k [SearchString], query: Query) -> Vec<&'a Title> {
     self.service_db.by_keywords(keywords, query)
   }
 
-  /// Query titles by keywords and year
+  /// Query titles by keywords and year.
+  ///
   /// # Arguments
-  /// * `keywords` - List of keywords to search in titles
-  /// * `year` - Release year of the title
-  /// * `query` - Specifies if movies or series are queried
+  ///
+  /// * `keywords` - List of keywords to search in titles.
+  /// * `year` - Release year of the title.
+  /// * `query` - Specifies if movies or series are queried.
   pub fn by_keywords_and_year<'a, 'k>(
     &'a self,
     keywords: &'k [SearchString],
