@@ -15,12 +15,12 @@ use std::io::Read;
 /// its implementation of `std::io::Read`, but instead of immediately forwarding what is
 /// read, it first calls the closure of type `F` with the number of bytes that were
 /// consumed from the source object.
-pub struct ProgressPipe<R, F: Fn(Option<u64>, u64)> {
+pub struct ProgressPipe<R, F: Fn(u64)> {
   source: R,
   progress_fn: F,
 }
 
-impl<R: Read, F: Fn(Option<u64>, u64)> ProgressPipe<R, F> {
+impl<R: Read, F: Fn(u64)> ProgressPipe<R, F> {
   /// Construct a new `Progress` object.
   ///
   /// # Arguments
@@ -32,10 +32,10 @@ impl<R: Read, F: Fn(Option<u64>, u64)> ProgressPipe<R, F> {
   }
 }
 
-impl<R: Read, F: Fn(Option<u64>, u64)> Read for ProgressPipe<R, F> {
+impl<R: Read, F: Fn(u64)> Read for ProgressPipe<R, F> {
   fn read(&mut self, destination: &mut [u8]) -> std::io::Result<usize> {
     let bytes = self.source.read(destination)?;
-    (self.progress_fn)(None, bytes as u64);
+    (self.progress_fn)(bytes as u64);
     Ok(bytes)
   }
 }
