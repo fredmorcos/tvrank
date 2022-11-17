@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -123,15 +123,11 @@ impl Service {
   /// # Arguments
   /// * `resp` - Response returned for the GET request
   /// * `progress_fn` - Function to keep track of the download progress
-  fn create_downloader(
-    resp: Response,
-    progress_fn: impl Fn(Option<u64>, u64),
-  ) -> Res<BufReader<GzDecoder<BufReader<Progress<Response, impl Fn(Option<u64>, u64)>>>>> {
+  fn create_downloader(resp: Response, progress_fn: impl Fn(Option<u64>, u64)) -> impl BufRead {
     let progress = Progress::new(resp, progress_fn);
     let reader = BufReader::new(progress);
     let decoder = GzDecoder::new(reader);
-    let reader = BufReader::new(decoder);
-    Ok(reader)
+    BufReader::new(decoder)
   }
 
   /// Ensures that the movies and series databases exist and are up-to-date. The databases are created if they don't exist, and updated if they
@@ -173,8 +169,8 @@ impl Service {
         }
       }
 
-      let basics_downloader = Self::create_downloader(basics_resp, &progress_fn)?;
-      let ratings_downloader = Self::create_downloader(ratings_resp, &progress_fn)?;
+      let basics_downloader = Self::create_downloader(basics_resp, &progress_fn);
+      let ratings_downloader = Self::create_downloader(ratings_resp, &progress_fn);
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);
