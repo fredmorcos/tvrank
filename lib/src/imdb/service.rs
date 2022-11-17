@@ -81,10 +81,8 @@ impl Service {
   /// # Arguments
   /// * `file` - Database file to be checked
   /// * `force_db_update` - True if the database should be updated regardless of its age
-  fn file_needs_update(file: &Option<File>, force_db_update: bool) -> Res<bool> {
-    if force_db_update {
-      Ok(true)
-    } else if let Some(f) = file {
+  fn file_needs_update(file: &Option<File>) -> Res<bool> {
+    if let Some(f) = file {
       let md = f.metadata()?;
       let modified = md.modified()?;
       let age = match SystemTime::now().duration_since(modified) {
@@ -138,8 +136,9 @@ impl Service {
     let needs_update = {
       let movies_db_file = Self::file_exists(movies_db_filename)?;
       let series_db_file = Self::file_exists(series_db_filename)?;
-      Self::file_needs_update(&movies_db_file, force_db_update)?
-        || Self::file_needs_update(&series_db_file, force_db_update)?
+      force_db_update
+        || Self::file_needs_update(&movies_db_file)?
+        || Self::file_needs_update(&series_db_file)?
     };
 
     if needs_update {
