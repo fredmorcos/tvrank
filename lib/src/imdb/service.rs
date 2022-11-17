@@ -113,7 +113,7 @@ impl Service {
   /// # Arguments
   /// * `resp` - Response returned for the GET request
   /// * `progress_fn` - Function to keep track of the download progress
-  fn create_downloader(resp: Response, progress_fn: impl Fn(Option<u64>, u64)) -> impl BufRead {
+  fn create_downloader(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
     let progress = ProgressPipe::new(resp, progress_fn);
     let reader = BufReader::new(progress);
     let decoder = GzDecoder::new(reader);
@@ -160,8 +160,8 @@ impl Service {
         }
       }
 
-      let basics_downloader = Self::create_downloader(basics_resp, &progress_fn);
-      let ratings_downloader = Self::create_downloader(ratings_resp, &progress_fn);
+      let basics_downloader = Self::create_downloader(basics_resp, |bytes| progress_fn(None, bytes));
+      let ratings_downloader = Self::create_downloader(ratings_resp, |bytes| progress_fn(None, bytes));
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);
