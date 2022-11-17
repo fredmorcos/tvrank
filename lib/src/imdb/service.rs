@@ -36,14 +36,6 @@ impl Service {
   /// * `force_db_update` - True if the databases should be updated regardless of their age
   /// * `progress_fn` - Function that keeps track of the download progress
   pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: impl Fn(Option<u64>, u64)) -> Res<Self> {
-    // Delete old imdb cache directory.
-    let old_cache_dir = cache_dir.join("imdb");
-    let _ = fs::remove_dir_all(old_cache_dir);
-
-    // Delete old imdb cache file.
-    let old_cache_file = cache_dir.join("imdb.tvrankdb");
-    let _ = fs::remove_file(old_cache_file);
-
     let movies_db_filename = cache_dir.join("imdb-movies.tvrankdb");
     let series_db_filename = cache_dir.join("imdb-series.tvrankdb");
     Self::ensure_db_files(&movies_db_filename, &series_db_filename, force_db_update, progress_fn)?;
