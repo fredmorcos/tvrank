@@ -40,7 +40,7 @@ pub trait Printer {
     series: Option<SearchRes>,
     imdb_url: &Url,
     search_terms: Option<&str>,
-  ) -> Res<()>;
+  ) -> Res;
 }
 
 pub struct JsonPrinter;
@@ -63,7 +63,7 @@ impl Printer for JsonPrinter {
     mut series: Option<SearchRes>,
     _imdb_url: &Url,
     _search_terms: Option<&str>,
-  ) -> Res<()> {
+  ) -> Res {
     println!(
       "{}",
       serde_json::to_string_pretty(&OutputWrapper::new(
@@ -95,7 +95,7 @@ impl Printer for YamlPrinter {
     mut series: Option<SearchRes>,
     _imdb_url: &Url,
     _search_terms: Option<&str>,
-  ) -> Res<()> {
+  ) -> Res {
     println!(
       "{}",
       serde_yaml::to_string(&OutputWrapper::new(
@@ -123,7 +123,7 @@ impl Printer for TablePrinter {
     series: Option<SearchRes>,
     imdb_url: &Url,
     search_terms: Option<&str>,
-  ) -> Res<()> {
+  ) -> Res {
     if let Some(movies) = movies {
       self.print_results(movies, imdb_url, ImdbQuery::Movies, search_terms)?;
     }
@@ -147,7 +147,7 @@ impl TablePrinter {
     imdb_url: &Url,
     query: ImdbQuery,
     search_terms: Option<&str>,
-  ) -> Res<()> {
+  ) -> Res {
     if results.is_empty() {
       if let Some(search_terms) = search_terms {
         eprintln!("No {} matches found for `{search_terms}`", query);

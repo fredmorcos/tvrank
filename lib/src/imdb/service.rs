@@ -149,7 +149,7 @@ impl Service {
     series_db_filename: &Path,
     force_db_update: bool,
     progress_fn: impl Fn(Option<u64>, u64),
-  ) -> Res<()> {
+  ) -> Res {
     let needs_update = {
       let movies_db_file = Self::file_exists(movies_db_filename)?;
       let series_db_file = Self::file_exists(series_db_filename)?;
