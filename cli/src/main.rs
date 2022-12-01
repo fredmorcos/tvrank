@@ -251,7 +251,7 @@ fn imdb_title<'a>(
   search_opts: &SearchOpts,
   exact: bool,
   printer: Box<dyn Printer>,
-) -> Res<()> {
+) -> Res {
   let mut movies_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
@@ -290,7 +290,7 @@ fn imdb_movies_dir(
   imdb_url: &Url,
   search_opts: &SearchOpts,
   printer: Box<dyn Printer>,
-) -> Res<()> {
+) -> Res {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
   let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
@@ -371,7 +371,7 @@ fn imdb_movies_dir(
   Ok(())
 }
 
-fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res<()> {
+fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res {
   // DONE 1.   Check if the directory exist.
   // DONE 2.   If not, fail.
   // DONE 3.   Check if tvrank.json exists in there.
@@ -419,7 +419,7 @@ fn imdb_series_dir(
   imdb_url: &Url,
   search_opts: &SearchOpts,
   printer: Box<dyn Printer>,
-) -> Res<()> {
+) -> Res {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
   let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);

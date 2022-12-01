@@ -24,7 +24,7 @@ pub(crate) fn tsv_import<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
   mut basics_reader: R2,
   mut movies_db_writer: W1,
   mut series_db_writer: W2,
-) -> Res<()> {
+) -> Res {
   let ratings = Ratings::from_tsv(ratings_reader)?;
 
   let mut line = String::new();

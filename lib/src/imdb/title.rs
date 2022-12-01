@@ -216,7 +216,7 @@ impl<'storage> Title<'storage> {
   /// Writes the title as binary
   /// # Arguments
   /// `writer` - Writer to write the title to
-  pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res<()> {
+  pub(crate) fn write_binary<W: Write>(&self, writer: &mut W) -> Res {
     writer.write_all(&self.header.to_le_bytes())?;
 
     let title_id = self.title_id.as_bytes();
