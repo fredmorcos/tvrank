@@ -84,30 +84,26 @@ impl Service {
     }
   }
 
-  /// Determines if the given database needs to be updated.
-  ///
-  /// Returns true if the force_db_update parameter is true or if the database have not
-  /// been updated for longer than one month.
+  /// Determines if the given database file is old.
   ///
   /// # Arguments
   ///
   /// * `file` - Database file to be checked.
-  /// * `force_db_update` - True if the database should be updated regardless of its age.
-  fn file_needs_update(file: &Option<File>) -> Res<bool> {
+  /// * `duration` - The duration by which the file would be considered old.
+  fn file_older_than(file: &Option<File>, duration: Duration) -> bool {
     if let Some(f) = file {
-      let md = f.metadata()?;
-      let modified = md.modified()?;
-      let age = match SystemTime::now().duration_since(modified) {
-        Ok(duration) => duration,
-        Err(_) => return Ok(true),
-      };
-
-      // Older than a month.
-      Ok(age >= Duration::from_secs(60 * 60 * 24 * 30))
-    } else {
-      // The file does not exist.
-      Ok(true)
+      if let Ok(md) = f.metadata() {
+        if let Ok(modified) = md.modified() {
+          match SystemTime::now().duration_since(modified) {
+            Ok(age) => return age >= duration,
+            Err(_) => return true,
+          }
+        }
+      }
     }
+
+    // The file does not exist or its metadata or modification date could not be read.
+    true
   }
 
   /// Sends a GET request to the given URL and returns the response.
@@ -154,11 +150,10 @@ impl Service {
     progress_fn: impl Fn(Option<u64>, u64),
   ) -> Res {
     let needs_update = {
-      let movies_db_file = Self::file_exists(movies_db_filename)?;
-      let series_db_file = Self::file_exists(series_db_filename)?;
+      let one_month = Duration::from_secs(60 * 60 * 24 * 30);
       force_db_update
-        || Self::file_needs_update(&movies_db_file)?
-        || Self::file_needs_update(&series_db_file)?
+        || Self::file_older_than(&Self::file_exists(movies_db_filename)?, one_month)
+        || Self::file_older_than(&Self::file_exists(series_db_filename)?, one_month)
     };
 
     if needs_update {
