@@ -25,9 +25,12 @@ pub struct Service {
   service_db: ServiceDbFromBinary,
 }
 
-const IMDB: &str = "https://datasets.imdbws.com/";
-const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
+const IMDB_URL: &str = "https://datasets.imdbws.com/";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
+const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
+
+const MOVIES_DB_FILENAME: &str = "imdb-movies.tvrankdb";
+const SERIES_DB_FILENAME: &str = "imdb-series.tvrankdb";
 
 impl Service {
   /// Returns a Service struct holding movies/series databases
@@ -38,8 +41,8 @@ impl Service {
   /// * `force_db_update` - True if the databases should be updated regardless of their age.
   /// * `progress_fn` - Function that keeps track of the download progress.
   pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: impl Fn(Option<u64>, u64)) -> Res<Self> {
-    let movies_db_filename = cache_dir.join("imdb-movies.tvrankdb");
-    let series_db_filename = cache_dir.join("imdb-series.tvrankdb");
+    let movies_db_filename = cache_dir.join(MOVIES_DB_FILENAME);
+    let series_db_filename = cache_dir.join(SERIES_DB_FILENAME);
     Self::ensure_db_files(&movies_db_filename, &series_db_filename, force_db_update, progress_fn)?;
 
     let start = Instant::now();
@@ -165,7 +168,7 @@ impl Service {
         debug!("IMDB database does not exist or is more than a month old, going to fetch and build");
       }
 
-      let imdb_url = Url::parse(IMDB)?;
+      let imdb_url = Url::parse(IMDB_URL)?;
 
       let basics_resp = Self::get_response(&imdb_url, BASICS_FILENAME)?;
       let ratings_resp = Self::get_response(&imdb_url, RATINGS_FILENAME)?;
