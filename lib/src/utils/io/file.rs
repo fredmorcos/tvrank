@@ -16,7 +16,7 @@ use crate::utils::result::Res;
 /// # Arguments
 ///
 /// * `path` - Path of the file to be opened.
-pub fn file_exists(path: &Path) -> Res<Option<File>> {
+pub fn exists(path: &Path) -> Res<Option<File>> {
   match File::open(path) {
     Ok(f) => Ok(Some(f)),
     Err(e) => match e.kind() {
@@ -32,7 +32,7 @@ pub fn file_exists(path: &Path) -> Res<Option<File>> {
 ///
 /// * `file` - Database file to be checked.
 /// * `duration` - The duration by which the file would be considered old.
-pub fn file_older_than(file: &Option<File>, duration: Duration) -> bool {
+pub fn older_than(file: &Option<File>, duration: Duration) -> bool {
   if let Some(f) = file {
     if let Ok(md) = f.metadata() {
       if let Ok(modified) = md.modified() {
