@@ -10,7 +10,7 @@ use crate::imdb::db_binary::ServiceDbFromBinary;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::imdb::tsv_import::tsv_import;
-use crate::utils::io::ProgressPipe;
+use crate::utils::io::progress::ProgressPipe;
 use crate::utils::result::Res;
 use crate::utils::search::SearchString;
 
