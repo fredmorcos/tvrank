@@ -1,7 +1,5 @@
 #![warn(clippy::all)]
 
-use std::fs::{self, File};
-use std::io::BufWriter;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -47,10 +45,8 @@ impl Service {
     Self::ensure_db_files(&movies_db_filename, &series_db_filename, one_month, force_db_update, progress_fn)?;
 
     let start = Instant::now();
-    let movies_data = fs::read(movies_db_filename)?;
-    let series_data = fs::read(series_db_filename)?;
-    let movies_data = Box::leak(movies_data.into_boxed_slice());
-    let series_data = Box::leak(series_data.into_boxed_slice());
+    let movies_data = io_file::read_static(&movies_db_filename)?;
+    let series_data = io_file::read_static(&series_db_filename)?;
     debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
@@ -97,8 +93,8 @@ impl Service {
         debug!("IMDB database does not exist or is more than a month old, going to fetch and build");
       }
 
-      let movies_db_writer = BufWriter::new(File::create(movies_db_filename)?);
-      let series_db_writer = BufWriter::new(File::create(series_db_filename)?);
+      let movies_db_writer = io_file::create_buffered(movies_db_filename)?;
+      let series_db_writer = io_file::create_buffered(series_db_filename)?;
 
       let imdb_url = Url::parse(IMDB_URL)?;
       let basics_response = io_net::get_response(imdb_url.join(BASICS_FILENAME)?)?;
