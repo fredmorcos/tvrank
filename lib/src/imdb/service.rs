@@ -1,15 +1,16 @@
 #![warn(clippy::all)]
 
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, BufWriter};
+use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::imdb::db::Query;
 use crate::imdb::db_binary::ServiceDbFromBinary;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::imdb::tsv_import::tsv_import;
+use crate::utils;
 use crate::utils::io::progress::ProgressPipe;
 use crate::utils::result::Res;
 use crate::utils::search::SearchString;
@@ -67,45 +68,6 @@ impl Service {
     Ok(service)
   }
 
-  /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
-  ///
-  /// Only returns an error if a problem occurs while opening an existing file.
-  ///
-  /// # Arguments
-  ///
-  /// * `path` - Path of the file to be opened.
-  fn file_exists(path: &Path) -> Res<Option<File>> {
-    match File::open(path) {
-      Ok(f) => Ok(Some(f)),
-      Err(e) => match e.kind() {
-        io::ErrorKind::NotFound => Ok(None),
-        _ => Err(Box::new(e)),
-      },
-    }
-  }
-
-  /// Determines if the given database file is old.
-  ///
-  /// # Arguments
-  ///
-  /// * `file` - Database file to be checked.
-  /// * `duration` - The duration by which the file would be considered old.
-  fn file_older_than(file: &Option<File>, duration: Duration) -> bool {
-    if let Some(f) = file {
-      if let Ok(md) = f.metadata() {
-        if let Ok(modified) = md.modified() {
-          match SystemTime::now().duration_since(modified) {
-            Ok(age) => return age >= duration,
-            Err(_) => return true,
-          }
-        }
-      }
-    }
-
-    // The file does not exist or its metadata or modification date could not be read.
-    true
-  }
-
   /// Sends a GET request to the given URL and returns the response.
   ///
   /// # Arguments
@@ -152,8 +114,8 @@ impl Service {
   ) -> Res {
     let needs_update = {
       force_db_update
-        || Self::file_older_than(&Self::file_exists(movies_db_filename)?, max_age)
-        || Self::file_older_than(&Self::file_exists(series_db_filename)?, max_age)
+        || utils::io::file::file_older_than(&utils::io::file::file_exists(movies_db_filename)?, max_age)
+        || utils::io::file::file_older_than(&utils::io::file::file_exists(series_db_filename)?, max_age)
     };
 
     if needs_update {
