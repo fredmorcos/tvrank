@@ -1,6 +1,6 @@
 #![warn(clippy::all)]
 
-//! Common utilities for IO.
+//! Helper for showing IO progress using a callback mechanism.
 
 use std::io::Read;
 
