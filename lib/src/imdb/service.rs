@@ -86,8 +86,8 @@ impl Service {
   ) -> Res {
     let needs_update = {
       force_db_update
-        || io_file::file_older_than(&io_file::file_exists(movies_db_filename)?, max_age)
-        || io_file::file_older_than(&io_file::file_exists(series_db_filename)?, max_age)
+        || io_file::older_than(&io_file::open_existing(movies_db_filename)?, max_age)
+        || io_file::older_than(&io_file::open_existing(series_db_filename)?, max_age)
     };
 
     if needs_update {
@@ -97,10 +97,8 @@ impl Service {
         debug!("IMDB database does not exist or is more than a month old, going to fetch and build");
       }
 
-      let movies_db_file = File::create(movies_db_filename)?;
-      let series_db_file = File::create(series_db_filename)?;
-      let movies_db_writer = BufWriter::new(movies_db_file);
-      let series_db_writer = BufWriter::new(series_db_file);
+      let movies_db_writer = BufWriter::new(File::create(movies_db_filename)?);
+      let series_db_writer = BufWriter::new(File::create(series_db_filename)?);
 
       let imdb_url = Url::parse(IMDB_URL)?;
       let basics_response = io_net::get_response(imdb_url.join(BASICS_FILENAME)?)?;
@@ -115,8 +113,8 @@ impl Service {
 
       progress_fn(content_length, 0);
 
-      let basics_fetcher = io_net::create_fetcher(basics_response, |bytes| progress_fn(None, bytes));
-      let ratings_fetcher = io_net::create_fetcher(ratings_response, |bytes| progress_fn(None, bytes));
+      let basics_fetcher = io_net::make_fetcher(basics_response, |bytes| progress_fn(None, bytes));
+      let ratings_fetcher = io_net::make_fetcher(ratings_response, |bytes| progress_fn(None, bytes));
 
       tsv_import(ratings_fetcher, basics_fetcher, movies_db_writer, series_db_writer)?;
     } else {

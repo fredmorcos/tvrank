@@ -28,7 +28,7 @@ pub fn get_response(url: Url) -> Res<Response> {
 ///
 /// * `resp` - Response returned for the GET request.
 /// * `progress_fn` - Function to keep track of the download progress.
-pub fn create_fetcher(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
+pub fn make_fetcher(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
   let progress = ProgressPipe::new(resp, progress_fn);
   let reader = BufReader::new(progress);
   let decoder = GzDecoder::new(reader);
