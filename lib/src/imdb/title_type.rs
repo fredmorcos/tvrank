@@ -5,64 +5,66 @@ use enum_utils::FromStr;
 use serde::Serialize;
 use std::hash::Hash;
 
-/// Encodes the 13 types a title can be
+/// Encodes the 13 types of a title.
 #[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 #[enumeration(rename_all = "camelCase")]
 #[display(fmt = "{}")]
 pub enum TitleType {
   // Games
-  /// VideoGame
+  /// VideoGame.
   VideoGame = 0,
 
   // Movies
   #[display(fmt = "Short Movie")]
-  /// Short
+  /// Short.
   Short = 1,
-  /// Video
+  /// Video.
   Video = 2,
-  /// Movie
+  /// Movie.
   Movie = 3,
   #[display(fmt = "TV Short")]
-  /// TvShort
+  /// TvShort.
   TvShort = 4,
   #[display(fmt = "TV Movie")]
-  /// TvMovie
+  /// TvMovie.
   TvMovie = 5,
   #[display(fmt = "TV Special")]
-  /// TvSpecial
+  /// TvSpecial.
   TvSpecial = 6,
 
   // Episodes
-  /// TvEpisode
+  /// TvEpisode.
   TvEpisode = 7,
-  /// TvPilot
+  /// TvPilot.
   TvPilot = 8,
-  /// RadioEpisode
+  /// RadioEpisode.
   RadioEpisode = 9,
 
   // Series
   #[display(fmt = "TV Series")]
-  /// TvSeries
+  /// TvSeries.
   TvSeries = 10,
   #[display(fmt = "TV Mini-Series")]
-  /// TvMiniSeries
+  /// TvMiniSeries.
   TvMiniSeries = 11,
 
   // Radio
   #[display(fmt = "Radio Series")]
-  /// RadioSeries
+  /// RadioSeries.
   RadioSeries = 12,
 }
 
 impl TitleType {
-  /// Converts a byte representation to its corresponding TitleType
+  /// Converts a byte representation to its corresponding TitleType.
+  ///
   /// # Arguments
-  /// * `value` - Byte representation of a TitleType
+  ///
+  /// * `value` - Byte representation of a TitleType.
   pub(crate) const unsafe fn from(value: u8) -> Self {
     std::mem::transmute(value)
   }
 
-  /// Returns true if the TitleType is movie
+  /// Whether the title type refers to a movie.
   pub(crate) fn is_movie(&self) -> bool {
     match self {
       // Games
@@ -87,7 +89,7 @@ impl TitleType {
     }
   }
 
-  /// Returns true if the TitleType is series
+  /// Whether the title type refers to a series.
   pub(crate) fn is_series(&self) -> bool {
     match self {
       // Games

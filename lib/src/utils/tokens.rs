@@ -2,6 +2,17 @@
 
 //! Common utilities for writing parsers.
 
+use thiserror::Error;
+
+/// General parsing errors.
+#[derive(Debug, Error)]
+#[error("Parsing error")]
+pub enum Err {
+  /// Thrown if the end of file is reached unexpectedly.
+  #[error("Unexpected end of file")]
+  Eof,
+}
+
 /// Get the next iterator item or propagate an EOF error if the end is reached.
 ///
 /// This macro can be used when writing parsers that expect more input to be consumed
@@ -19,6 +30,6 @@
 #[macro_export]
 macro_rules! iter_next {
   ($iter:ident) => {{
-    $iter.next().ok_or(Err::Eof)?
+    $iter.next().ok_or($crate::utils::tokens::Err::Eof)
   }};
 }

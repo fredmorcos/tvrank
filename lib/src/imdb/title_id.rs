@@ -1,12 +1,25 @@
 #![warn(clippy::all)]
 
-use crate::imdb::error::Err;
 use crate::imdb::tokens;
-use atoi::FromRadix10;
-use serde::{Serialize, Serializer};
-use std::error::Error;
+
 use std::fmt;
 use std::hash::{Hash, Hasher};
+
+use atoi::FromRadix10;
+use serde::{Serialize, Serializer};
+use thiserror::Error;
+
+/// Errors when parsing title IDs.
+#[derive(Debug, Error)]
+#[error("Error parsing title ID")]
+pub enum Err {
+  /// ID does not start with the required `tt`.
+  #[error("ID `{0}` does not start with `tt` (e.g. ttXXXXXXX)")]
+  Id(String),
+  /// ID does not contain a valid number.
+  #[error("ID `{0}` does not contain a valid number (e.g. ttXXXXXXX)")]
+  IdNumber(String),
+}
 
 /// The ID corresponding to a title as u8 and usize
 #[derive(Debug, Clone, Copy)]
@@ -56,18 +69,18 @@ impl<'storage> TitleId<'storage> {
 }
 
 impl<'storage> TryFrom<&'storage [u8]> for TitleId<'storage> {
-  type Error = Box<dyn Error>;
+  type Error = Err;
 
   fn try_from(bytes: &'storage [u8]) -> Result<Self, Self::Error> {
     if &bytes[0..2] != tokens::TT {
-      return Err::id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned());
+      return Err(Err::Id(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned()));
     }
 
     let num = &bytes[2..];
     let num_len = num.len();
     let num = match usize::from_radix_10(num) {
       (val, len) if len == num_len => val,
-      _ => return Err::id_number(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned()),
+      _ => return Err(Err::IdNumber(unsafe { std::str::from_utf8_unchecked(bytes) }.to_owned())),
     };
 
     Ok(TitleId { bytes, num })
@@ -75,7 +88,7 @@ impl<'storage> TryFrom<&'storage [u8]> for TitleId<'storage> {
 }
 
 impl<'a> TryFrom<&'a str> for TitleId<'a> {
-  type Error = Box<dyn Error>;
+  type Error = Err;
 
   fn try_from(id: &'a str) -> Result<Self, Self::Error> {
     TitleId::try_from(id.as_bytes())

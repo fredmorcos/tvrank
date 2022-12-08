@@ -10,14 +10,35 @@ use crate::imdb::title_id::TitleId;
 use crate::imdb::tsv_import::tsv_import;
 use crate::utils::io::file as io_file;
 use crate::utils::io::net as io_net;
-use crate::utils::result::Res;
 use crate::utils::search::SearchString;
 
 use humantime::format_duration;
 use log::{debug, log_enabled};
 use reqwest::Url;
+use thiserror::Error;
 
-/// Struct providing the movies and series databases and the related services
+/// Errors when creating service.
+#[derive(Debug, Error)]
+#[error("Error creating IMDB service")]
+pub enum Err {
+  /// File-related error.
+  #[error("File handling error: {0}")]
+  File(#[from] crate::utils::io::file::Err),
+  /// Networking-related error.
+  #[error("Network handling error: {0}")]
+  Net(#[from] crate::utils::io::net::Err),
+  /// Database loading error.
+  #[error("Error loading database: {0}")]
+  Db(#[from] crate::imdb::db_binary::Err),
+  /// URL parsing error.
+  #[error("Error parsing URL: {0}")]
+  UrlParsing(#[from] url::ParseError),
+  /// TSV conversion error.
+  #[error("Error importing from TSV to binary database: {0}")]
+  TsvImport(#[from] crate::imdb::tsv_import::Err),
+}
+
+/// Struct providing the movies and series databases and the related services.
 pub struct Service {
   service_db: ServiceDbFromBinary,
 }
@@ -37,7 +58,11 @@ impl Service {
   /// * `cache_dir` - Directory path of the database files.
   /// * `force_db_update` - True if the databases should be updated regardless of their age.
   /// * `progress_fn` - Function that keeps track of the download progress.
-  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: impl Fn(Option<u64>, u64)) -> Res<Self> {
+  pub fn new(
+    cache_dir: &Path,
+    force_db_update: bool,
+    progress_fn: impl Fn(Option<u64>, u64),
+  ) -> Result<Self, Err> {
     let one_month = Duration::from_secs(60 * 60 * 24 * 30);
 
     let movies_db_filename = cache_dir.join(MOVIES_DB_FILENAME);
@@ -50,7 +75,7 @@ impl Service {
     debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
-    let service = Self { service_db: ServiceDbFromBinary::new(movies_data, series_data) };
+    let service = Self { service_db: ServiceDbFromBinary::new(movies_data, series_data)? };
     debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     if log_enabled!(log::Level::Debug) {
@@ -79,7 +104,7 @@ impl Service {
     max_age: Duration,
     force_db_update: bool,
     progress_fn: impl Fn(Option<u64>, u64),
-  ) -> Res {
+  ) -> Result<(), Err> {
     let needs_update = {
       force_db_update
         || io_file::older_than(&io_file::exists(movies_db_filename)?, max_age)

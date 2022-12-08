@@ -1,19 +1,48 @@
 #![warn(clippy::all)]
 
-use crate::imdb::error::Err;
 use crate::imdb::title_id::TitleId;
 use crate::imdb::tokens;
 use crate::iter_next;
-use crate::utils::result::Res;
+
+use std::borrow::Borrow;
+use std::cmp::{Ord, Ordering};
+use std::io::{self, BufRead};
+use std::num::ParseFloatError;
+use std::ops::{Deref, DerefMut};
+use std::str::FromStr;
+
 use atoi::atoi;
 use fnv::FnvHashMap;
 use serde::Serialize;
-use std::borrow::Borrow;
-use std::cmp::Ord;
-use std::cmp::Ordering;
-use std::io::BufRead;
-use std::ops::{Deref, DerefMut};
-use std::str::FromStr;
+
+use thiserror::Error;
+
+/// Errors when converting titles from IMDB TSVs to binary.
+#[derive(Debug, Error)]
+#[error("Error parsing title rating")]
+pub enum Err {
+  /// Title parsing error.
+  #[error("Title parsing error: {0}")]
+  TitleParsing(#[from] crate::imdb::title::Err),
+  /// IO errors.
+  #[error("IO error: {0}")]
+  Io(#[from] io::Error),
+  /// Number of votes is not a valid number.
+  #[error("Number of votes is not a valid number")]
+  Votes,
+  /// ID already exists.
+  #[error("Duplicate IMDB ID `{0}` found")]
+  DuplicateId(String),
+  /// Invalid rating value.
+  #[error("Invalid rating value `{0}`")]
+  InvalidRating(String, #[source] ParseFloatError),
+  /// General parsing errors.
+  #[error("Parsing error: {0}")]
+  Parsing(#[from] crate::utils::tokens::Err),
+  /// ID parsing errors.
+  #[error("Error parsing ID: {0}")]
+  IdParsing(#[from] crate::imdb::title_id::Err),
+}
 
 /// Average user rating of a title together with the number of votes
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
@@ -55,10 +84,11 @@ impl Rating {
 
   /// Creates a Rating from a tab separated value
   /// * `columns` - Rating of a title as a tab separated value
-  fn from_tsv<'a>(columns: &mut impl Iterator<Item = &'a [u8]>) -> Res<Self> {
-    let rating = f32::from_str(unsafe { std::str::from_utf8_unchecked(iter_next!(columns)) })?;
+  fn from_tsv<'a>(columns: &mut impl Iterator<Item = &'a [u8]>) -> Result<Self, Err> {
+    let rating = unsafe { std::str::from_utf8_unchecked(iter_next!(columns)?) };
+    let rating = f32::from_str(rating).map_err(|e| Err::InvalidRating(rating.to_owned(), e))?;
     let rating = unsafe { (rating * 10.0).to_int_unchecked() };
-    let votes = atoi::<u32>(iter_next!(columns)).ok_or(Err::Votes)?;
+    let votes = atoi::<u32>(iter_next!(columns)?).ok_or(Err::Votes)?;
     Ok(Self::new(rating, votes))
   }
 
@@ -114,7 +144,7 @@ impl DerefMut for Ratings {
 impl Ratings {
   /// Create and return Ratings from tab separated values
   /// * `reader` - Reader containing a list of titles as tab separated values
-  pub(crate) fn from_tsv<R: BufRead>(mut reader: R) -> Res<Self> {
+  pub(crate) fn from_tsv<R: BufRead>(mut reader: R) -> Result<Self, Err> {
     // TODO: See if we can use byte vectors instead of strings. Ultimately we end up
     // parsing bytes rather than strings, and when we need strings, we already know they
     // are valid UTF-8 because we trust the source.
@@ -141,11 +171,11 @@ impl Ratings {
 
       let mut columns = trimmed.as_bytes().split(|&b| b == tokens::TAB);
 
-      let id = TitleId::try_from(iter_next!(columns))?;
+      let id = TitleId::try_from(iter_next!(columns)?)?;
       let rating = Rating::from_tsv(&mut columns)?;
 
       if res.insert(id.as_usize(), rating).is_some() {
-        return Err::duplicate_id(id.as_str().to_owned());
+        return Err(Err::DuplicateId(id.as_str().to_owned()));
       }
 
       line.clear();

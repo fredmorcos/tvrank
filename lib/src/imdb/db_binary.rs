@@ -1,10 +1,23 @@
-use super::db::Db;
+#![warn(clippy::all)]
+
+use crate::imdb::db::{Db, Query};
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
-use crate::{imdb::db::Query, utils::search::SearchString};
+use crate::utils::search::SearchString;
+
 use log::debug;
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
+use thiserror::Error;
+
+/// Errors when loading database.
+#[derive(Debug, Error)]
+#[error("Error loading database")]
+pub enum Err {
+  /// Loading title error.
+  #[error("Error loading title: {0}")]
+  LoadingTitle(#[from] crate::imdb::title::Err),
+}
 
 pub struct ServiceDbFromBinary {
   dbs: Vec<Db>,
@@ -20,29 +33,47 @@ impl ServiceDbFromBinary {
   ///
   /// * `movies_data` - Binary movies data.
   /// * `series_data` - Binary series data.
-  pub(crate) fn new(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Self {
+  pub(crate) fn new(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Result<Self, Err> {
     let nthreads = rayon::current_num_threads();
     let dbs = const_mutex(Vec::with_capacity(nthreads));
     let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
     let series_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut series_data);
+    let error: Mutex<Option<Err>> = const_mutex(None);
 
     rayon::scope(|scope| {
       for _ in 0..nthreads {
         let dbs = &dbs;
         let movies_cursor = &movies_cursor;
         let series_cursor = &series_cursor;
+        let error_mutex = &error;
 
         scope.spawn(move |_| {
           let mut db = Db::with_capacities(1_900_000 / nthreads, 270_000 / nthreads);
           let mut titles = Vec::with_capacity(100);
-          Self::movies_from_binary(movies_cursor, &mut titles, &mut db);
-          Self::series_from_binary(series_cursor, &mut titles, &mut db);
+          if let Err(err) = Self::movies_from_binary(movies_cursor, &mut titles, &mut db) {
+            let mut error_guard = error_mutex.lock();
+            if error_guard.is_none() {
+              *error_guard = Some(err);
+            }
+            return;
+          }
+          if let Err(err) = Self::series_from_binary(series_cursor, &mut titles, &mut db) {
+            let mut error_guard = error_mutex.lock();
+            if error_guard.is_none() {
+              *error_guard = Some(err);
+            }
+            return;
+          }
           dbs.lock().push(db);
         });
       }
     });
 
-    Self { dbs: dbs.into_inner() }
+    if let Some(err) = error.into_inner() {
+      Err(err)
+    } else {
+      Ok(Self { dbs: dbs.into_inner() })
+    }
   }
 
   /// Loads movies from the provided binary content buffers.
@@ -52,7 +83,11 @@ impl ServiceDbFromBinary {
   /// * `cursor` - Cursor at the binary to read the titles from.
   /// * `titles` - Vector to store the titles temporarily before writing to the database.
   /// * `db` - Database to store movies in.
-  fn movies_from_binary(cursor: &Mutex<&mut &'static [u8]>, titles: &mut Vec<Title<'static>>, db: &mut Db) {
+  fn movies_from_binary(
+    cursor: &Mutex<&mut &'static [u8]>,
+    titles: &mut Vec<Title<'static>>,
+    db: &mut Db,
+  ) -> Result<(), Err> {
     Self::titles_from_binary::<true>(cursor, titles, db)
   }
 
@@ -63,7 +98,11 @@ impl ServiceDbFromBinary {
   /// * `cursor` - Cursor at the binary to read the titles from.
   /// * `titles` - Vector to store the titles temporarily before writing to the database.
   /// * `db` - Database to store series in.
-  fn series_from_binary(cursor: &Mutex<&mut &'static [u8]>, titles: &mut Vec<Title<'static>>, db: &mut Db) {
+  fn series_from_binary(
+    cursor: &Mutex<&mut &'static [u8]>,
+    titles: &mut Vec<Title<'static>>,
+    db: &mut Db,
+  ) -> Result<(), Err> {
     Self::titles_from_binary::<false>(cursor, titles, db)
   }
 
@@ -83,12 +122,12 @@ impl ServiceDbFromBinary {
     cursor: &Mutex<&mut &'static [u8]>,
     titles: &mut Vec<Title<'static>>,
     db: &mut Db,
-  ) {
+  ) -> Result<(), Err> {
     loop {
       let mut cursor_guard = cursor.lock();
 
       if (*cursor_guard).is_empty() {
-        break;
+        return Ok(());
       }
 
       for _ in 0..100 {
@@ -96,11 +135,7 @@ impl ServiceDbFromBinary {
           break;
         }
 
-        let title = match Title::from_binary(&mut cursor_guard) {
-          Ok(title) => title,
-          Err(e) => panic!("Error parsing title: {}", e),
-        };
-
+        let title = Title::from_binary(&mut cursor_guard)?;
         titles.push(title);
       }
 
@@ -215,7 +250,7 @@ mod tests {
 
     let movies_storage = Box::leak(movies_storage.into_boxed_slice());
     let series_storage = Box::leak(series_storage.into_boxed_slice());
-    ServiceDbFromBinary::new(movies_storage, series_storage)
+    ServiceDbFromBinary::new(movies_storage, series_storage).unwrap()
   }
 
   #[test]

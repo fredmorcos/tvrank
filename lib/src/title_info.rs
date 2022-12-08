@@ -2,22 +2,28 @@
 
 //! Module for handling title information objects.
 
-use crate::imdb::ImdbTitleId;
-use crate::utils::result::Res;
-use derive_more::Display;
-use log::warn;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::error::Error;
 use std::fs;
-use std::io::BufReader;
+use std::io::{self, BufReader};
 use std::path::Path;
 
-/// Error type thrown when the title information file is incorrect.
-#[derive(Debug, Display)]
-#[display(fmt = "")]
-pub struct InfoErr;
+use crate::imdb::ImdbTitleId;
 
-impl Error for InfoErr {}
+use log::warn;
+use serde::{Deserialize, Deserializer, Serialize};
+
+use thiserror::Error;
+
+/// Errors when parsing title information.
+#[derive(Debug, Error)]
+#[error("Error parsing title information file")]
+pub enum Err {
+  /// JSON errors (e.g. when the title information file is incorrect).
+  #[error("Error parsing title info JSON file: {0}")]
+  Json(#[from] serde_json::Error),
+  /// IO errors.
+  #[error("IO error: {0}")]
+  Io(#[from] io::Error),
+}
 
 /// The IMDB section of title information files.
 #[derive(Serialize, Deserialize)]
@@ -65,7 +71,7 @@ impl<'a> TitleInfo<'a> {
   }
 
   /// Load a title information object from a file.
-  pub fn from_path(path: &Path) -> Res<TitleInfo> {
+  pub fn from_path(path: &Path) -> Result<TitleInfo, Err> {
     let title_info_path = path.join("tvrank.json");
     let title_info_file = fs::File::open(&title_info_path)?;
     let title_info_file_reader = BufReader::new(title_info_file);
@@ -75,7 +81,7 @@ impl<'a> TitleInfo<'a> {
       Ok(title_info) => title_info,
       Err(err) => {
         warn!("Ignoring info in `{}` due to parse error: {}", title_info_path.display(), err);
-        return Err(Box::new(InfoErr));
+        return Err(Err::Json(err));
       }
     };
 

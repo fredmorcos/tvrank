@@ -1,11 +1,27 @@
 #![warn(clippy::all)]
 
-use std::io::{BufRead, Write};
+use std::io::{self, BufRead, Write};
 
 use crate::imdb::ratings::Ratings;
 use crate::imdb::title::Title;
 use crate::imdb::title::TsvAction;
-use crate::utils::result::Res;
+
+use thiserror::Error;
+
+/// Errors when converting titles from IMDB TSVs to binary.
+#[derive(Debug, Error)]
+#[error("TSV to Binary Conversion Error")]
+pub enum Err {
+  /// Title parsing error.
+  #[error("Title parsing error: {0}")]
+  TitleParsing(#[from] crate::imdb::title::Err),
+  /// IO errors.
+  #[error("IO error: {0}")]
+  Io(#[from] io::Error),
+  /// Ratings parsing error.
+  #[error("Ratings parsing error: {0}")]
+  RatingsParsing(#[from] crate::imdb::ratings::Err),
+}
 
 /// Import title data from tab separated values (TSVs).
 ///
@@ -24,7 +40,7 @@ pub(crate) fn tsv_import<R1: BufRead, R2: BufRead, W1: Write, W2: Write>(
   mut basics_reader: R2,
   mut movies_db_writer: W1,
   mut series_db_writer: W2,
-) -> Res {
+) -> Result<(), Err> {
   let ratings = Ratings::from_tsv(ratings_reader)?;
 
   let mut line = String::new();
