@@ -6,7 +6,6 @@
 mod db;
 mod db_binary;
 mod db_impl;
-mod error;
 mod genre;
 mod ratings;
 mod service;
@@ -21,9 +20,10 @@ mod tsv_import;
 mod testdata;
 
 pub use db::Query as ImdbQuery;
-pub use error::Err as ImdbErr;
 pub use genre::{Genre as ImdbGenre, Genres as ImdbGenres};
+pub use service::Error as ImdbError;
 pub use service::Service as Imdb;
 pub use title::Title as ImdbTitle;
+pub use title_id::Error as ImdbTitleIdError;
 pub use title_id::TitleId as ImdbTitleId;
 pub use title_type::TitleType as ImdbTitleType;

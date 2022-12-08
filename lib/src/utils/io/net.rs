@@ -5,18 +5,26 @@
 use std::io::{BufRead, BufReader};
 
 use crate::utils::io::progress::ProgressPipe;
-use crate::utils::result::Res;
 
 use flate2::bufread::GzDecoder;
 use reqwest::blocking::{Client, Response};
 use reqwest::Url;
+
+/// Errors when doing networking.
+#[derive(Debug, thiserror::Error)]
+#[error("Networking error")]
+pub enum Error {
+  /// Networking error.
+  #[error("Networking error: {0}")]
+  Net(#[from] reqwest::Error),
+}
 
 /// Sends a GET request to the given URL and returns the response.
 ///
 /// # Arguments
 ///
 /// * `url` - The URL to send the GET request to.
-pub fn get_response(url: Url) -> Res<Response> {
+pub fn get_response(url: Url) -> Result<Response, Error> {
   let client = Client::builder().build()?;
   let resp = client.get(url).send()?;
   Ok(resp)

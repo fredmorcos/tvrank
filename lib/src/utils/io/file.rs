@@ -7,7 +7,14 @@ use std::io::{self, BufWriter};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use crate::utils::result::Res;
+/// Errors when handling files.
+#[derive(Debug, thiserror::Error)]
+#[error("File handling error")]
+pub enum Error {
+  /// IO error.
+  #[error("IO error: {0}")]
+  Io(#[from] io::Error),
+}
 
 /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
 ///
@@ -16,12 +23,12 @@ use crate::utils::result::Res;
 /// # Arguments
 ///
 /// * `path` - Path of the file to be opened.
-pub fn open_existing(path: &Path) -> Res<Option<File>> {
+pub fn open_existing(path: &Path) -> Result<Option<File>, Error> {
   match File::open(path) {
     Ok(f) => Ok(Some(f)),
     Err(e) => match e.kind() {
       io::ErrorKind::NotFound => Ok(None),
-      _ => Err(Box::new(e)),
+      _ => Err(Error::Io(e)),
     },
   }
 }
@@ -53,7 +60,7 @@ pub fn older_than(file: &Option<File>, duration: Duration) -> bool {
 /// # Arguments
 ///
 /// * `file` - The file path to read.
-pub fn read_static(filename: &Path) -> Res<&'static [u8]> {
+pub fn read_static(filename: &Path) -> Result<&'static [u8], Error> {
   Ok(Box::leak(fs::read(filename)?.into_boxed_slice()))
 }
 
@@ -62,6 +69,6 @@ pub fn read_static(filename: &Path) -> Res<&'static [u8]> {
 /// # Arguments
 ///
 /// * `file` - The file path to create.
-pub fn create_buffered(filename: &Path) -> Res<BufWriter<File>> {
+pub fn create_buffered(filename: &Path) -> Result<BufWriter<File>, Error> {
   Ok(BufWriter::new(File::create(filename)?))
 }
