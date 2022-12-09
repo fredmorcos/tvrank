@@ -1559,8 +1559,10 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "thiserror",
  "truncatable",
  "tvrank",
+ "url",
  "walkdir",
 ]
 
