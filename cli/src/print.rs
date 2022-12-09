@@ -1,13 +1,26 @@
 #![warn(clippy::all)]
 
 use crate::search::SearchRes;
+
+use tvrank::imdb::{ImdbQuery, ImdbTitle};
+
 use humantime::format_duration;
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use reqwest::Url;
 use serde::Serialize;
+use thiserror::Error;
 use truncatable::Truncatable;
-use tvrank::imdb::{ImdbQuery, ImdbTitle};
-use tvrank::utils::result::Res;
+
+#[derive(Debug, Error)]
+#[error("Output printing error")]
+pub enum Err {
+  #[error("JSON output error: {0}")]
+  Json(#[from] serde_json::Error),
+  #[error("YAML output error: {0}")]
+  Yaml(#[from] serde_yaml::Error),
+  #[error("Table output error: {0}")]
+  Table(#[from] url::ParseError),
+}
 
 #[derive(Debug, Clone, clap::ArgEnum)]
 pub enum OutputFormat {
@@ -32,6 +45,8 @@ impl<'search_res, 'a, 'storage> OutputWrapper<'search_res, 'a, 'storage> {
 }
 
 pub trait Printer {
+  type Error;
+
   fn get_format(&self) -> OutputFormat;
 
   fn print(
@@ -40,7 +55,7 @@ pub trait Printer {
     series: Option<SearchRes>,
     imdb_url: &Url,
     search_terms: Option<&str>,
-  ) -> Res;
+  ) -> Result<(), Self::Error>;
 }
 
 pub struct JsonPrinter;
@@ -53,6 +68,8 @@ impl JsonPrinter {
 }
 
 impl Printer for JsonPrinter {
+  type Error = Err;
+
   fn get_format(&self) -> OutputFormat {
     OutputFormat::Json
   }
@@ -63,14 +80,10 @@ impl Printer for JsonPrinter {
     mut series: Option<SearchRes>,
     _imdb_url: &Url,
     _search_terms: Option<&str>,
-  ) -> Res {
-    println!(
-      "{}",
-      serde_json::to_string_pretty(&OutputWrapper::new(
-        movies.as_mut().map(|movies| movies.top_sorted_results()),
-        series.as_mut().map(|series| series.top_sorted_results()),
-      ))?
-    );
+  ) -> Result<(), Self::Error> {
+    let movie_results = movies.as_mut().map(|movies| movies.top_sorted_results());
+    let series_results = series.as_mut().map(|series| series.top_sorted_results());
+    println!("{}", serde_json::to_string_pretty(&OutputWrapper::new(movie_results, series_results))?);
     Ok(())
   }
 }
@@ -85,6 +98,8 @@ impl YamlPrinter {
 }
 
 impl Printer for YamlPrinter {
+  type Error = Err;
+
   fn get_format(&self) -> OutputFormat {
     OutputFormat::Yaml
   }
@@ -95,14 +110,10 @@ impl Printer for YamlPrinter {
     mut series: Option<SearchRes>,
     _imdb_url: &Url,
     _search_terms: Option<&str>,
-  ) -> Res {
-    println!(
-      "{}",
-      serde_yaml::to_string(&OutputWrapper::new(
-        movies.as_mut().map(|movies| movies.top_sorted_results()),
-        series.as_mut().map(|series| series.top_sorted_results()),
-      ))?
-    );
+  ) -> Result<(), Self::Error> {
+    let movie_results = movies.as_mut().map(|movies| movies.top_sorted_results());
+    let series_results = series.as_mut().map(|series| series.top_sorted_results());
+    println!("{}", serde_yaml::to_string(&OutputWrapper::new(movie_results, series_results,))?);
     Ok(())
   }
 }
@@ -113,6 +124,8 @@ pub struct TablePrinter {
 }
 
 impl Printer for TablePrinter {
+  type Error = Err;
+
   fn get_format(&self) -> OutputFormat {
     OutputFormat::Table
   }
@@ -123,7 +136,7 @@ impl Printer for TablePrinter {
     series: Option<SearchRes>,
     imdb_url: &Url,
     search_terms: Option<&str>,
-  ) -> Res {
+  ) -> Result<(), Self::Error> {
     if let Some(movies) = movies {
       self.print_results(movies, imdb_url, ImdbQuery::Movies, search_terms)?;
     }
@@ -147,7 +160,7 @@ impl TablePrinter {
     imdb_url: &Url,
     query: ImdbQuery,
     search_terms: Option<&str>,
-  ) -> Res {
+  ) -> Result<(), Err> {
     if results.is_empty() {
       if let Some(search_terms) = search_terms {
         eprintln!("No {} matches found for `{search_terms}`", query);
@@ -191,7 +204,7 @@ impl TablePrinter {
     Ok(())
   }
 
-  fn create_table_row(&self, title: &ImdbTitle, imdb_url: &Url) -> Res<Row> {
+  fn create_table_row(&self, title: &ImdbTitle, imdb_url: &Url) -> Result<Row, Err> {
     static GREEN: Attr = Attr::ForegroundColor(color::GREEN);
     static YELLOW: Attr = Attr::ForegroundColor(color::YELLOW);
     static RED: Attr = Attr::ForegroundColor(color::RED);
