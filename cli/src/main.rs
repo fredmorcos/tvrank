@@ -407,7 +407,7 @@ fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res<()> {
     .truncate(true)
     .write(true)
     .create_new(!force)
-    .open(&title_info_path)?;
+    .open(title_info_path)?;
   file.write_all(serde_json::to_string_pretty(&title_info)?.as_bytes())?;
 
   Ok(())
