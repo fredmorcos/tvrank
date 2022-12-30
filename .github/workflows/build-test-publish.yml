@@ -24,8 +24,8 @@ jobs:
         # env:
         #   ENABLE_PRODUCTION: ${{startsWith(github.ref, 'refs/tags/')}}
         run: |
-          import os
           import json
+          # import os
 
           matrix = {
             'os': [
@@ -75,7 +75,10 @@ jobs:
           #     'args': '--profile production',
           #   })
 
-          print('::set-output name=matrix::%s' % json.dumps(matrix))
+          matrix_json = json.dumps(matrix)
+          # print(f'::set-output name=matrix::{matrix_json}')
+          with open('$GITHUB_OUTPUT', 'w', encoding='ascii') as out:
+              out.write(matrix_json)
 
   code-formatting:
     name: Code formatting
