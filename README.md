@@ -3,8 +3,7 @@
 [![License](https://img.shields.io/github/license/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/blob/main/LICENSE)
 [![Release (latest SemVer)](https://img.shields.io/github/v/release/fredmorcos/tvrank?sort=semver&style=for-the-badge)](https://github.com/fredmorcos/tvrank/releases)
 [![Crates.io](https://img.shields.io/crates/v/tvrank?style=for-the-badge)](https://crates.io/crates/tvrank)
-[![Release](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/Release?label=Release&style=for-the-badge)](https://github.com/fredmorcos/tvrank/releases)
-[![CI](https://img.shields.io/github/workflow/status/fredmorcos/tvrank/CI?label=Master&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/fredmorcos/tvrank/build-test-publish.yml?label=Main&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
 [![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.8.4/tvrank/)
 [![Github Open Issues](https://img.shields.io/github/issues-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues)
