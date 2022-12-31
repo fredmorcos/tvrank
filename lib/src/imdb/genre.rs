@@ -81,12 +81,14 @@ pub enum Genre {
   War = 26,
   /// Western
   Western = 27,
+  /// Experimental
+  Experimental = 28,
 }
 
 impl Genre {
   /// Returns the very last item encoded in the Genre enum as u8
   pub(crate) const fn max() -> u8 {
-    Self::Western as u8
+    Self::Experimental as u8
   }
 
   /// Converts a number into its corresponding Genre item
@@ -249,6 +251,7 @@ mod tests {
     assert_eq!(Genre::Thriller as u8, 25);
     assert_eq!(Genre::War as u8, 26);
     assert_eq!(Genre::Western as u8, 27);
+    assert_eq!(Genre::Experimental as u8, 28);
   }
 
   #[test]
@@ -281,11 +284,12 @@ mod tests {
     assert_eq!(Genre::Thriller, unsafe { Genre::from(25) });
     assert_eq!(Genre::War, unsafe { Genre::from(26) });
     assert_eq!(Genre::Western, unsafe { Genre::from(27) });
+    assert_eq!(Genre::Experimental, unsafe { Genre::from(28) });
   }
 
   #[test]
   fn test_genre_max() {
-    assert_eq!(Genre::max(), Genre::Western as u8);
+    assert_eq!(Genre::max(), Genre::Experimental as u8);
   }
 
   #[test]
