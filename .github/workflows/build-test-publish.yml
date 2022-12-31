@@ -20,12 +20,13 @@ jobs:
       matrix: ${{steps.set-matrix.outputs.matrix}}
     steps:
       - id: set-matrix
+        name: Generate build matrix
         shell: python
         # env:
         #   ENABLE_PRODUCTION: ${{startsWith(github.ref, 'refs/tags/')}}
         run: |
           import json
-          # import os
+          import os
 
           matrix = {
             'os': [
@@ -69,16 +70,11 @@ jobs:
             ]
           }
 
-          # if os.getenv('ENABLE_PRODUCTION', default='false') == 'true':
-          #   matrix['build-config'].append({
-          #     'id': 'production',
-          #     'args': '--profile production',
-          #   })
-
           matrix_json = json.dumps(matrix)
-          # print(f'::set-output name=matrix::{matrix_json}')
-          with open('$GITHUB_OUTPUT', 'w', encoding='ascii') as out:
-              out.write(matrix_json)
+          env_file = os.getenv('GITHUB_OUTPUT')
+          if env_file is not None:
+            with open(env_file, 'a', encoding='utf8') as out:
+                print(f'matrix={matrix_json}', file=out)
 
   code-formatting:
     name: Code formatting
