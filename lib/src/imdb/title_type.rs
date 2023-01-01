@@ -15,21 +15,21 @@ pub enum TitleType {
   VideoGame = 0,
 
   // Movies
-  #[display(fmt = "Short Movie")]
   /// Short.
+  #[display(fmt = "Short Movie")]
   Short = 1,
   /// Video.
   Video = 2,
   /// Movie.
   Movie = 3,
-  #[display(fmt = "TV Short")]
   /// TvShort.
+  #[display(fmt = "TV Short")]
   TvShort = 4,
-  #[display(fmt = "TV Movie")]
   /// TvMovie.
+  #[display(fmt = "TV Movie")]
   TvMovie = 5,
-  #[display(fmt = "TV Special")]
   /// TvSpecial.
+  #[display(fmt = "TV Special")]
   TvSpecial = 6,
 
   // Episodes
@@ -41,16 +41,16 @@ pub enum TitleType {
   RadioEpisode = 9,
 
   // Series
-  #[display(fmt = "TV Series")]
   /// TvSeries.
+  #[display(fmt = "TV Series")]
   TvSeries = 10,
-  #[display(fmt = "TV Mini-Series")]
   /// TvMiniSeries.
+  #[display(fmt = "TV Mini-Series")]
   TvMiniSeries = 11,
 
   // Radio
-  #[display(fmt = "Radio Series")]
   /// RadioSeries.
+  #[display(fmt = "Radio Series")]
   RadioSeries = 12,
 }
 

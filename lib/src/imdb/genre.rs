@@ -32,15 +32,15 @@ pub enum Genre {
   Family = 9,
   /// Fantasy
   Fantasy = 10,
+  /// FilmNoir
   #[display(fmt = "Film-Noir")]
   #[enumeration(rename = "Film-Noir")]
   #[serde(rename(serialize = "Film-Noir"))]
-  /// FilmNoir
   FilmNoir = 11,
+  /// GameShow
   #[display(fmt = "Game-Show")]
   #[enumeration(rename = "Game-Show")]
   #[serde(rename(serialize = "Game-Show"))]
-  /// GameShow
   GameShow = 12,
   /// History
   History = 13,
@@ -54,26 +54,26 @@ pub enum Genre {
   Mystery = 17,
   /// News
   News = 18,
+  /// RealityTv
   #[display(fmt = "Reality-TV")]
   #[enumeration(rename = "Reality-TV")]
   #[serde(rename(serialize = "Reality-TV"))]
-  /// RealityTv
   RealityTv = 19,
   /// Romance
   Romance = 20,
+  /// SciFi
   #[display(fmt = "Sci-Fi")]
   #[enumeration(rename = "Sci-Fi")]
   #[serde(rename(serialize = "Sci-Fi"))]
-  /// SciFi
   SciFi = 21,
   /// Short
   Short = 22,
   /// Sport
   Sport = 23,
+  /// TalkShow
   #[display(fmt = "Talk-Show")]
   #[enumeration(rename = "Talk-Show")]
   #[serde(rename(serialize = "Talk-Show"))]
-  /// TalkShow
   TalkShow = 24,
   /// Thriller
   Thriller = 25,
@@ -91,7 +91,7 @@ impl Genre {
     Self::Experimental as u8
   }
 
-  /// Converts a number into its corresponding Genre item
+  /// Converts a number into its corresponding Genre item.
   ///
   /// # Arguments
   ///

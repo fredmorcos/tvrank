@@ -18,7 +18,7 @@ use atoi::atoi;
 use serde::Serialize;
 use thiserror::Error;
 
-/// Wraps a title based on its type
+/// Wraps a title based on its type.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum TsvAction<T> {
   Skip,
