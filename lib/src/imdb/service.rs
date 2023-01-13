@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
 
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -35,7 +35,7 @@ impl Service {
   /// * `cache_dir` - Directory path of the database files
   /// * `force_db_update` - True if the databases should be updated regardless of their age
   /// * `progress_fn` - Function that keeps track of the download progress
-  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: &dyn Fn(Option<u64>, u64)) -> Res<Self> {
+  pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: impl Fn(Option<u64>, u64)) -> Res<Self> {
     // Delete old imdb cache directory.
     let old_cache_dir = cache_dir.join("imdb");
     let _ = fs::remove_dir_all(old_cache_dir);
@@ -121,15 +121,11 @@ impl Service {
   /// # Arguments
   /// * `resp` - Response returned for the GET request
   /// * `progress_fn` - Function to keep track of the download progress
-  fn create_downloader(
-    resp: Response,
-    progress_fn: &dyn Fn(Option<u64>, u64),
-  ) -> Res<BufReader<GzDecoder<BufReader<Progress<Response>>>>> {
+  fn create_downloader(resp: Response, progress_fn: impl Fn(Option<u64>, u64)) -> impl BufRead {
     let progress = Progress::new(resp, progress_fn);
     let reader = BufReader::new(progress);
     let decoder = GzDecoder::new(reader);
-    let reader = BufReader::new(decoder);
-    Ok(reader)
+    BufReader::new(decoder)
   }
 
   /// Ensures that the movies and series databases exist and are up-to-date. The databases are created if they don't exist, and updated if they
@@ -143,7 +139,7 @@ impl Service {
     movies_db_filename: &Path,
     series_db_filename: &Path,
     force_db_update: bool,
-    progress_fn: &dyn Fn(Option<u64>, u64),
+    progress_fn: impl Fn(Option<u64>, u64),
   ) -> Res<()> {
     let needs_update = {
       let movies_db_file = Self::file_exists(movies_db_filename)?;
@@ -172,8 +168,8 @@ impl Service {
         }
       }
 
-      let basics_downloader = Self::create_downloader(basics_resp, progress_fn)?;
-      let ratings_downloader = Self::create_downloader(ratings_resp, progress_fn)?;
+      let basics_downloader = Self::create_downloader(basics_resp, &progress_fn);
+      let ratings_downloader = Self::create_downloader(ratings_resp, &progress_fn);
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);

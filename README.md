@@ -308,7 +308,7 @@ and is a `FnMut` to be able to e.g. mutate a progress bar object.
 
 ```rust
 let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
-let imdb = Imdb::new(cache_dir.path(), false, &mut |_| {})?;
+let imdb = Imdb::new(cache_dir.path(), false, |_, _| {})?;
 ```
 
 Afterwards, one can query the database using either `imdb.by_id(...)`,
