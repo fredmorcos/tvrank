@@ -10,7 +10,7 @@ use crate::imdb::db_binary::ServiceDbFromBinary;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::imdb::tsv_import::tsv_import;
-use crate::utils::io::Progress;
+use crate::utils::io::ProgressPipe;
 use crate::utils::result::Res;
 use crate::utils::search::SearchString;
 
@@ -121,8 +121,8 @@ impl Service {
   /// # Arguments
   /// * `resp` - Response returned for the GET request
   /// * `progress_fn` - Function to keep track of the download progress
-  fn create_downloader(resp: Response, progress_fn: impl Fn(Option<u64>, u64)) -> impl BufRead {
-    let progress = Progress::new(resp, progress_fn);
+  fn create_downloader(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
+    let progress = ProgressPipe::new(resp, progress_fn);
     let reader = BufReader::new(progress);
     let decoder = GzDecoder::new(reader);
     BufReader::new(decoder)
@@ -168,8 +168,8 @@ impl Service {
         }
       }
 
-      let basics_downloader = Self::create_downloader(basics_resp, &progress_fn);
-      let ratings_downloader = Self::create_downloader(ratings_resp, &progress_fn);
+      let basics_downloader = Self::create_downloader(basics_resp, |bytes| progress_fn(None, bytes));
+      let ratings_downloader = Self::create_downloader(ratings_resp, |bytes| progress_fn(None, bytes));
 
       let movies_db_file = File::create(movies_db_filename)?;
       let movies_db_writer = BufWriter::new(movies_db_file);
