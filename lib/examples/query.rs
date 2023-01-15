@@ -4,7 +4,7 @@ use tvrank::imdb::{Imdb, ImdbQuery};
 use tvrank::utils::result::Res;
 use tvrank::utils::search::SearchString;
 
-fn main() -> Res<()> {
+fn main() -> Res {
   let cache_dir = tempfile::Builder::new().prefix("tvrank_").tempdir()?;
   let imdb = Imdb::new(cache_dir.path(), false, |_, _| {})?;
 
