@@ -25,9 +25,12 @@ pub struct Service {
   service_db: ServiceDbFromBinary,
 }
 
-const IMDB: &str = "https://datasets.imdbws.com/";
-const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
+const IMDB_URL: &str = "https://datasets.imdbws.com/";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
+const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
+
+const MOVIES_DB_FILENAME: &str = "imdb-movies.tvrankdb";
+const SERIES_DB_FILENAME: &str = "imdb-series.tvrankdb";
 
 impl Service {
   /// Returns a Service struct holding movies/series databases
@@ -38,9 +41,11 @@ impl Service {
   /// * `force_db_update` - True if the databases should be updated regardless of their age.
   /// * `progress_fn` - Function that keeps track of the download progress.
   pub fn new(cache_dir: &Path, force_db_update: bool, progress_fn: impl Fn(Option<u64>, u64)) -> Res<Self> {
-    let movies_db_filename = cache_dir.join("imdb-movies.tvrankdb");
-    let series_db_filename = cache_dir.join("imdb-series.tvrankdb");
-    Self::ensure_db_files(&movies_db_filename, &series_db_filename, force_db_update, progress_fn)?;
+    let one_month = Duration::from_secs(60 * 60 * 24 * 30);
+
+    let movies_db_filename = cache_dir.join(MOVIES_DB_FILENAME);
+    let series_db_filename = cache_dir.join(SERIES_DB_FILENAME);
+    Self::ensure_db_files(&movies_db_filename, &series_db_filename, one_month, force_db_update, progress_fn)?;
 
     let start = Instant::now();
     let movies_data = fs::read(movies_db_filename)?;
@@ -56,9 +61,7 @@ impl Service {
     if log_enabled!(log::Level::Debug) {
       let (total_movies, total_series) = service.service_db.n_entries();
       let total_entries = total_movies + total_series;
-      debug!(
-        "IMDB database contains {total_movies} movies and {total_series} series ({total_entries} entries)"
-      );
+      debug!("IMDB: {total_movies} movies and {total_series} series ({total_entries} entries)");
     }
 
     Ok(service)
@@ -81,30 +84,26 @@ impl Service {
     }
   }
 
-  /// Determines if the given database needs to be updated.
-  ///
-  /// Returns true if the force_db_update parameter is true or if the database have not
-  /// been updated for longer than one month.
+  /// Determines if the given database file is old.
   ///
   /// # Arguments
   ///
   /// * `file` - Database file to be checked.
-  /// * `force_db_update` - True if the database should be updated regardless of its age.
-  fn file_needs_update(file: &Option<File>) -> Res<bool> {
+  /// * `duration` - The duration by which the file would be considered old.
+  fn file_older_than(file: &Option<File>, duration: Duration) -> bool {
     if let Some(f) = file {
-      let md = f.metadata()?;
-      let modified = md.modified()?;
-      let age = match SystemTime::now().duration_since(modified) {
-        Ok(duration) => duration,
-        Err(_) => return Ok(true),
-      };
-
-      // Older than a month.
-      Ok(age >= Duration::from_secs(60 * 60 * 24 * 30))
-    } else {
-      // The file does not exist.
-      Ok(true)
+      if let Ok(md) = f.metadata() {
+        if let Ok(modified) = md.modified() {
+          match SystemTime::now().duration_since(modified) {
+            Ok(age) => return age >= duration,
+            Err(_) => return true,
+          }
+        }
+      }
     }
+
+    // The file does not exist or its metadata or modification date could not be read.
+    true
   }
 
   /// Sends a GET request to the given URL and returns the response.
@@ -126,7 +125,7 @@ impl Service {
   ///
   /// * `resp` - Response returned for the GET request.
   /// * `progress_fn` - Function to keep track of the download progress.
-  fn create_downloader(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
+  fn create_fetcher(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
     let progress = ProgressPipe::new(resp, progress_fn);
     let reader = BufReader::new(progress);
     let decoder = GzDecoder::new(reader);
@@ -147,15 +146,14 @@ impl Service {
   fn ensure_db_files(
     movies_db_filename: &Path,
     series_db_filename: &Path,
+    max_age: Duration,
     force_db_update: bool,
     progress_fn: impl Fn(Option<u64>, u64),
   ) -> Res {
     let needs_update = {
-      let movies_db_file = Self::file_exists(movies_db_filename)?;
-      let series_db_file = Self::file_exists(series_db_filename)?;
       force_db_update
-        || Self::file_needs_update(&movies_db_file)?
-        || Self::file_needs_update(&series_db_file)?
+        || Self::file_older_than(&Self::file_exists(movies_db_filename)?, max_age)
+        || Self::file_older_than(&Self::file_exists(series_db_filename)?, max_age)
     };
 
     if needs_update {
@@ -165,28 +163,28 @@ impl Service {
         debug!("IMDB database does not exist or is more than a month old, going to fetch and build");
       }
 
-      let imdb_url = Url::parse(IMDB)?;
-
-      let basics_resp = Self::get_response(&imdb_url, BASICS_FILENAME)?;
-      let ratings_resp = Self::get_response(&imdb_url, RATINGS_FILENAME)?;
-
-      match (basics_resp.content_length(), ratings_resp.content_length()) {
-        (None, None) | (None, Some(_)) | (Some(_), None) => progress_fn(None, 0),
-        (Some(basics_content_len), Some(ratings_content_len)) => {
-          progress_fn(Some(basics_content_len + ratings_content_len), 0)
-        }
-      }
-
-      let basics_downloader = Self::create_downloader(basics_resp, |bytes| progress_fn(None, bytes));
-      let ratings_downloader = Self::create_downloader(ratings_resp, |bytes| progress_fn(None, bytes));
-
       let movies_db_file = File::create(movies_db_filename)?;
-      let movies_db_writer = BufWriter::new(movies_db_file);
-
       let series_db_file = File::create(series_db_filename)?;
+      let movies_db_writer = BufWriter::new(movies_db_file);
       let series_db_writer = BufWriter::new(series_db_file);
 
-      tsv_import(ratings_downloader, basics_downloader, movies_db_writer, series_db_writer)?;
+      let imdb_url = Url::parse(IMDB_URL)?;
+      let basics_response = Self::get_response(&imdb_url, BASICS_FILENAME)?;
+      let ratings_response = Self::get_response(&imdb_url, RATINGS_FILENAME)?;
+
+      let content_length = match (basics_response.content_length(), ratings_response.content_length()) {
+        (None, _) | (_, None) => None,
+        (Some(basics_content_length), Some(ratings_content_length)) => {
+          Some(basics_content_length + ratings_content_length)
+        }
+      };
+
+      progress_fn(content_length, 0);
+
+      let basics_fetcher = Self::create_fetcher(basics_response, |bytes| progress_fn(None, bytes));
+      let ratings_fetcher = Self::create_fetcher(ratings_response, |bytes| progress_fn(None, bytes));
+
+      tsv_import(ratings_fetcher, basics_fetcher, movies_db_writer, series_db_writer)?;
     } else {
       debug!("IMDB database exists and is less than a month old");
     }
