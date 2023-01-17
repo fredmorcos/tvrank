@@ -1,23 +1,20 @@
 #![warn(clippy::all)]
 
-use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::imdb::db::Query;
 use crate::imdb::db_binary::ServiceDbFromBinary;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::imdb::tsv_import::tsv_import;
-use crate::utils::io::ProgressPipe;
+use crate::utils::io::file as io_file;
+use crate::utils::io::net as io_net;
 use crate::utils::result::Res;
 use crate::utils::search::SearchString;
 
-use flate2::bufread::GzDecoder;
 use humantime::format_duration;
 use log::{debug, log_enabled};
-use reqwest::blocking::{Client, Response};
 use reqwest::Url;
 
 /// Struct providing the movies and series databases and the related services
@@ -48,10 +45,8 @@ impl Service {
     Self::ensure_db_files(&movies_db_filename, &series_db_filename, one_month, force_db_update, progress_fn)?;
 
     let start = Instant::now();
-    let movies_data = fs::read(movies_db_filename)?;
-    let series_data = fs::read(series_db_filename)?;
-    let movies_data = Box::leak(movies_data.into_boxed_slice());
-    let series_data = Box::leak(series_data.into_boxed_slice());
+    let movies_data = io_file::read_static(&movies_db_filename)?;
+    let series_data = io_file::read_static(&series_db_filename)?;
     debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     let start = Instant::now();
@@ -65,71 +60,6 @@ impl Service {
     }
 
     Ok(service)
-  }
-
-  /// Returns the file at the given path if it exists, or an Ok Result if it is not found.
-  ///
-  /// Only returns an error if a problem occurs while opening an existing file.
-  ///
-  /// # Arguments
-  ///
-  /// * `path` - Path of the file to be opened.
-  fn file_exists(path: &Path) -> Res<Option<File>> {
-    match File::open(path) {
-      Ok(f) => Ok(Some(f)),
-      Err(e) => match e.kind() {
-        io::ErrorKind::NotFound => Ok(None),
-        _ => Err(Box::new(e)),
-      },
-    }
-  }
-
-  /// Determines if the given database file is old.
-  ///
-  /// # Arguments
-  ///
-  /// * `file` - Database file to be checked.
-  /// * `duration` - The duration by which the file would be considered old.
-  fn file_older_than(file: &Option<File>, duration: Duration) -> bool {
-    if let Some(f) = file {
-      if let Ok(md) = f.metadata() {
-        if let Ok(modified) = md.modified() {
-          match SystemTime::now().duration_since(modified) {
-            Ok(age) => return age >= duration,
-            Err(_) => return true,
-          }
-        }
-      }
-    }
-
-    // The file does not exist or its metadata or modification date could not be read.
-    true
-  }
-
-  /// Sends a GET request to the given URL and returns the response.
-  ///
-  /// # Arguments
-  ///
-  /// * `imdb_url` - The base URL to send the GET request to.
-  /// * `path` - Endpoint path.
-  fn get_response(imdb_url: &Url, path: &str) -> Res<Response> {
-    let url = imdb_url.join(path)?;
-    let client = Client::builder().build()?;
-    let resp = client.get(url).send()?;
-    Ok(resp)
-  }
-
-  /// Returns a reader for the given response.
-  ///
-  /// # Arguments
-  ///
-  /// * `resp` - Response returned for the GET request.
-  /// * `progress_fn` - Function to keep track of the download progress.
-  fn create_fetcher(resp: Response, progress_fn: impl Fn(u64)) -> impl BufRead {
-    let progress = ProgressPipe::new(resp, progress_fn);
-    let reader = BufReader::new(progress);
-    let decoder = GzDecoder::new(reader);
-    BufReader::new(decoder)
   }
 
   /// Ensures that the movies and series databases exist and are up-to-date.
@@ -152,8 +82,8 @@ impl Service {
   ) -> Res {
     let needs_update = {
       force_db_update
-        || Self::file_older_than(&Self::file_exists(movies_db_filename)?, max_age)
-        || Self::file_older_than(&Self::file_exists(series_db_filename)?, max_age)
+        || io_file::older_than(&io_file::open_existing(movies_db_filename)?, max_age)
+        || io_file::older_than(&io_file::open_existing(series_db_filename)?, max_age)
     };
 
     if needs_update {
@@ -163,14 +93,12 @@ impl Service {
         debug!("IMDB database does not exist or is more than a month old, going to fetch and build");
       }
 
-      let movies_db_file = File::create(movies_db_filename)?;
-      let series_db_file = File::create(series_db_filename)?;
-      let movies_db_writer = BufWriter::new(movies_db_file);
-      let series_db_writer = BufWriter::new(series_db_file);
+      let movies_db_writer = io_file::create_buffered(movies_db_filename)?;
+      let series_db_writer = io_file::create_buffered(series_db_filename)?;
 
       let imdb_url = Url::parse(IMDB_URL)?;
-      let basics_response = Self::get_response(&imdb_url, BASICS_FILENAME)?;
-      let ratings_response = Self::get_response(&imdb_url, RATINGS_FILENAME)?;
+      let basics_response = io_net::get_response(imdb_url.join(BASICS_FILENAME)?)?;
+      let ratings_response = io_net::get_response(imdb_url.join(RATINGS_FILENAME)?)?;
 
       let content_length = match (basics_response.content_length(), ratings_response.content_length()) {
         (None, _) | (_, None) => None,
@@ -181,8 +109,8 @@ impl Service {
 
       progress_fn(content_length, 0);
 
-      let basics_fetcher = Self::create_fetcher(basics_response, |bytes| progress_fn(None, bytes));
-      let ratings_fetcher = Self::create_fetcher(ratings_response, |bytes| progress_fn(None, bytes));
+      let basics_fetcher = io_net::make_fetcher(basics_response, |bytes| progress_fn(None, bytes));
+      let ratings_fetcher = io_net::make_fetcher(ratings_response, |bytes| progress_fn(None, bytes));
 
       tsv_import(ratings_fetcher, basics_fetcher, movies_db_writer, series_db_writer)?;
     } else {

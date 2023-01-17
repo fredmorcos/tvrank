@@ -16,7 +16,7 @@ use std::io::Write;
 use std::str::FromStr;
 use std::time::Duration;
 
-/// Wraps a title based on its type
+/// Wraps a title based on its type.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum TsvAction<T> {
   Skip,
