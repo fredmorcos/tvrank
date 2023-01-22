@@ -9,7 +9,7 @@ use atoi::FromRadix10;
 use serde::{Serialize, Serializer};
 
 /// Errors when parsing title IDs.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error("Error parsing title ID")]
 pub enum Error {
   /// ID does not start with the required `tt`.
@@ -102,13 +102,26 @@ impl fmt::Display for TitleId<'_> {
 
 #[cfg(test)]
 mod tests {
+  use crate::imdb::title_id::Error;
   use crate::imdb::title_id::TitleId;
 
   #[test]
-  fn test() {
+  fn numeric() {
     let id = TitleId::try_from("tt0000001".as_bytes()).unwrap();
     assert_eq!(id.as_bytes(), "tt0000001".as_bytes());
     assert_eq!(id.as_str(), "tt0000001");
     assert_eq!(id.as_usize(), 1);
+  }
+
+  #[test]
+  fn non_numeric() {
+    let id = TitleId::try_from("ttabc".as_bytes());
+    assert_eq!(id, Err(Error::IdNumber("ttabc".to_owned())));
+  }
+
+  #[test]
+  fn trailing_non_numeric() {
+    let id = TitleId::try_from("tt0000001abc".as_bytes());
+    assert_eq!(id, Err(Error::IdNumber("tt0000001abc".to_owned())));
   }
 }
