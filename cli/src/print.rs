@@ -150,9 +150,9 @@ impl TablePrinter {
   ) -> Res {
     if results.is_empty() {
       if let Some(search_terms) = search_terms {
-        eprintln!("No {} matches found for `{search_terms}`", query);
+        eprintln!("No {query} matches found for `{search_terms}`");
       } else {
-        eprintln!("No {} matches found", query);
+        eprintln!("No {query} matches found");
       }
     } else {
       let num = results.total_len();
@@ -164,18 +164,14 @@ impl TablePrinter {
 
       if let Some(search_terms) = search_terms {
         if results.is_truncated() {
-          println!(
-            "Found {num} {} {matches} for `{search_terms}`, {} will be displayed:",
-            query,
-            results.len()
-          )
+          println!("Found {num} {query} {matches} for `{search_terms}`, {} will be displayed:", results.len())
         } else {
-          println!("Found {num} {} {matches} for `{search_terms}`:", query)
+          println!("Found {num} {query} {matches} for `{search_terms}`:")
         }
       } else if results.is_truncated() {
-        println!("Found {num} {} {matches}, {} will be displayed:", query, results.len());
+        println!("Found {num} {query} {matches}, {} will be displayed:", results.len());
       } else {
-        println!("Found {num} {} {matches}:", query);
+        println!("Found {num} {query} {matches}:");
       }
 
       let mut table = create_table(self.color);
@@ -207,7 +203,7 @@ impl TablePrinter {
     }
 
     if let Some(year) = title.start_year() {
-      row.add_cell(Cell::new(&format!("{}", year)));
+      row.add_cell(Cell::new(&format!("{year}")));
     } else {
       row.add_cell(Cell::new(""));
     }
@@ -241,9 +237,9 @@ impl TablePrinter {
     row.add_cell(Cell::new(&format!("{}", title.title_type())));
 
     let title_id = title.title_id();
-    row.add_cell(Cell::new(&format!("{}", title_id)));
+    row.add_cell(Cell::new(&format!("{title_id}")));
 
-    let url = imdb_url.join(&format!("{}", title_id))?;
+    let url = imdb_url.join(&format!("{title_id}"))?;
     row.add_cell(Cell::new(url.as_str()));
 
     Ok(row)

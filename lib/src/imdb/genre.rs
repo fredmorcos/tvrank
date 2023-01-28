@@ -176,10 +176,10 @@ impl fmt::Display for Genres {
 
     for genre in self.iter() {
       if first {
-        write!(f, "{}", genre)?;
+        write!(f, "{genre}")?;
         first = false;
       } else {
-        write!(f, ", {}", genre)?;
+        write!(f, ", {genre}")?;
       }
     }
 

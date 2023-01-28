@@ -143,7 +143,7 @@ impl<C> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for in title names.
-  fn cookies_by_keywords<'a, 'k>(&'a self, keywords: &'k [SearchString]) -> impl Iterator<Item = &'a C> {
+  fn cookies_by_keywords<'a>(&'a self, keywords: &[SearchString]) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
     let keywords_len = keywords.len();
     self
@@ -163,9 +163,9 @@ impl<C> DbImpl<C> {
   ///
   /// * `keywords` - Keywords to search for in title names.
   /// * `year` - The year to search for titles in.
-  fn cookies_by_keywords_and_year<'a, 'k>(
+  fn cookies_by_keywords_and_year<'a>(
     &'a self,
-    keywords: &'k [SearchString],
+    keywords: &[SearchString],
     year: u16,
   ) -> impl Iterator<Item = &'a C> {
     let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
@@ -245,10 +245,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for.
-  pub(crate) fn by_keywords<'a, 'k>(
-    &'a self,
-    keywords: &'k [SearchString],
-  ) -> impl Iterator<Item = &'a Title> {
+  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString]) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 
@@ -258,9 +255,9 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   ///
   /// * `keywords` - Keywords to search for.
   /// * `year` - The year to search for titles in.
-  pub(crate) fn by_keywords_and_year<'a, 'k>(
+  pub(crate) fn by_keywords_and_year<'a>(
     &'a self,
-    keywords: &'k [SearchString],
+    keywords: &[SearchString],
     year: u16,
   ) -> impl Iterator<Item = &'a Title> {
     self.cookies_by_keywords_and_year(keywords, year).map(|&cookie| &self[cookie])

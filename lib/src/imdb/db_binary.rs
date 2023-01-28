@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 use super::db::Db;
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
@@ -98,7 +100,7 @@ impl ServiceDbFromBinary {
 
         let title = match Title::from_binary(&mut cursor_guard) {
           Ok(title) => title,
-          Err(e) => panic!("Error parsing title: {}", e),
+          Err(e) => panic!("Error parsing title: {e}"),
         };
 
         titles.push(title);
@@ -174,7 +176,7 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords<'a, 'k>(&'a self, keywords: &'k [SearchString], query: Query) -> Vec<&'a Title> {
+  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title> {
     self
       .dbs
       .par_iter()
@@ -182,9 +184,9 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords_and_year<'a, 'k>(
+  pub(crate) fn by_keywords_and_year<'a>(
     &'a self,
-    keywords: &'k [SearchString],
+    keywords: &[SearchString],
     year: u16,
     query: Query,
   ) -> Vec<&'a Title> {
