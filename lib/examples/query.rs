@@ -11,16 +11,16 @@ fn main() -> Res {
   let title = "city of god";
   let year = 2002;
 
-  println!("Matches for {} and {:?}:", title, year);
+  println!("Matches for {title} and {year:?}:");
 
   let search_string = SearchString::try_from(title)?;
   for title in imdb.by_title_and_year(&search_string, year, ImdbQuery::Movies) {
     let id = title.title_id();
 
-    println!("ID: {}", id);
+    println!("ID: {id}");
     println!("Primary name: {}", title.primary_title());
     if let Some(original_title) = title.original_title() {
-      println!("Original name: {}", original_title);
+      println!("Original name: {original_title}");
     } else {
       println!("Original name: N/A");
     }

@@ -40,7 +40,7 @@ enum TvRankErr {
   NoKeywords,
   #[display(fmt = "`{}` is not a directory", "_0.display()")]
   NotADirectory(PathBuf),
-  #[display(fmt = "Id `{}` was not found", _0)]
+  #[display(fmt = "Id `{_0}` was not found")]
   UnknownImdbId(String),
 }
 
@@ -213,7 +213,7 @@ enum Command {
 }
 
 fn display_title_and_year(title: &str, year: u16) -> String {
-  format!("{} ({})", title, year)
+  format!("{title} ({year})")
 }
 
 fn display_keywords(keywords: &[SearchString]) -> String {
@@ -244,9 +244,9 @@ fn create_keywords_set(title: &str) -> Res<Vec<SearchString>> {
   Ok(keywords)
 }
 
-fn imdb_title<'a>(
+fn imdb_title(
   title: &str,
-  imdb: &'a Imdb,
+  imdb: &Imdb,
   imdb_url: &Url,
   search_opts: &SearchOpts,
   exact: bool,
@@ -611,7 +611,7 @@ impl Context {
     let log_level = get_log_level(general_opts.verbose);
     let logger = env_logger::Builder::new().filter_level(log_level).try_init();
     if let Err(e) = &logger {
-      eprintln!("Error initializing logger: {}", e);
+      eprintln!("Error initializing logger: {e}");
     }
     let have_logger = logger.is_err();
 

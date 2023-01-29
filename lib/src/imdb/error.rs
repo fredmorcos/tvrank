@@ -10,13 +10,13 @@ use std::error::Error;
 #[display(fmt = "{}")]
 pub enum Err {
   /// Thrown if an ID does not start with `tt`
-  #[display(fmt = "ID `{}` does not start with `tt` (e.g. ttXXXXXXX)", _0)]
+  #[display(fmt = "ID `{_0}` does not start with `tt` (e.g. ttXXXXXXX)")]
   Id(String),
   /// Thrown if an ID does not contain a valid number
-  #[display(fmt = "ID `{}` does not contain a valid number (e.g. ttXXXXXXX)", _0)]
+  #[display(fmt = "ID `{_0}` does not contain a valid number (e.g. ttXXXXXXX)")]
   IdNumber(String),
   /// Thrown if the ID already exists
-  #[display(fmt = "Duplicate IMDB ID `{}` found", _0)]
+  #[display(fmt = "Duplicate IMDB ID `{_0}` found")]
   DuplicateId(String),
   /// Thrown if the given title type does not exist
   #[display(fmt = "Unknown title type")]
@@ -49,10 +49,10 @@ pub enum Err {
   #[display(fmt = "Error querying the IMDB basics DB")]
   BasicsDbQuery,
   /// Thrown if the given title type is not supported
-  #[display(fmt = "Unsupported title type `{}`", _0)]
+  #[display(fmt = "Unsupported title type `{_0}`")]
   UnsupportedTitleType(TitleType),
   /// Thrown if a problem occurs while parsing a title
-  #[display(fmt = "Error parsing title: {}", _0)]
+  #[display(fmt = "Error parsing title: {_0}")]
   ParsingTitle(String),
 }
 
