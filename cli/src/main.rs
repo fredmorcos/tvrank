@@ -4,65 +4,61 @@ mod print;
 mod search;
 mod ui;
 
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+use std::{env, io};
+
 use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter};
 use crate::search::SearchRes;
 use crate::ui::{create_progress_bar, create_progress_spinner};
+
+use tvrank::imdb::{Imdb, ImdbError, ImdbQuery, ImdbTitleId, ImdbTitleIdError};
+use tvrank::title_info::TitleInfo;
+use tvrank::utils::search::{SearchString, SearchStringError};
+
 use atoi::atoi;
 use clap::Parser;
-use derive_more::Display;
 use directories::ProjectDirs;
 use humantime::format_duration;
 use indicatif::ProgressBar;
 use log::{debug, error, log_enabled, warn};
 use regex::Regex;
 use reqwest::Url;
-use std::borrow::Cow;
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::env;
-use std::error::Error;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::time::Instant;
-use tvrank::imdb::{Imdb, ImdbQuery, ImdbTitleId};
-use tvrank::title_info::TitleInfo;
-use tvrank::utils::result::Res;
-use tvrank::utils::search::{SearchString, SearchStringErr};
 use walkdir::WalkDir;
 
-#[derive(Debug, Display)]
-#[display(fmt = "{}")]
-enum TvRankErr {
-  #[display(fmt = "Could not find cache directory")]
-  CacheDir,
-  #[display(fmt = "Empty set of keywords")]
-  NoKeywords,
-  #[display(fmt = "`{}` is not a directory", "_0.display()")]
-  NotADirectory(PathBuf),
-  #[display(fmt = "Id `{_0}` was not found")]
+#[derive(Debug, thiserror::Error)]
+#[error("TVrank error")]
+enum Error {
+  #[error("Empty set of keywords")]
+  EmptyKeywords,
+  #[error("Invalid search string `{0}`")]
+  SearchString(#[from] SearchStringError),
+  #[error("Output error: {0}")]
+  Print(#[from] print::Error),
+  #[error("Directory error: {0}")]
+  Walkdir(#[from] walkdir::Error),
+  #[error("IMDB title ID error: {0}")]
+  ImdbTitleId(#[from] ImdbTitleIdError),
+  #[error("`{}` is not a directory", .0.display())]
+  NotDir(PathBuf),
+  #[error("Unknown IMDB ID `{0}`")]
   UnknownImdbId(String),
+  #[error("IO error: {0}")]
+  Io(#[from] io::Error),
+  #[error("Error writing title information file: {0}")]
+  Json(#[from] serde_json::Error),
+  #[error("Cannot find cache directory")]
+  CacheDir,
+  #[error("URL parse error: {0}")]
+  Url(#[from] url::ParseError),
+  #[error("IMDB service error: {0}")]
+  Imdb(#[from] ImdbError),
 }
-
-impl TvRankErr {
-  fn cache_dir<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::CacheDir))
-  }
-
-  fn no_keywords<T>() -> Res<T> {
-    Err(Box::new(TvRankErr::NoKeywords))
-  }
-
-  fn not_a_directory<T>(path: PathBuf) -> Res<T> {
-    Err(Box::new(TvRankErr::NotADirectory(path)))
-  }
-
-  fn unknown_imdb_id<T>(id: String) -> Res<T> {
-    Err(Box::new(TvRankErr::UnknownImdbId(id)))
-  }
-}
-
-impl Error for TvRankErr {}
 
 fn parse_title_and_year(input: &str) -> Option<(&str, u16)> {
   let regex = match Regex::new(r"^(.+)\s+\((\d{4})\)$") {
@@ -220,22 +216,22 @@ fn display_keywords(keywords: &[SearchString]) -> String {
   keywords.iter().map(|kw| kw.as_str()).collect::<Vec<_>>().join(", ")
 }
 
-fn create_keywords_set(title: &str) -> Res<Vec<SearchString>> {
+fn create_keywords_set(title: &str) -> Result<Vec<SearchString>, Error> {
   debug!("Going to use `{}` as keywords for search query", title);
 
   let set: HashSet<_> = title.split_whitespace().collect();
   let set: HashSet<_> = if set.is_empty() {
-    return TvRankErr::no_keywords();
+    return Err(Error::EmptyKeywords);
   } else if set.len() > 1 {
     set.into_iter().filter(|kw| kw.len() > 1).collect()
   } else {
     set
   };
 
-  let keywords: Vec<SearchString> = set
+  let keywords = set
     .into_iter()
     .map(SearchString::try_from)
-    .collect::<Result<Vec<_>, SearchStringErr>>()?;
+    .collect::<Result<Vec<_>, SearchStringError>>()?;
 
   if log_enabled!(log::Level::Debug) {
     debug!("Keywords: {}", display_keywords(&keywords));
@@ -250,8 +246,8 @@ fn imdb_title(
   imdb_url: &Url,
   search_opts: &SearchOpts,
   exact: bool,
-  printer: Box<dyn Printer>,
-) -> Res {
+  printer: Box<dyn Printer<Error = crate::print::Error>>,
+) -> Result<(), Error> {
   let mut movies_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
   let mut series_results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
 
@@ -289,8 +285,8 @@ fn imdb_movies_dir(
   imdb: &Imdb,
   imdb_url: &Url,
   search_opts: &SearchOpts,
-  printer: Box<dyn Printer>,
-) -> Res {
+  printer: Box<dyn Printer<Error = crate::print::Error>>,
+) -> Result<(), Error> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
   let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
@@ -371,7 +367,7 @@ fn imdb_movies_dir(
   Ok(())
 }
 
-fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res {
+fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Result<(), Error> {
   // DONE 1.   Check if the directory exist.
   // DONE 2.   If not, fail.
   // DONE 3.   Check if tvrank.json exists in there.
@@ -388,7 +384,7 @@ fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res {
   let title_id = ImdbTitleId::try_from(id)?;
 
   if !dir.is_dir() {
-    return TvRankErr::not_a_directory(dir.into());
+    return Err(Error::NotDir(dir.to_owned()));
   }
 
   if imdb
@@ -396,7 +392,7 @@ fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Res {
     .or_else(|| imdb.by_id(&title_id, ImdbQuery::Series))
     .is_none()
   {
-    return TvRankErr::unknown_imdb_id(id.to_owned());
+    return Err(Error::UnknownImdbId(id.to_owned()));
   }
 
   let title_info = TitleInfo::new(title_id);
@@ -418,8 +414,8 @@ fn imdb_series_dir(
   imdb: &Imdb,
   imdb_url: &Url,
   search_opts: &SearchOpts,
-  printer: Box<dyn Printer>,
-) -> Res {
+  printer: Box<dyn Printer<Error = crate::print::Error>>,
+) -> Result<(), Error> {
   let mut at_least_one = false;
   let mut at_least_one_matched = false;
   let mut results = SearchRes::new(search_opts.sort_by_year, search_opts.top);
@@ -491,29 +487,32 @@ fn imdb_series_dir(
   Ok(())
 }
 
-fn create_project() -> Res<ProjectDirs> {
+fn create_project() -> Result<ProjectDirs, Error> {
   let prj = ProjectDirs::from("com.fredmorcos", "Fred Morcos", "tvrank");
   if let Some(prj) = prj {
     Ok(prj)
   } else {
-    TvRankErr::cache_dir()
+    Err(Error::CacheDir)
   }
 }
 
-fn create_cache_dir(project: &ProjectDirs) -> Res<&Path> {
+fn create_cache_dir(project: &ProjectDirs) -> Result<&Path, Error> {
   let app_cache_dir = project.cache_dir();
   fs::create_dir_all(app_cache_dir)?;
   debug!("Cache directory: {}", app_cache_dir.display());
   Ok(app_cache_dir)
 }
 
-fn get_imdb_url() -> Res<Url> {
+fn get_imdb_url() -> Result<Url, Error> {
   const IMDB: &str = "https://www.imdb.com/title/";
   let imdb_url = Url::parse(IMDB)?;
   Ok(imdb_url)
 }
 
-fn create_output_printer(output_format: &OutputFormat, general_opts: &GeneralOpts) -> Box<dyn Printer> {
+fn create_output_printer(
+  output_format: &OutputFormat,
+  general_opts: &GeneralOpts,
+) -> Box<dyn Printer<Error = crate::print::Error>> {
   match output_format {
     OutputFormat::Json => Box::new(JsonPrinter::new()),
     OutputFormat::Table => Box::new(TablePrinter::new(general_opts.color)),
@@ -521,7 +520,7 @@ fn create_output_printer(output_format: &OutputFormat, general_opts: &GeneralOpt
   }
 }
 
-fn create_imdb_service(app_cache_dir: &Path, force_update: bool) -> Res<Imdb> {
+fn create_imdb_service(app_cache_dir: &Path, force_update: bool) -> Result<Imdb, Error> {
   let start_time = Instant::now();
   let progress_bar: RefCell<Option<ProgressBar>> = RefCell::new(None);
   let imdb = Imdb::new(app_cache_dir, force_update, |content_len: Option<u64>, delta| {

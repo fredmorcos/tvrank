@@ -1,18 +1,15 @@
 //! A string type used to ensure that search keywords are lowercase and non-empty.
 
-use derive_more::Display;
-use std::error::Error;
+pub use self::Error as SearchStringError;
 
 /// Error type for search string construction.
-#[derive(Debug, Display)]
-#[display(fmt = "{}")]
-pub enum SearchStringErr {
+#[derive(Debug, thiserror::Error)]
+#[error("Search string error")]
+pub enum Error {
   /// Thrown if a search string is empty.
-  #[display(fmt = "Search title or keyword is empty")]
+  #[error("Search title or keyword is empty")]
   IsEmpty,
 }
-
-impl Error for SearchStringErr {}
 
 /// A string type used to ensure that search keywords are lowercase and non-empty.
 pub struct SearchString {
@@ -39,11 +36,11 @@ impl From<SearchString> for String {
 }
 
 impl TryFrom<&str> for SearchString {
-  type Error = SearchStringErr;
+  type Error = Error;
 
   fn try_from(value: &str) -> Result<Self, Self::Error> {
     if value.is_empty() {
-      return Err(SearchStringErr::IsEmpty);
+      return Err(Error::IsEmpty);
     }
 
     Ok(Self { contents: value.to_lowercase() })

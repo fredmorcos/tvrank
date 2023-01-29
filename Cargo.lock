@@ -1537,6 +1537,8 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
+ "url",
 ]
 
 [[package]]
@@ -1557,8 +1559,10 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "thiserror",
  "truncatable",
  "tvrank",
+ "url",
  "walkdir",
 ]
 
