@@ -368,18 +368,8 @@ fn imdb_movies_dir(
 }
 
 fn imdb_mark(dir: &Path, id: &str, imdb: &Imdb, force: bool) -> Result<(), Error> {
-  // DONE 1.   Check if the directory exist.
-  // DONE 2.   If not, fail.
-  // DONE 3.   Check if tvrank.json exists in there.
-  // DONE 4.   If it exists, fail.
-  // DONE 4.1. Add a --force flag to the mark subcommand to force-overwiting the tvrank.json file
-  // DONE 5.   Check if the imdb id exists in the database.
-  // DONE 6.   If it doesn't exist, fail.
-  //      7.   Check if the imdb id matches the title and year of the directory name.
-  // DONE 8.   Create titleinfo object
-  // DONE 8.1. Serialize it into the json file
-  //      9.   Check if the directory follows the naming convention
-  //      10.  ImbdTitleID try_from should fail on trailing non-numeric characters
+  // TODO: Check if the directory follows the naming convention.
+  // TODO: Check if the imdb id matches the title and year of the directory name.
 
   let title_id = ImdbTitleId::try_from(id)?;
 
