@@ -1,8 +1,11 @@
 #![warn(clippy::all)]
 
+use std::path::{Path, PathBuf};
+
 use crate::imdb::db::{Db, Query};
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
+use crate::utils::io::file as io_file;
 use crate::utils::search::SearchString;
 
 use log::debug;
@@ -16,13 +19,38 @@ pub enum Error {
   /// Loading title error.
   #[error("Error loading title: {0}")]
   LoadingTitle(#[from] crate::imdb::title::Error),
+  /// File-related error.
+  #[error("File handling error: {0}")]
+  File(#[from] crate::utils::io::file::Error),
 }
 
-pub struct ServiceDbFromBinary {
+pub(crate) struct DbBinaryBuilder {
+  pub(crate) movies_db_filename: PathBuf,
+  pub(crate) series_db_filename: PathBuf,
+}
+
+impl DbBinaryBuilder {
+  pub(crate) fn new(cache_dir: &Path) -> Self {
+    let movies_db_filename = cache_dir.join(DbBinary::MOVIES_DB_FILENAME);
+    let series_db_filename = cache_dir.join(DbBinary::SERIES_DB_FILENAME);
+    Self { movies_db_filename, series_db_filename }
+  }
+
+  pub(crate) fn build(self) -> Result<DbBinary, Error> {
+    let movies_data = io_file::read_static(&self.movies_db_filename)?;
+    let series_data = io_file::read_static(&self.series_db_filename)?;
+    DbBinary::new(movies_data, series_data)
+  }
+}
+
+pub struct DbBinary {
   dbs: Vec<Db>,
 }
 
-impl ServiceDbFromBinary {
+impl DbBinary {
+  const MOVIES_DB_FILENAME: &str = "imdb-movies.tvrankdb";
+  const SERIES_DB_FILENAME: &str = "imdb-series.tvrankdb";
+
   /// Load titles from the given binary data.
   ///
   /// Loads titles from the provided binary content buffers (`movies_data` and
@@ -32,7 +60,7 @@ impl ServiceDbFromBinary {
   ///
   /// * `movies_data` - Binary movies data.
   /// * `series_data` - Binary series data.
-  pub(crate) fn new(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Result<Self, Error> {
+  fn new(mut movies_data: &'static [u8], mut series_data: &'static [u8]) -> Result<Self, Error> {
     let nthreads = rayon::current_num_threads();
     let dbs = const_mutex(Vec::with_capacity(nthreads));
     let movies_cursor: Mutex<&mut &'static [u8]> = const_mutex(&mut movies_data);
@@ -233,13 +261,13 @@ impl ServiceDbFromBinary {
 #[cfg(test)]
 mod tests {
   use crate::imdb::db::Query;
-  use crate::imdb::db_binary::ServiceDbFromBinary;
+  use crate::imdb::db_binary::DbBinary;
   use crate::imdb::testdata::{make_basics_reader, make_ratings_reader};
   use crate::imdb::title_id::TitleId;
   use crate::imdb::tsv_import::tsv_import;
   use crate::utils::search::SearchString;
 
-  fn make_service_db_from_binary() -> ServiceDbFromBinary {
+  fn make_service_db_from_binary() -> DbBinary {
     let basics_reader = make_basics_reader();
     let ratings_reader = make_ratings_reader();
 
@@ -249,7 +277,7 @@ mod tests {
 
     let movies_storage = Box::leak(movies_storage.into_boxed_slice());
     let series_storage = Box::leak(series_storage.into_boxed_slice());
-    ServiceDbFromBinary::new(movies_storage, series_storage).unwrap()
+    DbBinary::new(movies_storage, series_storage).unwrap()
   }
 
   #[test]

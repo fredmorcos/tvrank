@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use crate::imdb::db::Query;
-use crate::imdb::db_binary::ServiceDbFromBinary;
+use crate::imdb::db_binary::{DbBinary, DbBinaryBuilder};
 use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::imdb::tsv_import::tsv_import;
@@ -39,15 +39,12 @@ pub enum Error {
 
 /// Struct providing the movies and series databases and the related services.
 pub struct Service {
-  service_db: ServiceDbFromBinary,
+  service_db: DbBinary,
 }
 
 const IMDB_URL: &str = "https://datasets.imdbws.com/";
 const BASICS_FILENAME: &str = "title.basics.tsv.gz";
 const RATINGS_FILENAME: &str = "title.ratings.tsv.gz";
-
-const MOVIES_DB_FILENAME: &str = "imdb-movies.tvrankdb";
-const SERIES_DB_FILENAME: &str = "imdb-series.tvrankdb";
 
 impl Service {
   /// Returns a Service struct holding movies/series databases
@@ -64,18 +61,18 @@ impl Service {
   ) -> Result<Self, Error> {
     let one_month = Duration::from_secs(60 * 60 * 24 * 30);
 
-    let movies_db_filename = cache_dir.join(MOVIES_DB_FILENAME);
-    let series_db_filename = cache_dir.join(SERIES_DB_FILENAME);
-    Self::ensure_db_files(&movies_db_filename, &series_db_filename, one_month, force_db_update, progress_fn)?;
+    let db_builder = DbBinaryBuilder::new(cache_dir);
+    Self::ensure_db_files(
+      &db_builder.movies_db_filename,
+      &db_builder.series_db_filename,
+      one_month,
+      force_db_update,
+      progress_fn,
+    )?;
 
     let start = Instant::now();
-    let movies_data = io_file::read_static(&movies_db_filename)?;
-    let series_data = io_file::read_static(&series_db_filename)?;
-    debug!("Read IMDB database in {}", format_duration(Instant::now().duration_since(start)));
-
-    let start = Instant::now();
-    let service = Self { service_db: ServiceDbFromBinary::new(movies_data, series_data)? };
-    debug!("Parsed IMDB database in {}", format_duration(Instant::now().duration_since(start)));
+    let service = Self { service_db: db_builder.build()? };
+    debug!("Loaded IMDB database in {}", format_duration(Instant::now().duration_since(start)));
 
     if log_enabled!(log::Level::Debug) {
       let (total_movies, total_series) = service.service_db.n_entries();
