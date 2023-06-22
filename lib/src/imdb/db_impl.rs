@@ -115,10 +115,7 @@ impl<C> DbImpl<C> {
   /// # Arguments
   ///
   /// * `title` - Title name to search for.
-  pub(crate) fn cookies_by_title<'a>(
-    &'a self,
-    title: &SearchString,
-  ) -> Option<impl Iterator<Item = &C> + 'a> {
+  pub(crate) fn cookies_by_title(&self, title: &SearchString) -> Option<impl Iterator<Item = &C>> {
     self.by_title.get(title.as_str()).map(|by_year| by_year.values().flatten())
   }
 
