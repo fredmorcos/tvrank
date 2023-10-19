@@ -70,7 +70,7 @@ impl<'a, 'storage> SearchRes<'a, 'storage> {
   }
 
   pub fn extend(&mut self, iter: impl IntoIterator<Item = &'a ImdbTitle<'storage>>) {
-    self.results.extend(iter.into_iter())
+    self.results.extend(iter)
   }
 
   pub fn top_sorted_results(&mut self) -> &[&'a ImdbTitle<'storage>] {
