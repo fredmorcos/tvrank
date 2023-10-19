@@ -51,12 +51,7 @@ pub struct Rating {
 
 impl PartialOrd for Rating {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-    match self.rating.partial_cmp(&other.rating) {
-      Some(Ordering::Equal) => {}
-      ord => return ord,
-    }
-
-    self.votes.partial_cmp(&other.votes)
+    Some(self.cmp(other))
   }
 }
 
@@ -67,7 +62,7 @@ impl Ord for Rating {
       ord => return ord,
     }
 
-    self.rating.cmp(&other.rating)
+    self.votes.cmp(&other.votes)
   }
 }
 
