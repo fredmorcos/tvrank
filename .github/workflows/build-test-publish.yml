@@ -257,15 +257,15 @@ jobs:
         id: tag
 
       - name: Download Linux tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
       - name: Download MacOS tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
       - name: Download Windows tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
 
