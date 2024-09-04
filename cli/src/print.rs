@@ -21,7 +21,7 @@ pub enum Error {
   Table(#[from] url::ParseError),
 }
 
-#[derive(Debug, Clone, clap::ArgEnum)]
+#[derive(Debug, Clone, clap::ValueEnum)]
 pub enum OutputFormat {
   Json,
   Table,
