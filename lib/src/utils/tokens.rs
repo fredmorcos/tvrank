@@ -23,8 +23,8 @@ pub enum Error {
 /// # Errors
 ///
 /// * [`Error::Eof`] - Propagate an unexpected EOF error up the stack when the end of the
-/// iterator is reached. This should be expected behavior since this macro is used when a
-/// parser is expected to consume more input.
+///   iterator is reached. This should be expected behavior since this macro is used when
+///   a parser is expected to consume more input.
 #[macro_export]
 macro_rules! iter_next {
   ($iter:ident) => {{
