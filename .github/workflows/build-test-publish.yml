@@ -235,7 +235,7 @@ jobs:
         if: >-
           ${{matrix.build-config.id == 'release' &&
           startsWith(github.ref, 'refs/tags/')}}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: >-
             tvrank-${{steps.tag.outputs.tag}}-${{matrix.os.name}}${{matrix.os.pkgext}}
@@ -257,15 +257,15 @@ jobs:
         id: tag
 
       - name: Download Linux tarball
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v4
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
       - name: Download MacOS tarball
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v4
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
       - name: Download Windows tarball
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v4
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
 
