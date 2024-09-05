@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/tvrank?style=for-the-badge)](https://crates.io/crates/tvrank)
 [![CI](https://img.shields.io/github/actions/workflow/status/fredmorcos/tvrank/build-test-publish.yml?label=Main&style=for-the-badge)](https://github.com/fredmorcos/tvrank/actions)
 </br>
-[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.8.5/tvrank/)
+[![docs.rs](https://img.shields.io/docsrs/tvrank?style=for-the-badge)](https://docs.rs/tvrank/0.9.0/tvrank/)
 [![Github Open Issues](https://img.shields.io/github/issues-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues)
 [![Github Closed Issues](https://img.shields.io/github/issues-closed-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/issues?q=is%3Aissue+is%3Aclosed)
 [![Github Open Pull Requests](https://img.shields.io/github/issues-pr-raw/fredmorcos/tvrank?style=for-the-badge)](https://github.com/fredmorcos/tvrank/pulls)
