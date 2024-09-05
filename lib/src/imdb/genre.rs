@@ -1,13 +1,13 @@
 #![warn(clippy::all)]
 
 use derive_more::Display;
-use enum_utils::FromStr;
 use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 use std::fmt;
+use std::str::FromStr;
 
 /// 27 genres a title can be associated with
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 #[display(fmt = "{}")]
 pub enum Genre {
   /// Action
@@ -34,12 +34,10 @@ pub enum Genre {
   Fantasy = 10,
   /// FilmNoir
   #[display(fmt = "Film-Noir")]
-  #[enumeration(rename = "Film-Noir")]
   #[serde(rename(serialize = "Film-Noir"))]
   FilmNoir = 11,
   /// GameShow
   #[display(fmt = "Game-Show")]
-  #[enumeration(rename = "Game-Show")]
   #[serde(rename(serialize = "Game-Show"))]
   GameShow = 12,
   /// History
@@ -56,14 +54,12 @@ pub enum Genre {
   News = 18,
   /// RealityTv
   #[display(fmt = "Reality-TV")]
-  #[enumeration(rename = "Reality-TV")]
   #[serde(rename(serialize = "Reality-TV"))]
   RealityTv = 19,
   /// Romance
   Romance = 20,
   /// SciFi
   #[display(fmt = "Sci-Fi")]
-  #[enumeration(rename = "Sci-Fi")]
   #[serde(rename(serialize = "Sci-Fi"))]
   SciFi = 21,
   /// Short
@@ -72,7 +68,6 @@ pub enum Genre {
   Sport = 23,
   /// TalkShow
   #[display(fmt = "Talk-Show")]
-  #[enumeration(rename = "Talk-Show")]
   #[serde(rename(serialize = "Talk-Show"))]
   TalkShow = 24,
   /// Thriller
@@ -83,6 +78,45 @@ pub enum Genre {
   Western = 27,
   /// Experimental
   Experimental = 28,
+}
+
+impl FromStr for Genre {
+  type Err = ();
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+      "Action" => Ok(Genre::Action),
+      "Adult" => Ok(Genre::Adult),
+      "Adventure" => Ok(Genre::Adventure),
+      "Animation" => Ok(Genre::Animation),
+      "Biography" => Ok(Genre::Biography),
+      "Comedy" => Ok(Genre::Comedy),
+      "Crime" => Ok(Genre::Crime),
+      "Documentary" => Ok(Genre::Documentary),
+      "Drama" => Ok(Genre::Drama),
+      "Family" => Ok(Genre::Family),
+      "Fantasy" => Ok(Genre::Fantasy),
+      "Film-Noir" => Ok(Genre::FilmNoir),
+      "Game-Show" => Ok(Genre::GameShow),
+      "History" => Ok(Genre::History),
+      "Horror" => Ok(Genre::Horror),
+      "Music" => Ok(Genre::Music),
+      "Musical" => Ok(Genre::Musical),
+      "Mystery" => Ok(Genre::Mystery),
+      "News" => Ok(Genre::News),
+      "Reality-TV" => Ok(Genre::RealityTv),
+      "Romance" => Ok(Genre::Romance),
+      "Sci-Fi" => Ok(Genre::SciFi),
+      "Short" => Ok(Genre::Short),
+      "Sport" => Ok(Genre::Sport),
+      "Talk-Show" => Ok(Genre::TalkShow),
+      "Thriller" => Ok(Genre::Thriller),
+      "War" => Ok(Genre::War),
+      "Western" => Ok(Genre::Western),
+      "Experimental" => Ok(Genre::Experimental),
+      _ => Err(()),
+    }
+  }
 }
 
 impl Genre {

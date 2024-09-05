@@ -28,7 +28,6 @@ flate2 = "1.0"
 humantime = "2.1"
 parking_lot = "0.12"
 log = "0.4"
-enum-utils = "0.1"
 url = "2.2"
 thiserror = "1.0"
 

@@ -1,13 +1,11 @@
 #![warn(clippy::all)]
 
 use derive_more::Display;
-use enum_utils::FromStr;
 use serde::Serialize;
-use std::hash::Hash;
+use std::{hash::Hash, str::FromStr};
 
 /// Encodes the 13 types of a title.
-#[derive(Debug, Display, FromStr, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
-#[enumeration(rename_all = "camelCase")]
+#[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 #[display(fmt = "{}")]
 pub enum TitleType {
   // Games
@@ -52,6 +50,29 @@ pub enum TitleType {
   /// RadioSeries.
   #[display(fmt = "Radio Series")]
   RadioSeries = 12,
+}
+
+impl FromStr for TitleType {
+  type Err = ();
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+      "videoGame" => Ok(TitleType::VideoGame),
+      "short" => Ok(TitleType::Short),
+      "video" => Ok(TitleType::Video),
+      "movie" => Ok(TitleType::Movie),
+      "tvShort" => Ok(TitleType::TvShort),
+      "tvMovie" => Ok(TitleType::TvMovie),
+      "tvSpecial" => Ok(TitleType::TvSpecial),
+      "tvEpisode" => Ok(TitleType::TvEpisode),
+      "tvPilot" => Ok(TitleType::TvPilot),
+      "radioEpisode" => Ok(TitleType::RadioEpisode),
+      "tvSeries" => Ok(TitleType::TvSeries),
+      "tvMiniSeries" => Ok(TitleType::TvMiniSeries),
+      "radioSeries" => Ok(TitleType::RadioSeries),
+      _ => Err(()),
+    }
+  }
 }
 
 impl TitleType {
