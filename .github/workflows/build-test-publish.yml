@@ -32,7 +32,7 @@ jobs:
             'os': [
               {
                 'name': 'linux',
-                'edition': 'ubuntu-20.04',
+                'edition': 'ubuntu-22.04',
                 'execext': '',
                 'pkgext': '.tar.bz2',
                 'pkgcmd': ('tar -c -f '
@@ -50,7 +50,7 @@ jobs:
               },
               {
                 'name': 'macos',
-                'edition': 'macos-11',
+                'edition': 'macos-14',
                 'execext': '',
                 'pkgext': '.dmg',
                 'pkgcmd': ('hdiutil create -format UDZO -srcfolder '
@@ -257,15 +257,15 @@ jobs:
         id: tag
 
       - name: Download Linux tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-linux.tar.bz2
       - name: Download MacOS tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-macos.dmg
       - name: Download Windows tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4.1.7
         with:
           name: tvrank-${{steps.tag.outputs.tag}}-windows.zip
 

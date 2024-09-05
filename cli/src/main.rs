@@ -110,12 +110,12 @@ struct GeneralOpts {
   #[clap(short, long)]
   force_update: bool,
 
-  /// Display colors regardless of the NO_COLOR environment variable
+  /// Display colors even when the NO_COLOR environment variable is set
   #[clap(short, long)]
   color: bool,
 
   /// Verbose output (can be specified multiple times)
-  #[clap(short, long, parse(from_occurrences))]
+  #[clap(short, long, action = clap::ArgAction::Count)]
   verbose: u8,
 }
 
@@ -130,7 +130,7 @@ struct SearchOpts {
   top: Option<usize>,
 
   /// Set output format
-  #[clap(short, long, arg_enum, default_value = "table")]
+  #[clap(short, long, value_enum, default_value = "table")]
   output: OutputFormat,
 }
 
