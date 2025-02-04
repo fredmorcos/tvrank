@@ -1,6 +1,6 @@
 [package]
 name = "tvrank-cli"
-version = "0.9.1"
+version = "0.10.0"
 edition = "2021"
 description = "Query and sort information about movies and series"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
@@ -16,7 +16,7 @@ name = "tvrank"
 path = "src/main.rs"
 
 [dependencies]
-tvrank = { path = "../lib", version = "0.9.1" }
+tvrank = { path = "../lib", version = "0.10.0" }
 indicatif = { version = "0.17", features = ["improved_unicode"] }
 log = "0.4"
 atoi = "2.0"
