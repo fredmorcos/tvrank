@@ -30,7 +30,7 @@ impl<'a, 'storage> Deref for SearchRes<'a, 'storage> {
   }
 }
 
-impl<'a, 'storage> DerefMut for SearchRes<'a, 'storage> {
+impl DerefMut for SearchRes<'_, '_> {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.results
   }

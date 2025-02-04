@@ -27,7 +27,7 @@ pub struct TitleId<'storage> {
   num: usize,
 }
 
-impl<'storage> Serialize for TitleId<'storage> {
+impl Serialize for TitleId<'_> {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
