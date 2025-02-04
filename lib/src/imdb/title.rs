@@ -11,7 +11,7 @@ use crate::iter_next;
 use std::array::TryFromSliceError;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Write};
-use std::str::FromStr;
+use std::str::{self, FromStr};
 use std::time::Duration;
 
 use atoi::atoi;
@@ -54,9 +54,6 @@ pub enum Error {
   /// End year is not a number.
   #[error("End year is not a number")]
   EndYear,
-  /// Runtime minutes is not a number.
-  #[error("Runtime minutes is not a number")]
-  RuntimeMinutes,
   /// Given genre is invalid.
   #[error("Invalid or unknown genre `{0}`")]
   Genre(String),
@@ -213,7 +210,7 @@ impl<'storage> Title<'storage> {
       let runtime_minutes = iter_next!(columns)?;
       match runtime_minutes {
         tokens::NOT_AVAIL => None,
-        runtime_minutes => Some(atoi::<u16>(runtime_minutes).ok_or(Error::RuntimeMinutes)?),
+        runtime_minutes => atoi::<u16>(runtime_minutes),
       }
     };
 
