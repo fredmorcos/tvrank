@@ -8,7 +8,6 @@ use std::str::FromStr;
 
 /// 27 genres a title can be associated with
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
-#[display(fmt = "{}")]
 pub enum Genre {
   /// Action
   Action = 0,
@@ -33,11 +32,11 @@ pub enum Genre {
   /// Fantasy
   Fantasy = 10,
   /// FilmNoir
-  #[display(fmt = "Film-Noir")]
+  #[display("Film-Noir")]
   #[serde(rename(serialize = "Film-Noir"))]
   FilmNoir = 11,
   /// GameShow
-  #[display(fmt = "Game-Show")]
+  #[display("Game-Show")]
   #[serde(rename(serialize = "Game-Show"))]
   GameShow = 12,
   /// History
@@ -53,13 +52,13 @@ pub enum Genre {
   /// News
   News = 18,
   /// RealityTv
-  #[display(fmt = "Reality-TV")]
+  #[display("Reality-TV")]
   #[serde(rename(serialize = "Reality-TV"))]
   RealityTv = 19,
   /// Romance
   Romance = 20,
   /// SciFi
-  #[display(fmt = "Sci-Fi")]
+  #[display("Sci-Fi")]
   #[serde(rename(serialize = "Sci-Fi"))]
   SciFi = 21,
   /// Short
@@ -67,7 +66,7 @@ pub enum Genre {
   /// Sport
   Sport = 23,
   /// TalkShow
-  #[display(fmt = "Talk-Show")]
+  #[display("Talk-Show")]
   #[serde(rename(serialize = "Talk-Show"))]
   TalkShow = 24,
   /// Thriller

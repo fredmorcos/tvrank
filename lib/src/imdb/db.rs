@@ -9,14 +9,14 @@ use derive_more::{Display, From, Into};
 
 /// Specifies the type of title a query is for. E.g. Movies or Series.
 #[derive(Clone, Copy, Display)]
-#[display(fmt = "{}")]
+#[display("{}")]
 pub enum Query {
   /// Query the database of Movies.
-  #[display(fmt = "movie")]
+  #[display("movie")]
   Movies,
 
   /// Query the database of Series.
-  #[display(fmt = "series")]
+  #[display("series")]
   Series,
 }
 
