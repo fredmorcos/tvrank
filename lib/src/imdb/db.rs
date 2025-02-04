@@ -103,7 +103,7 @@ impl Db {
     &'a self,
     title: &SearchString,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
     match query {
       Query::Movies => self.movies.by_title(title),
       Query::Series => self.series.by_title(title),
@@ -122,7 +122,7 @@ impl Db {
     title: &SearchString,
     year: u16,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
     match query {
       Query::Movies => Box::new(self.movies.by_title_and_year(title, year)),
       Query::Series => Box::new(self.series.by_title_and_year(title, year)),
@@ -139,7 +139,7 @@ impl Db {
     &'a self,
     keywords: &'k [SearchString],
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
     match query {
       Query::Movies => Box::new(self.movies.by_keywords(keywords)),
       Query::Series => Box::new(self.series.by_keywords(keywords)),
@@ -158,7 +158,7 @@ impl Db {
     keywords: &'k [SearchString],
     year: u16,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
     match query {
       Query::Movies => Box::new(self.movies.by_keywords_and_year(keywords, year)),
       Query::Series => Box::new(self.series.by_keywords_and_year(keywords, year)),

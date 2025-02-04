@@ -208,7 +208,7 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title> {
+  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title<'a>> {
     self
       .dbs
       .par_iter()
@@ -221,7 +221,7 @@ impl ServiceDbFromBinary {
     keywords: &[SearchString],
     year: u16,
     query: Query,
-  ) -> Vec<&'a Title> {
+  ) -> Vec<&'a Title<'a>> {
     self
       .dbs
       .par_iter()

@@ -181,7 +181,7 @@ impl Service {
   ///
   /// * `keywords` - List of keywords to search in titles.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title> {
+  pub fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title<'a>> {
     self.service_db.by_keywords(keywords, query)
   }
 
@@ -197,7 +197,7 @@ impl Service {
     keywords: &[SearchString],
     year: u16,
     query: Query,
-  ) -> Vec<&'a Title> {
+  ) -> Vec<&'a Title<'a>> {
     self.service_db.by_keywords_and_year(keywords, year, query)
   }
 }

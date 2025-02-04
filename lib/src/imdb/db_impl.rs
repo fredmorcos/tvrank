@@ -219,7 +219,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `title` - Title name to search for.
-  pub(crate) fn by_title<'a>(&'a self, title: &SearchString) -> Box<dyn Iterator<Item = &Title> + 'a> {
+  pub(crate) fn by_title<'a>(&'a self, title: &SearchString) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
     if let Some(cookies) = self.cookies_by_title(title) {
       return Box::new(cookies.map(|&cookie| &self[cookie]));
     }
@@ -242,7 +242,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for.
-  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString]) -> impl Iterator<Item = &'a Title> {
+  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString]) -> impl Iterator<Item = &'a Title<'a>> {
     self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
   }
 
@@ -256,7 +256,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
     &'a self,
     keywords: &[SearchString],
     year: u16,
-  ) -> impl Iterator<Item = &'a Title> {
+  ) -> impl Iterator<Item = &'a Title<'a>> {
     self.cookies_by_keywords_and_year(keywords, year).map(|&cookie| &self[cookie])
   }
 }
