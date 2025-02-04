@@ -258,6 +258,16 @@ impl TablePrinter {
   }
 }
 
+#[macro_export]
+macro_rules! make_bold {
+  ($title: expr, $color: expr) => {
+    match $color {
+      true => Cell::new($title).with_style(Attr::Bold),
+      false => Cell::new($title),
+    }
+  };
+}
+
 fn create_table(color: bool) -> Table {
   let mut table = Table::new();
 
@@ -268,16 +278,6 @@ fn create_table(color: bool) -> Table {
     .build();
 
   table.set_format(table_format);
-
-  #[macro_export]
-  macro_rules! make_bold {
-    ($title: expr, $color: expr) => {
-      match $color {
-        true => Cell::new($title).with_style(Attr::Bold),
-        false => Cell::new($title),
-      }
-    };
-  }
 
   table.add_row(Row::new(vec![
     make_bold!("Primary Title", color),
