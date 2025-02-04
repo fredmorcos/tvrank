@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 tvrank = { path = "../lib", version = "0.9.1" }
-indicatif = "0.16"
+indicatif = { version = "0.17", features = ["improved_unicode"] }
 log = "0.4"
 atoi = "2.0"
 clap = { version = "4", features = ["derive"] }
