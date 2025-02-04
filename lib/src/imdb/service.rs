@@ -12,6 +12,7 @@ use crate::utils::io::file as io_file;
 use crate::utils::io::net as io_net;
 use crate::utils::search::SearchString;
 
+use aho_corasick::AhoCorasick;
 use humantime::format_duration;
 use log::{debug, log_enabled};
 use reqwest::Url;
@@ -181,8 +182,8 @@ impl Service {
   ///
   /// * `keywords` - List of keywords to search in titles.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title<'a>> {
-    self.service_db.by_keywords(keywords, query)
+  pub fn by_keywords<'a>(&'a self, searcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
+    self.service_db.by_keywords(searcher, query)
   }
 
   /// Query titles by keywords and year.
@@ -194,10 +195,10 @@ impl Service {
   /// * `query` - Specifies if movies or series are queried.
   pub fn by_keywords_and_year<'a>(
     &'a self,
-    keywords: &[SearchString],
+    searcher: &AhoCorasick,
     year: u16,
     query: Query,
   ) -> Vec<&'a Title<'a>> {
-    self.service_db.by_keywords_and_year(keywords, year, query)
+    self.service_db.by_keywords_and_year(searcher, year, query)
   }
 }

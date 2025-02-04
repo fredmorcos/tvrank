@@ -7,8 +7,7 @@ use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::utils::search::SearchString;
 
-use aho_corasick::AhoCorasickBuilder;
-use aho_corasick::MatchKind as ACMatchKind;
+use aho_corasick::AhoCorasick;
 use deunicode::deunicode;
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -140,15 +139,16 @@ impl<C> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for in title names.
-  fn cookies_by_keywords<'a>(&'a self, keywords: &[SearchString]) -> impl Iterator<Item = &'a C> {
-    let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
-    let keywords_len = keywords.len();
+  fn cookies_by_keywords<'a: 'b, 'b>(
+    &'a self,
+    searcher: &'b AhoCorasick,
+  ) -> impl Iterator<Item = &'a C> + 'b {
     self
       .by_title
       .iter()
       .filter(move |&(title, _)| {
         let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
-        matches.len() == keywords_len
+        matches.len() == searcher.patterns_len()
       })
       .flat_map(|(_, by_year)| by_year.values())
       .flatten()
@@ -160,19 +160,17 @@ impl<C> DbImpl<C> {
   ///
   /// * `keywords` - Keywords to search for in title names.
   /// * `year` - The year to search for titles in.
-  fn cookies_by_keywords_and_year<'a>(
+  fn cookies_by_keywords_and_year<'a: 'b, 'b>(
     &'a self,
-    keywords: &[SearchString],
+    searcher: &'b AhoCorasick,
     year: u16,
-  ) -> impl Iterator<Item = &'a C> {
-    let searcher = AhoCorasickBuilder::new().match_kind(ACMatchKind::LeftmostFirst).build(keywords);
-    let keywords_len = keywords.len();
+  ) -> impl Iterator<Item = &'a C> + 'b {
     self
       .by_title
       .iter()
       .filter(move |&(title, _)| {
         let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
-        matches.len() == keywords_len
+        matches.len() == searcher.patterns_len()
       })
       .filter_map(move |(_, by_year)| by_year.get(&year))
       .flatten()
@@ -242,8 +240,11 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `keywords` - Keywords to search for.
-  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString]) -> impl Iterator<Item = &'a Title<'a>> {
-    self.cookies_by_keywords(keywords).map(|&cookie| &self[cookie])
+  pub(crate) fn by_keywords<'a: 'b, 'b>(
+    &'a self,
+    searcher: &'b AhoCorasick,
+  ) -> impl Iterator<Item = &'a Title<'a>> + 'b {
+    self.cookies_by_keywords(searcher).map(|&cookie| &self[cookie])
   }
 
   /// Search for titles by keywords and year.
@@ -252,18 +253,20 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   ///
   /// * `keywords` - Keywords to search for.
   /// * `year` - The year to search for titles in.
-  pub(crate) fn by_keywords_and_year<'a>(
+  pub(crate) fn by_keywords_and_year<'a: 'b, 'b>(
     &'a self,
-    keywords: &[SearchString],
+    searcher: &'b AhoCorasick,
     year: u16,
-  ) -> impl Iterator<Item = &'a Title<'a>> {
-    self.cookies_by_keywords_and_year(keywords, year).map(|&cookie| &self[cookie])
+  ) -> impl Iterator<Item = &'a Title<'a>> + 'b {
+    self.cookies_by_keywords_and_year(searcher, year).map(|&cookie| &self[cookie])
   }
 }
 
 #[cfg(test)]
 mod test_db_impl {
   use std::io::BufRead;
+
+  use aho_corasick::{AhoCorasickBuilder, MatchKind as ACMatchKind};
 
   use crate::imdb::db_impl::DbImpl;
   use crate::imdb::ratings::Ratings;
@@ -310,10 +313,13 @@ mod test_db_impl {
 
   #[test]
   fn test_by_keywords() {
+    let keywords = &[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()];
+    let searcher = AhoCorasickBuilder::new()
+      .match_kind(ACMatchKind::LeftmostFirst)
+      .build(keywords)
+      .unwrap();
     let db_impl = make_db_impl();
-    let titles: Vec<_> = db_impl
-      .by_keywords(&[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()])
-      .collect();
+    let titles: Vec<_> = db_impl.by_keywords(&searcher).collect();
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
@@ -322,13 +328,13 @@ mod test_db_impl {
 
   #[test]
   fn test_by_keywords_and_year() {
+    let keywords = &[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()];
+    let searcher = AhoCorasickBuilder::new()
+      .match_kind(ACMatchKind::LeftmostFirst)
+      .build(keywords)
+      .unwrap();
     let db_impl = make_db_impl();
-    let titles: Vec<_> = db_impl
-      .by_keywords_and_year(
-        &[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()],
-        1894,
-      )
-      .collect();
+    let titles: Vec<_> = db_impl.by_keywords_and_year(&searcher, 1894).collect();
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());

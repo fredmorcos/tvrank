@@ -5,6 +5,7 @@ use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::utils::search::SearchString;
 
+use aho_corasick::AhoCorasick;
 use derive_more::{Display, From, Into};
 
 /// Specifies the type of title a query is for. E.g. Movies or Series.
@@ -135,14 +136,14 @@ impl Db {
   ///
   /// * `keywords` - Keywords to search for in title names.
   /// * `query` - Whether to query movies or series.
-  pub(crate) fn by_keywords<'a, 'k>(
+  pub(crate) fn by_keywords<'a: 'b, 'b>(
     &'a self,
-    keywords: &'k [SearchString],
+    searcher: &'b AhoCorasick,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
     match query {
-      Query::Movies => Box::new(self.movies.by_keywords(keywords)),
-      Query::Series => Box::new(self.series.by_keywords(keywords)),
+      Query::Movies => Box::new(self.movies.by_keywords(searcher)),
+      Query::Series => Box::new(self.series.by_keywords(searcher)),
     }
   }
 
@@ -153,15 +154,15 @@ impl Db {
   /// * `keywords` - Keywords to search for in title names.
   /// * `year` - The year to search for titles in.
   /// * `query` - Whether to query movies or series.
-  pub(crate) fn by_keywords_and_year<'a, 'k>(
+  pub(crate) fn by_keywords_and_year<'a: 'b, 'b>(
     &'a self,
-    keywords: &'k [SearchString],
+    searcher: &'b AhoCorasick,
     year: u16,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
     match query {
-      Query::Movies => Box::new(self.movies.by_keywords_and_year(keywords, year)),
-      Query::Series => Box::new(self.series.by_keywords_and_year(keywords, year)),
+      Query::Movies => Box::new(self.movies.by_keywords_and_year(searcher, year)),
+      Query::Series => Box::new(self.series.by_keywords_and_year(searcher, year)),
     }
   }
 }
