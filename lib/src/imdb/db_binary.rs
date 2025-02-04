@@ -5,6 +5,7 @@ use crate::imdb::title::Title;
 use crate::imdb::title_id::TitleId;
 use crate::utils::search::SearchString;
 
+use aho_corasick::AhoCorasick;
 use log::debug;
 use parking_lot::{const_mutex, Mutex};
 use rayon::prelude::*;
@@ -208,30 +209,32 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords<'a>(&'a self, keywords: &[SearchString], query: Query) -> Vec<&'a Title> {
+  pub(crate) fn by_keywords<'a>(&'a self, searcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
     self
       .dbs
       .par_iter()
-      .flat_map(|db| db.by_keywords(keywords, query).collect::<Vec<_>>())
+      .flat_map(|db| db.by_keywords(searcher, query).collect::<Vec<_>>())
       .collect()
   }
 
   pub(crate) fn by_keywords_and_year<'a>(
     &'a self,
-    keywords: &[SearchString],
+    searcher: &AhoCorasick,
     year: u16,
     query: Query,
-  ) -> Vec<&'a Title> {
+  ) -> Vec<&'a Title<'a>> {
     self
       .dbs
       .par_iter()
-      .flat_map(|db| db.by_keywords_and_year(keywords, year, query).collect::<Vec<_>>())
+      .flat_map(|db| db.by_keywords_and_year(searcher, year, query).collect::<Vec<_>>())
       .collect()
   }
 }
 
 #[cfg(test)]
 mod tests {
+  use aho_corasick::{AhoCorasickBuilder, MatchKind};
+
   use crate::imdb::db::Query;
   use crate::imdb::db_binary::ServiceDbFromBinary;
   use crate::imdb::testdata::{make_basics_reader, make_ratings_reader};
@@ -292,8 +295,13 @@ mod tests {
 
   #[test]
   fn test_by_keywords() {
+    let keywords = &[SearchString::try_from("Corbett").unwrap()];
+    let searcher = AhoCorasickBuilder::new()
+      .match_kind(MatchKind::LeftmostFirst)
+      .build(keywords)
+      .unwrap();
     let service_db = make_service_db_from_binary();
-    let titles = service_db.by_keywords(&[SearchString::try_from("Corbett").unwrap()], Query::Movies);
+    let titles = service_db.by_keywords(&searcher, Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
@@ -302,9 +310,13 @@ mod tests {
 
   #[test]
   fn test_by_keywords_and_year() {
+    let keywords = &[SearchString::try_from("Kineto").unwrap()];
+    let searcher = AhoCorasickBuilder::new()
+      .match_kind(MatchKind::LeftmostFirst)
+      .build(keywords)
+      .unwrap();
     let service_db = make_service_db_from_binary();
-    let titles =
-      service_db.by_keywords_and_year(&[SearchString::try_from("Kineto").unwrap()], 1915, Query::Movies);
+    let titles = service_db.by_keywords_and_year(&searcher, 1915, Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0212278").unwrap());

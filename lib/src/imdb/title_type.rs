@@ -6,7 +6,6 @@ use std::{hash::Hash, str::FromStr};
 
 /// Encodes the 13 types of a title.
 #[derive(Debug, Display, PartialEq, Eq, Hash, Clone, Copy, Serialize)]
-#[display(fmt = "{}")]
 pub enum TitleType {
   // Games
   /// VideoGame.
@@ -14,20 +13,20 @@ pub enum TitleType {
 
   // Movies
   /// Short.
-  #[display(fmt = "Short Movie")]
+  #[display("Short Movie")]
   Short = 1,
   /// Video.
   Video = 2,
   /// Movie.
   Movie = 3,
   /// TvShort.
-  #[display(fmt = "TV Short")]
+  #[display("TV Short")]
   TvShort = 4,
   /// TvMovie.
-  #[display(fmt = "TV Movie")]
+  #[display("TV Movie")]
   TvMovie = 5,
   /// TvSpecial.
-  #[display(fmt = "TV Special")]
+  #[display("TV Special")]
   TvSpecial = 6,
 
   // Episodes
@@ -40,15 +39,15 @@ pub enum TitleType {
 
   // Series
   /// TvSeries.
-  #[display(fmt = "TV Series")]
+  #[display("TV Series")]
   TvSeries = 10,
   /// TvMiniSeries.
-  #[display(fmt = "TV Mini-Series")]
+  #[display("TV Mini-Series")]
   TvMiniSeries = 11,
 
   // Radio
   /// RadioSeries.
-  #[display(fmt = "Radio Series")]
+  #[display("Radio Series")]
   RadioSeries = 12,
 }
 

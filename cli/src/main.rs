@@ -17,6 +17,7 @@ use crate::print::{JsonPrinter, OutputFormat, Printer, TablePrinter, YamlPrinter
 use crate::search::SearchRes;
 use crate::ui::{create_progress_bar, create_progress_spinner};
 
+use aho_corasick::{AhoCorasickBuilder, BuildError, MatchKind};
 use tvrank::imdb::{Imdb, ImdbError, ImdbQuery, ImdbTitleId, ImdbTitleIdError};
 use tvrank::title_info::TitleInfo;
 use tvrank::utils::search::{SearchString, SearchStringError};
@@ -58,6 +59,8 @@ enum Error {
   Url(#[from] url::ParseError),
   #[error("IMDB service error: {0}")]
   Imdb(#[from] ImdbError),
+  #[error("Could not build searcher: {0}")]
+  Searcher(#[from] BuildError),
 }
 
 fn parse_title_and_year(input: &str) -> Option<(&str, u16)> {
@@ -258,8 +261,11 @@ fn imdb_title(
       series_results.extend(imdb.by_title_and_year(&search_string, year, ImdbQuery::Series));
     } else {
       let keywords = create_keywords_set(title)?;
-      movies_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Movies));
-      series_results.extend(imdb.by_keywords_and_year(&keywords, year, ImdbQuery::Series));
+      let searcher = AhoCorasickBuilder::new()
+        .match_kind(MatchKind::LeftmostFirst)
+        .build(&keywords)?;
+      movies_results.extend(imdb.by_keywords_and_year(&searcher, year, ImdbQuery::Movies));
+      series_results.extend(imdb.by_keywords_and_year(&searcher, year, ImdbQuery::Series));
     }
 
     Some(display_title_and_year(title, year))
@@ -270,8 +276,11 @@ fn imdb_title(
     Some(search_string.into())
   } else {
     let keywords = create_keywords_set(title)?;
-    movies_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Movies));
-    series_results.extend(imdb.by_keywords(&keywords, ImdbQuery::Series));
+    let searcher = AhoCorasickBuilder::new()
+      .match_kind(MatchKind::LeftmostFirst)
+      .build(&keywords)?;
+    movies_results.extend(imdb.by_keywords(&searcher, ImdbQuery::Movies));
+    series_results.extend(imdb.by_keywords(&searcher, ImdbQuery::Series));
     Some(display_keywords(&keywords))
   };
 
