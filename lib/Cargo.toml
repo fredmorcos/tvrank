@@ -1,6 +1,6 @@
 [package]
 name = "tvrank"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2021"
 description = "Query and sort information about movies and series"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
