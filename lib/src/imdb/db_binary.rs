@@ -209,24 +209,24 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords<'a>(&'a self, searcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
+  pub(crate) fn by_keywords<'a>(&'a self, matcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
     self
       .dbs
       .par_iter()
-      .flat_map(|db| db.by_keywords(searcher, query).collect::<Vec<_>>())
+      .flat_map(|db| db.by_keywords(matcher, query).collect::<Vec<_>>())
       .collect()
   }
 
   pub(crate) fn by_keywords_and_year<'a>(
     &'a self,
-    searcher: &AhoCorasick,
+    matcher: &AhoCorasick,
     year: u16,
     query: Query,
   ) -> Vec<&'a Title<'a>> {
     self
       .dbs
       .par_iter()
-      .flat_map(|db| db.by_keywords_and_year(searcher, year, query).collect::<Vec<_>>())
+      .flat_map(|db| db.by_keywords_and_year(matcher, year, query).collect::<Vec<_>>())
       .collect()
   }
 }
@@ -296,12 +296,12 @@ mod tests {
   #[test]
   fn test_by_keywords() {
     let keywords = &[SearchString::try_from("Corbett").unwrap()];
-    let searcher = AhoCorasickBuilder::new()
+    let matcher = AhoCorasickBuilder::new()
       .match_kind(MatchKind::LeftmostFirst)
       .build(keywords)
       .unwrap();
     let service_db = make_service_db_from_binary();
-    let titles = service_db.by_keywords(&searcher, Query::Movies);
+    let titles = service_db.by_keywords(&matcher, Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
@@ -311,12 +311,12 @@ mod tests {
   #[test]
   fn test_by_keywords_and_year() {
     let keywords = &[SearchString::try_from("Kineto").unwrap()];
-    let searcher = AhoCorasickBuilder::new()
+    let matcher = AhoCorasickBuilder::new()
       .match_kind(MatchKind::LeftmostFirst)
       .build(keywords)
       .unwrap();
     let service_db = make_service_db_from_binary();
-    let titles = service_db.by_keywords_and_year(&searcher, 1915, Query::Movies);
+    let titles = service_db.by_keywords_and_year(&matcher, 1915, Query::Movies);
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0212278").unwrap());

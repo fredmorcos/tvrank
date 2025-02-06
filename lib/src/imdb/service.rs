@@ -180,25 +180,25 @@ impl Service {
   ///
   /// # Arguments
   ///
-  /// * `keywords` - List of keywords to search in titles.
+  /// * `matcher` - Keyword matcher to use.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_keywords<'a>(&'a self, searcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
-    self.service_db.by_keywords(searcher, query)
+  pub fn by_keywords<'a>(&'a self, matcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
+    self.service_db.by_keywords(matcher, query)
   }
 
   /// Query titles by keywords and year.
   ///
   /// # Arguments
   ///
-  /// * `keywords` - List of keywords to search in titles.
+  /// * `matcher` - Keyword matcher to use.
   /// * `year` - Release year of the title.
   /// * `query` - Specifies if movies or series are queried.
   pub fn by_keywords_and_year<'a>(
     &'a self,
-    searcher: &AhoCorasick,
+    matcher: &AhoCorasick,
     year: u16,
     query: Query,
   ) -> Vec<&'a Title<'a>> {
-    self.service_db.by_keywords_and_year(searcher, year, query)
+    self.service_db.by_keywords_and_year(matcher, year, query)
   }
 }

@@ -134,16 +134,16 @@ impl Db {
   ///
   /// # Arguments
   ///
-  /// * `keywords` - Keywords to search for in title names.
+  /// * `matcher` - Keyword matcher to use.
   /// * `query` - Whether to query movies or series.
   pub(crate) fn by_keywords<'a: 'b, 'b>(
     &'a self,
-    searcher: &'b AhoCorasick,
+    matcher: &'b AhoCorasick,
     query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
     match query {
-      Query::Movies => Box::new(self.movies.by_keywords(searcher)),
-      Query::Series => Box::new(self.series.by_keywords(searcher)),
+      Query::Movies => Box::new(self.movies.by_keywords(matcher)),
+      Query::Series => Box::new(self.series.by_keywords(matcher)),
     }
   }
 
@@ -151,18 +151,18 @@ impl Db {
   ///
   /// # Arguments
   ///
-  /// * `keywords` - Keywords to search for in title names.
+  /// * `matcher` - Keyword matcher to use.
   /// * `year` - The year to search for titles in.
   /// * `query` - Whether to query movies or series.
   pub(crate) fn by_keywords_and_year<'a: 'b, 'b>(
     &'a self,
-    searcher: &'b AhoCorasick,
+    matcher: &'b AhoCorasick,
     year: u16,
     query: Query,
   ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
     match query {
-      Query::Movies => Box::new(self.movies.by_keywords_and_year(searcher, year)),
-      Query::Series => Box::new(self.series.by_keywords_and_year(searcher, year)),
+      Query::Movies => Box::new(self.movies.by_keywords_and_year(matcher, year)),
+      Query::Series => Box::new(self.series.by_keywords_and_year(matcher, year)),
     }
   }
 }
