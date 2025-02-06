@@ -138,17 +138,14 @@ impl<C> DbImpl<C> {
   ///
   /// # Arguments
   ///
-  /// * `keywords` - Keywords to search for in title names.
-  fn cookies_by_keywords<'a: 'b, 'b>(
-    &'a self,
-    searcher: &'b AhoCorasick,
-  ) -> impl Iterator<Item = &'a C> + 'b {
+  /// * `matcher` - Keyword matcher to use.
+  fn cookies_by_keywords<'a: 'b, 'b>(&'a self, matcher: &'b AhoCorasick) -> impl Iterator<Item = &'a C> + 'b {
     self
       .by_title
       .iter()
       .filter(move |&(title, _)| {
-        let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
-        matches.len() == searcher.patterns_len()
+        let matches: FnvHashSet<_> = matcher.find_iter(title).map(|mat| mat.pattern()).collect();
+        matches.len() == matcher.patterns_len()
       })
       .flat_map(|(_, by_year)| by_year.values())
       .flatten()
@@ -158,19 +155,19 @@ impl<C> DbImpl<C> {
   ///
   /// # Arguments
   ///
-  /// * `keywords` - Keywords to search for in title names.
+  /// * `matcher` - Keyword matcher to use.
   /// * `year` - The year to search for titles in.
   fn cookies_by_keywords_and_year<'a: 'b, 'b>(
     &'a self,
-    searcher: &'b AhoCorasick,
+    matcher: &'b AhoCorasick,
     year: u16,
   ) -> impl Iterator<Item = &'a C> + 'b {
     self
       .by_title
       .iter()
       .filter(move |&(title, _)| {
-        let matches: FnvHashSet<_> = searcher.find_iter(title).map(|mat| mat.pattern()).collect();
-        matches.len() == searcher.patterns_len()
+        let matches: FnvHashSet<_> = matcher.find_iter(title).map(|mat| mat.pattern()).collect();
+        matches.len() == matcher.patterns_len()
       })
       .filter_map(move |(_, by_year)| by_year.get(&year))
       .flatten()
@@ -239,26 +236,26 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   ///
   /// # Arguments
   ///
-  /// * `keywords` - Keywords to search for.
+  /// * `matcher` - Keyword matcher to use.
   pub(crate) fn by_keywords<'a: 'b, 'b>(
     &'a self,
-    searcher: &'b AhoCorasick,
+    matcher: &'b AhoCorasick,
   ) -> impl Iterator<Item = &'a Title<'a>> + 'b {
-    self.cookies_by_keywords(searcher).map(|&cookie| &self[cookie])
+    self.cookies_by_keywords(matcher).map(|&cookie| &self[cookie])
   }
 
   /// Search for titles by keywords and year.
   ///
   /// # Arguments
   ///
-  /// * `keywords` - Keywords to search for.
+  /// * `matcher` - Keyword matcher to use.
   /// * `year` - The year to search for titles in.
   pub(crate) fn by_keywords_and_year<'a: 'b, 'b>(
     &'a self,
-    searcher: &'b AhoCorasick,
+    matcher: &'b AhoCorasick,
     year: u16,
   ) -> impl Iterator<Item = &'a Title<'a>> + 'b {
-    self.cookies_by_keywords_and_year(searcher, year).map(|&cookie| &self[cookie])
+    self.cookies_by_keywords_and_year(matcher, year).map(|&cookie| &self[cookie])
   }
 }
 
@@ -314,12 +311,12 @@ mod test_db_impl {
   #[test]
   fn test_by_keywords() {
     let keywords = &[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()];
-    let searcher = AhoCorasickBuilder::new()
+    let matcher = AhoCorasickBuilder::new()
       .match_kind(ACMatchKind::LeftmostFirst)
       .build(keywords)
       .unwrap();
     let db_impl = make_db_impl();
-    let titles: Vec<_> = db_impl.by_keywords(&searcher).collect();
+    let titles: Vec<_> = db_impl.by_keywords(&matcher).collect();
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());
@@ -329,12 +326,12 @@ mod test_db_impl {
   #[test]
   fn test_by_keywords_and_year() {
     let keywords = &[SearchString::try_from("Corbett").unwrap(), SearchString::try_from("Courtney").unwrap()];
-    let searcher = AhoCorasickBuilder::new()
+    let matcher = AhoCorasickBuilder::new()
       .match_kind(ACMatchKind::LeftmostFirst)
       .build(keywords)
       .unwrap();
     let db_impl = make_db_impl();
-    let titles: Vec<_> = db_impl.by_keywords_and_year(&searcher, 1894).collect();
+    let titles: Vec<_> = db_impl.by_keywords_and_year(&matcher, 1894).collect();
     assert_eq!(titles.len(), 1);
     let title = titles[0];
     assert_eq!(title.title_id(), &TitleId::try_from("tt0000007").unwrap());

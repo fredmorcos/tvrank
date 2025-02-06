@@ -59,8 +59,8 @@ enum Error {
   Url(#[from] url::ParseError),
   #[error("IMDB service error: {0}")]
   Imdb(#[from] ImdbError),
-  #[error("Could not build searcher: {0}")]
-  Searcher(#[from] BuildError),
+  #[error("Could not build keyword matcher: {0}")]
+  KeywordMatcher(#[from] BuildError),
 }
 
 fn parse_title_and_year(input: &str) -> Option<(&str, u16)> {
@@ -261,11 +261,11 @@ fn imdb_title(
       series_results.extend(imdb.by_title_and_year(&search_string, year, ImdbQuery::Series));
     } else {
       let keywords = create_keywords_set(title)?;
-      let searcher = AhoCorasickBuilder::new()
+      let matcher = AhoCorasickBuilder::new()
         .match_kind(MatchKind::LeftmostFirst)
         .build(&keywords)?;
-      movies_results.extend(imdb.by_keywords_and_year(&searcher, year, ImdbQuery::Movies));
-      series_results.extend(imdb.by_keywords_and_year(&searcher, year, ImdbQuery::Series));
+      movies_results.extend(imdb.by_keywords_and_year(&matcher, year, ImdbQuery::Movies));
+      series_results.extend(imdb.by_keywords_and_year(&matcher, year, ImdbQuery::Series));
     }
 
     Some(display_title_and_year(title, year))
@@ -276,11 +276,11 @@ fn imdb_title(
     Some(search_string.into())
   } else {
     let keywords = create_keywords_set(title)?;
-    let searcher = AhoCorasickBuilder::new()
+    let matcher = AhoCorasickBuilder::new()
       .match_kind(MatchKind::LeftmostFirst)
       .build(&keywords)?;
-    movies_results.extend(imdb.by_keywords(&searcher, ImdbQuery::Movies));
-    series_results.extend(imdb.by_keywords(&searcher, ImdbQuery::Series));
+    movies_results.extend(imdb.by_keywords(&matcher, ImdbQuery::Movies));
+    series_results.extend(imdb.by_keywords(&matcher, ImdbQuery::Series));
     Some(display_keywords(&keywords))
   };
 
