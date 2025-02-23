@@ -80,8 +80,8 @@ impl TitleType {
   /// # Arguments
   ///
   /// * `value` - Byte representation of a TitleType.
-  pub(crate) const unsafe fn from(value: u8) -> Self {
-    std::mem::transmute(value)
+  pub(crate) const fn from(value: u8) -> Self {
+    unsafe { std::mem::transmute(value) }
   }
 
   /// Whether the title type refers to a movie.
@@ -158,52 +158,52 @@ mod tests {
 
   #[test]
   fn test_title_type_from_u8() {
-    assert_eq!(TitleType::VideoGame, unsafe { TitleType::from(0) });
-    assert_eq!(TitleType::Short, unsafe { TitleType::from(1) });
-    assert_eq!(TitleType::Video, unsafe { TitleType::from(2) });
-    assert_eq!(TitleType::Movie, unsafe { TitleType::from(3) });
-    assert_eq!(TitleType::TvShort, unsafe { TitleType::from(4) });
-    assert_eq!(TitleType::TvMovie, unsafe { TitleType::from(5) });
-    assert_eq!(TitleType::TvSpecial, unsafe { TitleType::from(6) });
-    assert_eq!(TitleType::TvEpisode, unsafe { TitleType::from(7) });
-    assert_eq!(TitleType::TvPilot, unsafe { TitleType::from(8) });
-    assert_eq!(TitleType::RadioEpisode, unsafe { TitleType::from(9) });
-    assert_eq!(TitleType::TvSeries, unsafe { TitleType::from(10) });
-    assert_eq!(TitleType::TvMiniSeries, unsafe { TitleType::from(11) });
-    assert_eq!(TitleType::RadioSeries, unsafe { TitleType::from(12) });
+    assert_eq!(TitleType::VideoGame, TitleType::from(0));
+    assert_eq!(TitleType::Short, TitleType::from(1));
+    assert_eq!(TitleType::Video, TitleType::from(2));
+    assert_eq!(TitleType::Movie, TitleType::from(3));
+    assert_eq!(TitleType::TvShort, TitleType::from(4));
+    assert_eq!(TitleType::TvMovie, TitleType::from(5));
+    assert_eq!(TitleType::TvSpecial, TitleType::from(6));
+    assert_eq!(TitleType::TvEpisode, TitleType::from(7));
+    assert_eq!(TitleType::TvPilot, TitleType::from(8));
+    assert_eq!(TitleType::RadioEpisode, TitleType::from(9));
+    assert_eq!(TitleType::TvSeries, TitleType::from(10));
+    assert_eq!(TitleType::TvMiniSeries, TitleType::from(11));
+    assert_eq!(TitleType::RadioSeries, TitleType::from(12));
   }
 
   #[test]
   fn test_is_movie() {
-    assert!(unsafe { !TitleType::from(0).is_movie() });
-    assert!(unsafe { TitleType::from(1).is_movie() });
-    assert!(unsafe { TitleType::from(2).is_movie() });
-    assert!(unsafe { TitleType::from(3).is_movie() });
-    assert!(unsafe { TitleType::from(4).is_movie() });
-    assert!(unsafe { TitleType::from(5).is_movie() });
-    assert!(unsafe { TitleType::from(6).is_movie() });
-    assert!(unsafe { !TitleType::from(7).is_movie() });
-    assert!(unsafe { !TitleType::from(8).is_movie() });
-    assert!(unsafe { !TitleType::from(9).is_movie() });
-    assert!(unsafe { !TitleType::from(10).is_movie() });
-    assert!(unsafe { !TitleType::from(11).is_movie() });
-    assert!(unsafe { !TitleType::from(12).is_movie() });
+    assert!(!TitleType::from(0).is_movie());
+    assert!(TitleType::from(1).is_movie());
+    assert!(TitleType::from(2).is_movie());
+    assert!(TitleType::from(3).is_movie());
+    assert!(TitleType::from(4).is_movie());
+    assert!(TitleType::from(5).is_movie());
+    assert!(TitleType::from(6).is_movie());
+    assert!(!TitleType::from(7).is_movie());
+    assert!(!TitleType::from(8).is_movie());
+    assert!(!TitleType::from(9).is_movie());
+    assert!(!TitleType::from(10).is_movie());
+    assert!(!TitleType::from(11).is_movie());
+    assert!(!TitleType::from(12).is_movie());
   }
 
   #[test]
   fn test_is_series() {
-    assert!(unsafe { !TitleType::from(0).is_series() });
-    assert!(unsafe { !TitleType::from(1).is_series() });
-    assert!(unsafe { !TitleType::from(2).is_series() });
-    assert!(unsafe { !TitleType::from(3).is_series() });
-    assert!(unsafe { !TitleType::from(4).is_series() });
-    assert!(unsafe { !TitleType::from(5).is_series() });
-    assert!(unsafe { !TitleType::from(6).is_series() });
-    assert!(unsafe { !TitleType::from(7).is_series() });
-    assert!(unsafe { !TitleType::from(8).is_series() });
-    assert!(unsafe { !TitleType::from(9).is_series() });
-    assert!(unsafe { TitleType::from(10).is_series() });
-    assert!(unsafe { TitleType::from(11).is_series() });
-    assert!(unsafe { !TitleType::from(12).is_series() });
+    assert!(!TitleType::from(0).is_series());
+    assert!(!TitleType::from(1).is_series());
+    assert!(!TitleType::from(2).is_series());
+    assert!(!TitleType::from(3).is_series());
+    assert!(!TitleType::from(4).is_series());
+    assert!(!TitleType::from(5).is_series());
+    assert!(!TitleType::from(6).is_series());
+    assert!(!TitleType::from(7).is_series());
+    assert!(!TitleType::from(8).is_series());
+    assert!(!TitleType::from(9).is_series());
+    assert!(TitleType::from(10).is_series());
+    assert!(TitleType::from(11).is_series());
+    assert!(!TitleType::from(12).is_series());
   }
 }

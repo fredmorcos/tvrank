@@ -168,7 +168,7 @@ impl TitleHeader {
   pub(crate) fn title_type(&self) -> TitleType {
     let mask = (2_u128.pow(5) - 1) << 63;
     let value = (self.0 & mask) >> 63;
-    unsafe { TitleType::from(value as u8) }
+    TitleType::from(value as u8)
   }
 
   /// Returns the set of genres the title is associated with

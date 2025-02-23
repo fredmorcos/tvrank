@@ -129,8 +129,8 @@ impl Genre {
   /// # Arguments
   ///
   /// * `value` - u8 value to be converted to a Genre item.
-  pub(crate) const unsafe fn from(value: u8) -> Self {
-    std::mem::transmute(value)
+  pub(crate) const fn from(value: u8) -> Self {
+    unsafe { std::mem::transmute(value) }
   }
 }
 
@@ -165,7 +165,7 @@ impl Genres {
     }
 
     if (self.0 >> index) & 1 == 1 {
-      Some(unsafe { Genre::from(index) })
+      Some(Genre::from(index))
     } else {
       None
     }
@@ -297,35 +297,35 @@ mod tests {
 
   #[test]
   fn test_genre_from_u8() {
-    assert_eq!(Genre::Action, unsafe { Genre::from(0) });
-    assert_eq!(Genre::Adult, unsafe { Genre::from(1) });
-    assert_eq!(Genre::Adventure, unsafe { Genre::from(2) });
-    assert_eq!(Genre::Animation, unsafe { Genre::from(3) });
-    assert_eq!(Genre::Biography, unsafe { Genre::from(4) });
-    assert_eq!(Genre::Comedy, unsafe { Genre::from(5) });
-    assert_eq!(Genre::Crime, unsafe { Genre::from(6) });
-    assert_eq!(Genre::Documentary, unsafe { Genre::from(7) });
-    assert_eq!(Genre::Drama, unsafe { Genre::from(8) });
-    assert_eq!(Genre::Family, unsafe { Genre::from(9) });
-    assert_eq!(Genre::Fantasy, unsafe { Genre::from(10) });
-    assert_eq!(Genre::FilmNoir, unsafe { Genre::from(11) });
-    assert_eq!(Genre::GameShow, unsafe { Genre::from(12) });
-    assert_eq!(Genre::History, unsafe { Genre::from(13) });
-    assert_eq!(Genre::Horror, unsafe { Genre::from(14) });
-    assert_eq!(Genre::Music, unsafe { Genre::from(15) });
-    assert_eq!(Genre::Musical, unsafe { Genre::from(16) });
-    assert_eq!(Genre::Mystery, unsafe { Genre::from(17) });
-    assert_eq!(Genre::News, unsafe { Genre::from(18) });
-    assert_eq!(Genre::RealityTv, unsafe { Genre::from(19) });
-    assert_eq!(Genre::Romance, unsafe { Genre::from(20) });
-    assert_eq!(Genre::SciFi, unsafe { Genre::from(21) });
-    assert_eq!(Genre::Short, unsafe { Genre::from(22) });
-    assert_eq!(Genre::Sport, unsafe { Genre::from(23) });
-    assert_eq!(Genre::TalkShow, unsafe { Genre::from(24) });
-    assert_eq!(Genre::Thriller, unsafe { Genre::from(25) });
-    assert_eq!(Genre::War, unsafe { Genre::from(26) });
-    assert_eq!(Genre::Western, unsafe { Genre::from(27) });
-    assert_eq!(Genre::Experimental, unsafe { Genre::from(28) });
+    assert_eq!(Genre::Action, Genre::from(0));
+    assert_eq!(Genre::Adult, Genre::from(1));
+    assert_eq!(Genre::Adventure, Genre::from(2));
+    assert_eq!(Genre::Animation, Genre::from(3));
+    assert_eq!(Genre::Biography, Genre::from(4));
+    assert_eq!(Genre::Comedy, Genre::from(5));
+    assert_eq!(Genre::Crime, Genre::from(6));
+    assert_eq!(Genre::Documentary, Genre::from(7));
+    assert_eq!(Genre::Drama, Genre::from(8));
+    assert_eq!(Genre::Family, Genre::from(9));
+    assert_eq!(Genre::Fantasy, Genre::from(10));
+    assert_eq!(Genre::FilmNoir, Genre::from(11));
+    assert_eq!(Genre::GameShow, Genre::from(12));
+    assert_eq!(Genre::History, Genre::from(13));
+    assert_eq!(Genre::Horror, Genre::from(14));
+    assert_eq!(Genre::Music, Genre::from(15));
+    assert_eq!(Genre::Musical, Genre::from(16));
+    assert_eq!(Genre::Mystery, Genre::from(17));
+    assert_eq!(Genre::News, Genre::from(18));
+    assert_eq!(Genre::RealityTv, Genre::from(19));
+    assert_eq!(Genre::Romance, Genre::from(20));
+    assert_eq!(Genre::SciFi, Genre::from(21));
+    assert_eq!(Genre::Short, Genre::from(22));
+    assert_eq!(Genre::Sport, Genre::from(23));
+    assert_eq!(Genre::TalkShow, Genre::from(24));
+    assert_eq!(Genre::Thriller, Genre::from(25));
+    assert_eq!(Genre::War, Genre::from(26));
+    assert_eq!(Genre::Western, Genre::from(27));
+    assert_eq!(Genre::Experimental, Genre::from(28));
   }
 
   #[test]
