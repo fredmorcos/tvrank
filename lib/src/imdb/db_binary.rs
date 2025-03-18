@@ -7,7 +7,7 @@ use crate::utils::search::SearchString;
 
 use aho_corasick::AhoCorasick;
 use log::debug;
-use parking_lot::{const_mutex, Mutex};
+use parking_lot::{Mutex, const_mutex};
 use rayon::prelude::*;
 
 /// Errors when loading database.

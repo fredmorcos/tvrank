@@ -27,7 +27,5 @@ pub enum Error {
 ///   a parser is expected to consume more input.
 #[macro_export]
 macro_rules! iter_next {
-  ($iter:ident) => {{
-    $iter.next().ok_or($crate::utils::tokens::Error::Eof)
-  }};
+  ($iter:ident) => {{ $iter.next().ok_or($crate::utils::tokens::Error::Eof) }};
 }
