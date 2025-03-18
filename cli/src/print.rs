@@ -5,7 +5,7 @@ use crate::search::SearchRes;
 use tvrank::imdb::{ImdbQuery, ImdbTitle};
 
 use humantime::format_duration;
-use prettytable::{color, format, Attr, Cell, Row, Table};
+use prettytable::{Attr, Cell, Row, Table, color, format};
 use reqwest::Url;
 use serde::Serialize;
 use truncatable::Truncatable;

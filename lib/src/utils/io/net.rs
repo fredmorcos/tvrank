@@ -7,8 +7,8 @@ use std::io::{BufRead, BufReader};
 use crate::utils::io::progress::ProgressPipe;
 
 use flate2::bufread::GzDecoder;
-use reqwest::blocking::{Client, Response};
 use reqwest::Url;
+use reqwest::blocking::{Client, Response};
 
 /// Errors when doing networking.
 #[derive(Debug, thiserror::Error)]

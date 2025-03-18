@@ -1,7 +1,7 @@
 [package]
 name = "tvrank-cli"
 version = "0.10.1"
-edition = "2021"
+edition = "2024"
 description = "Query and sort information about movies and series"
 authors = ["Fred Morcos <fm@fredmorcos.com>"]
 license = "MIT"

@@ -100,11 +100,11 @@ impl Db {
   ///
   /// * `title` - The title name to search for.
   /// * `query` - Whether to query movies or series.
-  pub(crate) fn by_title<'a>(
+  pub(crate) fn by_title<'a: 'b, 'b>(
     &'a self,
-    title: &SearchString,
+    title: &'b SearchString,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
     match query {
       Query::Movies => self.movies.by_title(title),
       Query::Series => self.series.by_title(title),
@@ -118,12 +118,12 @@ impl Db {
   /// * `title` - The title name to search for.
   /// * `year` - The year to search for titles in.
   /// * `query` - Whether to query movies or series.
-  pub(crate) fn by_title_and_year<'a>(
+  pub(crate) fn by_title_and_year<'a: 'b, 'b>(
     &'a self,
-    title: &SearchString,
+    title: &'b SearchString,
     year: u16,
     query: Query,
-  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
+  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
     match query {
       Query::Movies => Box::new(self.movies.by_title_and_year(title, year)),
       Query::Series => Box::new(self.series.by_title_and_year(title, year)),
