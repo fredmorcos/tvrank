@@ -209,7 +209,7 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords<'a>(&'a self, matcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
+  pub(crate) fn by_keywords(&self, matcher: &AhoCorasick, query: Query) -> Vec<&Title> {
     self
       .dbs
       .par_iter()
@@ -217,12 +217,7 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords_and_year<'a>(
-    &'a self,
-    matcher: &AhoCorasick,
-    year: u16,
-    query: Query,
-  ) -> Vec<&'a Title<'a>> {
+  pub(crate) fn by_keywords_and_year(&self, matcher: &AhoCorasick, year: u16, query: Query) -> Vec<&Title> {
     self
       .dbs
       .par_iter()
