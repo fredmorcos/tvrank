@@ -151,7 +151,7 @@ impl Service {
   ///
   /// * `id` - ID of the title to be queried.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
+  pub fn by_id(&'_ self, id: &TitleId, query: Query) -> Option<&'_ Title<'_>> {
     self.service_db.by_id(id, query)
   }
 
@@ -161,7 +161,7 @@ impl Service {
   ///
   /// * `title` - Title to be queried.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_title(&self, title: &SearchString, query: Query) -> Vec<&Title> {
+  pub fn by_title(&'_ self, title: &SearchString, query: Query) -> Vec<&'_ Title<'_>> {
     self.service_db.by_title(title, query)
   }
 
@@ -172,7 +172,7 @@ impl Service {
   /// * `title` - Title to be queried.
   /// * `year` - Release year of the title.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_title_and_year(&self, title: &SearchString, year: u16, query: Query) -> Vec<&Title> {
+  pub fn by_title_and_year(&'_ self, title: &SearchString, year: u16, query: Query) -> Vec<&'_ Title<'_>> {
     self.service_db.by_title_and_year(title, year, query)
   }
 
@@ -182,7 +182,7 @@ impl Service {
   ///
   /// * `matcher` - Keyword matcher to use.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_keywords(&self, matcher: &AhoCorasick, query: Query) -> Vec<&Title> {
+  pub fn by_keywords(&'_ self, matcher: &AhoCorasick, query: Query) -> Vec<&'_ Title<'_>> {
     self.service_db.by_keywords(matcher, query)
   }
 
@@ -193,7 +193,12 @@ impl Service {
   /// * `matcher` - Keyword matcher to use.
   /// * `year` - Release year of the title.
   /// * `query` - Specifies if movies or series are queried.
-  pub fn by_keywords_and_year(&self, matcher: &AhoCorasick, year: u16, query: Query) -> Vec<&Title> {
+  pub fn by_keywords_and_year(
+    &'_ self,
+    matcher: &AhoCorasick,
+    year: u16,
+    query: Query,
+  ) -> Vec<&'_ Title<'_>> {
     self.service_db.by_keywords_and_year(matcher, year, query)
   }
 }

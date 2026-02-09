@@ -37,7 +37,7 @@ impl<'a> ImdbTitleInfo<'a> {
   }
 
   /// Get the IMDB ID of an IMDB title information object.
-  pub fn id(&self) -> &ImdbTitleId {
+  pub fn id(&'_ self) -> &'_ ImdbTitleId<'_> {
     &self.id
   }
 }
@@ -69,7 +69,7 @@ impl<'a> TitleInfo<'a> {
   }
 
   /// Load a title information object from a file.
-  pub fn from_path(path: &Path) -> Result<TitleInfo, Error> {
+  pub fn from_path(path: &'_ Path) -> Result<TitleInfo<'_>, Error> {
     let title_info_path = path.join("tvrank.json");
     let title_info_file = fs::File::open(&title_info_path)?;
     let title_info_file_reader = BufReader::new(title_info_file);
@@ -87,7 +87,7 @@ impl<'a> TitleInfo<'a> {
   }
 
   /// Get the IMDB title information object from a top-level title information object.
-  pub fn imdb(&self) -> &ImdbTitleInfo {
+  pub fn imdb(&'_ self) -> &'_ ImdbTitleInfo<'_> {
     &self.imdb
   }
 }

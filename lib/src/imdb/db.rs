@@ -87,7 +87,7 @@ impl Db {
   ///
   /// * `id` - Title ID to lookup.
   /// * `query` - Whether to query movies or series.
-  pub(crate) fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
+  pub(crate) fn by_id(&'_ self, id: &TitleId, query: Query) -> Option<&'_ Title<'_>> {
     match query {
       Query::Movies => self.movies.by_id(id),
       Query::Series => self.series.by_id(id),

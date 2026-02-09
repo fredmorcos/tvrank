@@ -98,7 +98,7 @@ impl Hash for Title<'_> {
 
 impl<'storage> Title<'storage> {
   /// Returns the id of the title.
-  pub fn title_id(&self) -> &TitleId {
+  pub fn title_id(&'_ self) -> &'_ TitleId<'_> {
     &self.title_id
   }
 

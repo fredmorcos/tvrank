@@ -177,7 +177,7 @@ impl ServiceDbFromBinary {
     (total_movies, total_series)
   }
 
-  pub(crate) fn by_id(&self, id: &TitleId, query: Query) -> Option<&Title> {
+  pub(crate) fn by_id(&'_ self, id: &TitleId, query: Query) -> Option<&'_ Title<'_>> {
     let res = self
       .dbs
       .par_iter()
@@ -193,7 +193,7 @@ impl ServiceDbFromBinary {
     }
   }
 
-  pub(crate) fn by_title(&self, title: &SearchString, query: Query) -> Vec<&Title> {
+  pub(crate) fn by_title(&'_ self, title: &SearchString, query: Query) -> Vec<&'_ Title<'_>> {
     self
       .dbs
       .par_iter()
@@ -201,7 +201,12 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_title_and_year(&self, title: &SearchString, year: u16, query: Query) -> Vec<&Title> {
+  pub(crate) fn by_title_and_year(
+    &'_ self,
+    title: &SearchString,
+    year: u16,
+    query: Query,
+  ) -> Vec<&'_ Title<'_>> {
     self
       .dbs
       .par_iter()
@@ -209,7 +214,7 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords(&self, matcher: &AhoCorasick, query: Query) -> Vec<&Title> {
+  pub(crate) fn by_keywords(&'_ self, matcher: &AhoCorasick, query: Query) -> Vec<&'_ Title<'_>> {
     self
       .dbs
       .par_iter()
@@ -217,7 +222,12 @@ impl ServiceDbFromBinary {
       .collect()
   }
 
-  pub(crate) fn by_keywords_and_year(&self, matcher: &AhoCorasick, year: u16, query: Query) -> Vec<&Title> {
+  pub(crate) fn by_keywords_and_year(
+    &'_ self,
+    matcher: &AhoCorasick,
+    year: u16,
+    query: Query,
+  ) -> Vec<&'_ Title<'_>> {
     self
       .dbs
       .par_iter()

@@ -125,10 +125,10 @@ impl<C> DbImpl<C> {
   /// * `title` - The title name to search for.
   /// * `year` - The year to search for titles in.
   fn cookies_by_title_and_year(&self, title: &SearchString, year: u16) -> impl Iterator<Item = &C> {
-    if let Some(by_year) = self.by_title.get(title.as_str()) {
-      if let Some(cookies) = by_year.get(&year) {
-        return cookies.iter();
-      }
+    if let Some(by_year) = self.by_title.get(title.as_str())
+      && let Some(cookies) = by_year.get(&year)
+    {
+      return cookies.iter();
     }
 
     [].iter()
@@ -201,7 +201,7 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
   /// # Arguments
   ///
   /// * `id` - Title ID to find.
-  pub(crate) fn by_id(&self, id: &TitleId) -> Option<&Title> {
+  pub(crate) fn by_id(&'_ self, id: &TitleId) -> Option<&'_ Title<'_>> {
     self.cookie_by_id(id).map(|&cookie| &self[cookie])
   }
 

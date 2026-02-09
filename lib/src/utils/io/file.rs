@@ -40,14 +40,13 @@ pub fn open_existing(path: &Path) -> Result<Option<File>, Error> {
 /// * `file` - Database file to be checked.
 /// * `duration` - The duration by which the file would be considered old.
 pub fn older_than(file: &Option<File>, duration: Duration) -> bool {
-  if let Some(f) = file {
-    if let Ok(md) = f.metadata() {
-      if let Ok(modified) = md.modified() {
-        match SystemTime::now().duration_since(modified) {
-          Ok(age) => return age >= duration,
-          Err(_) => return true,
-        }
-      }
+  if let Some(f) = file
+    && let Ok(md) = f.metadata()
+    && let Ok(modified) = md.modified()
+  {
+    match SystemTime::now().duration_since(modified) {
+      Ok(age) => return age >= duration,
+      Err(_) => return true,
     }
   }
 
