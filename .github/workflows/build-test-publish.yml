@@ -247,6 +247,8 @@ jobs:
 
   publish-github:
     name: Publish to Github
+    permissions:
+      contents: write
     needs:
       - code-formatting
       - lint
