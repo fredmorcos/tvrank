@@ -278,7 +278,9 @@ impl<'storage> Title<'storage> {
   }
 
   /// Reads a title from its binary representation and returns it inside a Result
+  ///
   /// # Arguments
+  ///
   /// * `source` - Title to be read as binary
   pub(crate) fn from_binary(source: &mut &'storage [u8]) -> Result<Self, Error> {
     if (*source).len() < 23 {
@@ -289,7 +291,6 @@ impl<'storage> Title<'storage> {
       // * At least 3 bytes for the title_id (ttX)
       // * 2 bytes for the primary title length
       // * At least 1 byte for the primary title
-
       return Err(crate::utils::tokens::Error::Eof)?;
     }
 
