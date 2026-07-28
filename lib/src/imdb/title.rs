@@ -291,7 +291,7 @@ impl<'storage> Title<'storage> {
       // * At least 3 bytes for the title_id (ttX)
       // * 2 bytes for the primary title length
       // * At least 1 byte for the primary title
-      return Err(crate::utils::tokens::Error::Eof)?;
+      Err(crate::utils::tokens::Error::Eof)?
     }
 
     let header: [u8; 16] = source[..16].try_into()?;
