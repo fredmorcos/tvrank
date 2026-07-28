@@ -1,0 +1,166 @@
+diff --git a/cli/Cargo.toml b/cli/Cargo.toml
+index d2b80c5..1d59588 100644
+--- a/cli/Cargo.toml
++++ b/cli/Cargo.toml
+@@ -1,7 +1,7 @@
+ [package]
+ name = "tvrank-cli"
+ version = "0.10.1"
+-edition = "2021"
++edition = "2024"
+ description = "Query and sort information about movies and series"
+ authors = ["Fred Morcos <fm@fredmorcos.com>"]
+ license = "MIT"
+diff --git a/lib/Cargo.toml b/lib/Cargo.toml
+index 754a6f0..23a8abd 100644
+--- a/lib/Cargo.toml
++++ b/lib/Cargo.toml
+@@ -1,7 +1,7 @@
+ [package]
+ name = "tvrank"
+ version = "0.10.1"
+-edition = "2021"
++edition = "2024"
+ description = "Query and sort information about movies and series"
+ authors = ["Fred Morcos <fm@fredmorcos.com>"]
+ license = "MIT"
+diff --git a/lib/src/imdb/db.rs b/lib/src/imdb/db.rs
+index 56ee15d..dd2fa52 100755
+--- a/lib/src/imdb/db.rs
++++ b/lib/src/imdb/db.rs
+@@ -100,11 +100,11 @@ impl Db {
+   ///
+   /// * `title` - The title name to search for.
+   /// * `query` - Whether to query movies or series.
+-  pub(crate) fn by_title<'a>(
++  pub(crate) fn by_title<'a: 'b, 'b>(
+     &'a self,
+-    title: &SearchString,
++    title: &'b SearchString,
+     query: Query,
+-  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
++  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
+     match query {
+       Query::Movies => self.movies.by_title(title),
+       Query::Series => self.series.by_title(title),
+@@ -118,12 +118,12 @@ impl Db {
+   /// * `title` - The title name to search for.
+   /// * `year` - The year to search for titles in.
+   /// * `query` - Whether to query movies or series.
+-  pub(crate) fn by_title_and_year<'a>(
++  pub(crate) fn by_title_and_year<'a: 'b, 'b>(
+     &'a self,
+-    title: &SearchString,
++    title: &'b SearchString,
+     year: u16,
+     query: Query,
+-  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
++  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
+     match query {
+       Query::Movies => Box::new(self.movies.by_title_and_year(title, year)),
+       Query::Series => Box::new(self.series.by_title_and_year(title, year)),
+diff --git a/lib/src/imdb/db_binary.rs b/lib/src/imdb/db_binary.rs
+index 4960fe0..02f35bd 100644
+--- a/lib/src/imdb/db_binary.rs
++++ b/lib/src/imdb/db_binary.rs
+@@ -209,7 +209,7 @@ impl ServiceDbFromBinary {
+       .collect()
+   }
+ 
+-  pub(crate) fn by_keywords<'a>(&'a self, matcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
++  pub(crate) fn by_keywords(&self, matcher: &AhoCorasick, query: Query) -> Vec<&Title> {
+     self
+       .dbs
+       .par_iter()
+@@ -217,12 +217,7 @@ impl ServiceDbFromBinary {
+       .collect()
+   }
+ 
+-  pub(crate) fn by_keywords_and_year<'a>(
+-    &'a self,
+-    matcher: &AhoCorasick,
+-    year: u16,
+-    query: Query,
+-  ) -> Vec<&'a Title<'a>> {
++  pub(crate) fn by_keywords_and_year(&self, matcher: &AhoCorasick, year: u16, query: Query) -> Vec<&Title> {
+     self
+       .dbs
+       .par_iter()
+diff --git a/lib/src/imdb/db_impl.rs b/lib/src/imdb/db_impl.rs
+index 3644edc..5202b59 100644
+--- a/lib/src/imdb/db_impl.rs
++++ b/lib/src/imdb/db_impl.rs
+@@ -139,7 +139,7 @@ impl<C> DbImpl<C> {
+   /// # Arguments
+   ///
+   /// * `matcher` - Keyword matcher to use.
+-  fn cookies_by_keywords<'a: 'b, 'b>(&'a self, matcher: &'b AhoCorasick) -> impl Iterator<Item = &'a C> + 'b {
++  fn cookies_by_keywords(&self, matcher: &AhoCorasick) -> impl Iterator<Item = &C> {
+     self
+       .by_title
+       .iter()
+@@ -157,11 +157,7 @@ impl<C> DbImpl<C> {
+   ///
+   /// * `matcher` - Keyword matcher to use.
+   /// * `year` - The year to search for titles in.
+-  fn cookies_by_keywords_and_year<'a: 'b, 'b>(
+-    &'a self,
+-    matcher: &'b AhoCorasick,
+-    year: u16,
+-  ) -> impl Iterator<Item = &'a C> + 'b {
++  fn cookies_by_keywords_and_year(&self, matcher: &AhoCorasick, year: u16) -> impl Iterator<Item = &C> {
+     self
+       .by_title
+       .iter()
+@@ -214,7 +210,10 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
+   /// # Arguments
+   ///
+   /// * `title` - Title name to search for.
+-  pub(crate) fn by_title<'a>(&'a self, title: &SearchString) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'a> {
++  pub(crate) fn by_title<'a: 'b, 'b>(
++    &'a self,
++    title: &'b SearchString,
++  ) -> Box<dyn Iterator<Item = &'a Title<'a>> + 'b> {
+     if let Some(cookies) = self.cookies_by_title(title) {
+       return Box::new(cookies.map(|&cookie| &self[cookie]));
+     }
+@@ -228,7 +227,11 @@ impl<C: Into<usize> + Copy> DbImpl<C> {
+   ///
+   /// * `title` - Title name to search for.
+   /// * `year` - The year to search for titles in.
+-  pub(crate) fn by_title_and_year(&self, title: &SearchString, year: u16) -> impl Iterator<Item = &Title> {
++  pub(crate) fn by_title_and_year<'a: 'b, 'b>(
++    &'a self,
++    title: &'b SearchString,
++    year: u16,
++  ) -> impl Iterator<Item = &'a Title<'a>> {
+     self.cookies_by_title_and_year(title, year).map(|&cookie| &self[cookie])
+   }
+ 
+diff --git a/lib/src/imdb/service.rs b/lib/src/imdb/service.rs
+index f241869..5170fb9 100755
+--- a/lib/src/imdb/service.rs
++++ b/lib/src/imdb/service.rs
+@@ -182,7 +182,7 @@ impl Service {
+   ///
+   /// * `matcher` - Keyword matcher to use.
+   /// * `query` - Specifies if movies or series are queried.
+-  pub fn by_keywords<'a>(&'a self, matcher: &AhoCorasick, query: Query) -> Vec<&'a Title<'a>> {
++  pub fn by_keywords(&self, matcher: &AhoCorasick, query: Query) -> Vec<&Title> {
+     self.service_db.by_keywords(matcher, query)
+   }
+ 
+@@ -193,12 +193,7 @@ impl Service {
+   /// * `matcher` - Keyword matcher to use.
+   /// * `year` - Release year of the title.
+   /// * `query` - Specifies if movies or series are queried.
+-  pub fn by_keywords_and_year<'a>(
+-    &'a self,
+-    matcher: &AhoCorasick,
+-    year: u16,
+-    query: Query,
+-  ) -> Vec<&'a Title<'a>> {
++  pub fn by_keywords_and_year(&self, matcher: &AhoCorasick, year: u16, query: Query) -> Vec<&Title> {
+     self.service_db.by_keywords_and_year(matcher, year, query)
+   }
+ }

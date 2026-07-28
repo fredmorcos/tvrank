@@ -1,0 +1,14 @@
+diff --git a/.github/workflows/build-test-publish.yml b/.github/workflows/build-test-publish.yml
+index 4f2e96d..ad84219 100644
+--- a/.github/workflows/build-test-publish.yml
++++ b/.github/workflows/build-test-publish.yml
+@@ -8,6 +8,9 @@ on:
+   pull_request:
+     branches: [main]
+ 
++permissions:
++  contents: read
++
+ env:
+   CARGO_TERM_COLOR: always
+   RUSTFLAGS: -Dwarnings

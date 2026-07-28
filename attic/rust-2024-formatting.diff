@@ -1,0 +1,53 @@
+diff --git a/cli/src/print.rs b/cli/src/print.rs
+index a2d4bbc..128a387 100644
+--- a/cli/src/print.rs
++++ b/cli/src/print.rs
+@@ -5,7 +5,7 @@ use crate::search::SearchRes;
+ use tvrank::imdb::{ImdbQuery, ImdbTitle};
+ 
+ use humantime::format_duration;
+-use prettytable::{color, format, Attr, Cell, Row, Table};
++use prettytable::{Attr, Cell, Row, Table, color, format};
+ use reqwest::Url;
+ use serde::Serialize;
+ use truncatable::Truncatable;
+diff --git a/lib/src/imdb/db_binary.rs b/lib/src/imdb/db_binary.rs
+index 02f35bd..ce1015a 100644
+--- a/lib/src/imdb/db_binary.rs
++++ b/lib/src/imdb/db_binary.rs
+@@ -7,7 +7,7 @@ use crate::utils::search::SearchString;
+ 
+ use aho_corasick::AhoCorasick;
+ use log::debug;
+-use parking_lot::{const_mutex, Mutex};
++use parking_lot::{Mutex, const_mutex};
+ use rayon::prelude::*;
+ 
+ /// Errors when loading database.
+diff --git a/lib/src/utils/io/net.rs b/lib/src/utils/io/net.rs
+index 1d9d07c..44493c0 100644
+--- a/lib/src/utils/io/net.rs
++++ b/lib/src/utils/io/net.rs
+@@ -7,8 +7,8 @@ use std::io::{BufRead, BufReader};
+ use crate::utils::io::progress::ProgressPipe;
+ 
+ use flate2::bufread::GzDecoder;
+-use reqwest::blocking::{Client, Response};
+ use reqwest::Url;
++use reqwest::blocking::{Client, Response};
+ 
+ /// Errors when doing networking.
+ #[derive(Debug, thiserror::Error)]
+diff --git a/lib/src/utils/tokens.rs b/lib/src/utils/tokens.rs
+index 2e6564e..476cd2a 100644
+--- a/lib/src/utils/tokens.rs
++++ b/lib/src/utils/tokens.rs
+@@ -27,7 +27,5 @@ pub enum Error {
+ ///   a parser is expected to consume more input.
+ #[macro_export]
+ macro_rules! iter_next {
+-  ($iter:ident) => {{
+-    $iter.next().ok_or($crate::utils::tokens::Error::Eof)
+-  }};
++  ($iter:ident) => {{ $iter.next().ok_or($crate::utils::tokens::Error::Eof) }};
+ }
